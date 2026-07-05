@@ -5,6 +5,7 @@ import { Beef, BookmarkPlus, Plus, Salad, Soup, Trash2, Wheat } from "lucide-rea
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
+import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 
 const mealIcons = [Salad, Beef, Soup, Wheat];
@@ -79,6 +80,8 @@ export function FuelingView() {
         title="Mahlzeiten und Standards"
         description="Grobe Planung über Standardmahlzeiten, Portionen, Makros und Trainingszeitpunkt."
       />
+
+      <WeekCalendar />
 
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
         <Panel>

@@ -4,6 +4,7 @@ import { ArrowDownRight, BarChart3, Info, Target } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { getWeekTrainingLoad } from "@/domain/planning/week";
 import type { WeekPlan } from "@/domain/planning/types";
+import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 
 export function InsightsView() {
@@ -20,6 +21,8 @@ export function InsightsView() {
         title="Einordnung statt Zahlenwand"
         description="Training und Zielkontext werden aus dem lokalen Plan abgeleitet."
       />
+
+      <WeekCalendar />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <InsightCard label="Laufumfang" value={`${insights.runningKm} km`} detail="aktive Laufplanung" />

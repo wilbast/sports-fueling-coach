@@ -3,6 +3,7 @@
 import { ChefHat, Dumbbell, Sparkles, Utensils } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { getDayPlanByDate } from "@/domain/planning/week";
+import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 
@@ -19,6 +20,8 @@ export function CoachView() {
         title="Fragen, einordnen, übernehmen"
         description="Der Coach nutzt Profil, Ziele, Training, Fueling, Standards und aktuelle Planung für konkrete Empfehlungen."
       />
+
+      <WeekCalendar />
 
       <section className="mb-6 grid gap-3 md:grid-cols-3">
         <Panel>

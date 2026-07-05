@@ -37,6 +37,7 @@ import type {
   WorkoutIntensity,
   WorkoutStatus
 } from "@/domain/training/types";
+import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 
@@ -196,6 +197,8 @@ export function PlanningView() {
           </Link>
         }
       />
+
+      <WeekCalendar />
 
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
         <Panel>

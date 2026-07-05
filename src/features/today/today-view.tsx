@@ -14,9 +14,10 @@ import type { DailyBriefing } from "@/domain/briefing/types";
 
 type TodayViewProps = {
   briefing: DailyBriefing;
+  calendar?: React.ReactNode;
 };
 
-export function TodayView({ briefing }: TodayViewProps) {
+export function TodayView({ briefing, calendar }: TodayViewProps) {
   return (
     <div>
       <PageHeader
@@ -33,6 +34,8 @@ export function TodayView({ briefing }: TodayViewProps) {
           </Link>
         }
       />
+
+      {calendar}
 
       <section className="mb-6 rounded-3xl bg-ink p-5 text-white shadow-soft sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">

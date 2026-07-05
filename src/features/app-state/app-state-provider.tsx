@@ -9,6 +9,7 @@ import { demoStandards } from "@/data/mock/standards";
 import type { CoachMealDraft, CoachPlanChange, CoachWorkoutDraft } from "@/domain/coach/types";
 import type { RaceGoal, UserGoals } from "@/domain/goals/types";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
+import { addWeeks, createEmptyWeekPlan, createPlanningContextBlock, startOfWeek } from "@/domain/planning/calendar";
 import type { DayBlock, DayContext, DayPlan, WeekPlan } from "@/domain/planning/types";
 import type { UserProfile } from "@/domain/profile/types";
 import type { IsoDate } from "@/domain/shared";
@@ -39,6 +40,7 @@ export type AppState = {
   profile: UserProfile;
   goals: UserGoals;
   weekPlan: WeekPlan;
+  weekPlans: WeekPlan[];
   mealTemplates: MealTemplate[];
   standards: AppStandards;
   selectedDate: string;
@@ -71,6 +73,8 @@ type AppStateContextValue = {
   state: AppState;
   hasHydrated: boolean;
   setSelectedDate: (date: string) => void;
+  goToPreviousWeek: () => void;
+  goToNextWeek: () => void;
   updateDayPlanningContext: (date: string, context: PlanningContext) => void;
   addDayExtraInfo: (date: string, info: Omit<PlanningExtraInfo, "id">) => void;
   removeDayExtraInfo: (date: string, infoId: string) => void;
@@ -214,7 +218,13 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     state,
     hasHydrated,
     setSelectedDate: (date) => {
-      setState((current) => ({ ...current, selectedDate: date }));
+      setState((current) => selectDate(current, date));
+    },
+    goToPreviousWeek: () => {
+      setState((current) => selectDate(current, addWeeks(current.weekPlan.startsOn, -1)));
+    },
+    goToNextWeek: () => {
+      setState((current) => selectDate(current, addWeeks(current.weekPlan.startsOn, 1)));
     },
     updateDayPlanningContext: (date, context) => {
       setState((current) => updateDay(current, date, (day) => ({
@@ -396,12 +406,11 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         });
 
         return {
-          ...current,
-          weekPlan: {
+          ...syncActiveWeek(current, {
             ...current.weekPlan,
             templateName: template.name,
             days
-          },
+          }),
           selectedDate: days[0]?.date ?? current.selectedDate
         };
       });
@@ -480,6 +489,7 @@ function createInitialAppState(): AppState {
     profile: clone(demoUserProfile),
     goals: clone(demoUserGoals),
     weekPlan: clone(demoWeekPlan),
+    weekPlans: [clone(demoWeekPlan)],
     mealTemplates: clone(demoMealTemplates),
     standards: clone(demoStandards),
     selectedDate: demoWeekPlan.days[0].date
@@ -500,34 +510,66 @@ function loadStoredState(): AppState | null {
 
 function normalizeAppState(parsed: Partial<AppState>): AppState {
   const fallback = createInitialAppState();
+  const weekPlan = parsed.weekPlan ?? fallback.weekPlan;
+  const weekPlans = parsed.weekPlans?.length ? parsed.weekPlans : [weekPlan];
 
-  return {
+  return selectDate({
     schemaVersion: parsed.schemaVersion ?? fallback.schemaVersion,
     appMode: parsed.appMode ?? fallback.appMode,
     profile: parsed.profile ?? fallback.profile,
     goals: parsed.goals ?? fallback.goals,
-    weekPlan: parsed.weekPlan ?? fallback.weekPlan,
+    weekPlan,
+    weekPlans,
     mealTemplates: parsed.mealTemplates ?? fallback.mealTemplates,
     standards: parsed.standards ?? fallback.standards,
     selectedDate: parsed.selectedDate ?? fallback.selectedDate
-  };
+  }, parsed.selectedDate ?? fallback.selectedDate);
 }
 
 function updateDay(state: AppState, date: string, updater: (day: DayPlan) => DayPlan): AppState {
+  const stateForDate = selectDate(state, date);
+  const weekPlan = {
+    ...stateForDate.weekPlan,
+    days: stateForDate.weekPlan.days.map((day) => day.date === date ? updater(day) : day)
+  };
+
+  return syncActiveWeek(stateForDate, weekPlan);
+}
+
+function selectDate(state: AppState, date: string): AppState {
+  const selectedDate = asIsoDate(date);
+  const weekStart = startOfWeek(selectedDate);
+  const weekPlan = state.weekPlans.find((week) => week.startsOn === weekStart)
+    ?? createEmptyWeekPlan(selectedDate);
+
   return {
-    ...state,
-    weekPlan: {
-      ...state.weekPlan,
-      days: state.weekPlan.days.map((day) => day.date === date ? updater(day) : day)
-    }
+    ...syncActiveWeek(state, weekPlan),
+    selectedDate
   };
 }
 
+function syncActiveWeek(state: AppState, weekPlan: WeekPlan): AppState {
+  return {
+    ...state,
+    weekPlan,
+    weekPlans: upsertWeekPlan(state.weekPlans, weekPlan)
+  };
+}
+
+function upsertWeekPlan(weekPlans: WeekPlan[], weekPlan: WeekPlan): WeekPlan[] {
+  const nextWeekPlans = [
+    ...weekPlans.filter((week) => week.startsOn !== weekPlan.startsOn),
+    weekPlan
+  ];
+
+  return nextWeekPlans.sort((left, right) => left.startsOn.localeCompare(right.startsOn));
+}
+
 function applyCoachPlanChange(state: AppState, change: CoachPlanChange): AppState {
-  if (!state.weekPlan.days.some((day) => day.date === change.date)) return state;
+  const stateForDate = selectDate(state, change.date);
 
   if (change.type === "set_day_context") {
-    return updateDay(state, change.date, (day) => ({
+    return updateDay(stateForDate, change.date, (day) => ({
       ...day,
       context: [change.context, ...day.context.filter((item) => !isPlanningContext(item))],
       blocks: [
@@ -546,7 +588,7 @@ function applyCoachPlanChange(state: AppState, change: CoachPlanChange): AppStat
       context: change.context
     };
 
-    return updateDay(state, change.date, (day) => ({
+    return updateDay(stateForDate, change.date, (day) => ({
       ...day,
       context: extraInfo.context && !day.context.includes(extraInfo.context)
         ? [...day.context, extraInfo.context]
@@ -557,7 +599,7 @@ function applyCoachPlanChange(state: AppState, change: CoachPlanChange): AppStat
 
   if (change.type === "add_workout") {
     const workout = createWorkoutFromDraft(change.date, normalizeCoachWorkout(change.workout));
-    const nextState = updateDay(state, change.date, (day) => ({
+    const nextState = updateDay(stateForDate, change.date, (day) => ({
       ...day,
       workouts: [...day.workouts, workout],
       blocks: [...day.blocks, createWorkoutBlock(workout)]
@@ -575,10 +617,10 @@ function applyCoachPlanChange(state: AppState, change: CoachPlanChange): AppStat
   }
 
   if (change.type === "add_meal") {
-    return applyCoachMealChange(state, change.date, change.meal);
+    return applyCoachMealChange(stateForDate, change.date, change.meal);
   }
 
-  return state;
+  return stateForDate;
 }
 
 function normalizeCoachWorkout(workout: CoachWorkoutDraft): WorkoutDraft {
@@ -635,31 +677,6 @@ function applyCoachMealChange(state: AppState, date: IsoDate, mealDraft: CoachMe
 
 function isPlanningContext(context: DayContext): context is PlanningContext {
   return context === "homeoffice" || context === "office" || context === "travel";
-}
-
-function createPlanningContextBlock(context: PlanningContext): DayBlock {
-  const blocks: Record<PlanningContext, Omit<DayBlock, "id">> = {
-    homeoffice: {
-      type: "work",
-      label: "Home-Office",
-      impact: "flexibler Tagesrhythmus, Training gut steuerbar"
-    },
-    office: {
-      type: "work",
-      label: "Büroarbeit",
-      impact: "Training und Verpflegung brauchen mehr Vorplanung"
-    },
-    travel: {
-      type: "travel",
-      label: "Reisetag",
-      impact: "Training und Fueling müssen bewusst einfach bleiben"
-    }
-  };
-
-  return {
-    id: createId(context),
-    ...blocks[context]
-  };
 }
 
 function planningExtraInfoToBlock(info: PlanningExtraInfo): DayBlock {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { createDailyBriefing } from "@/domain/briefing/create-daily-briefing";
 import { getDayPlanByDate } from "@/domain/planning/week";
+import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { TodayView } from "@/features/today/today-view";
 
@@ -16,10 +17,10 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
   const dayPlan = getDayPlanByDate(state.weekPlan, activeDate);
 
   useEffect(() => {
-    if (date) {
+    if (date && date !== state.selectedDate) {
       setSelectedDate(date);
     }
-  }, [date, setSelectedDate]);
+  }, [date, setSelectedDate, state.selectedDate]);
 
   const briefing = useMemo(() => createDailyBriefing({
     profile: state.profile,
@@ -28,5 +29,5 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     mealTemplates: state.mealTemplates
   }), [dayPlan, state.goals, state.mealTemplates, state.profile]);
 
-  return <TodayView briefing={briefing} />;
+  return <TodayView briefing={briefing} calendar={<WeekCalendar />} />;
 }
