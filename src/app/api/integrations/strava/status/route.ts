@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const diagnostics = createConfigDiagnostics();
   const missingEnv = [
     ...getMissingSupabaseEnvVars(),
     ...getMissingServiceRoleEnvVars(),
@@ -16,22 +17,33 @@ export async function GET() {
   ];
 
   if (missingEnv.length > 0) {
+    console.warn("[strava-status] integration is not configured", {
+      missingEnv,
+      diagnostics
+    });
+
     return NextResponse.json({
       configured: false,
       connected: false,
       provider: "strava",
       activityCount: 0,
-      missingEnv
+      missingEnv,
+      diagnostics
     });
   }
 
   if (!isSupabaseConfigured()) {
+    console.warn("[strava-status] supabase config unexpectedly missing", {
+      diagnostics
+    });
+
     return NextResponse.json({
       configured: false,
       connected: false,
       provider: "strava",
       activityCount: 0,
-      missingEnv: getMissingSupabaseEnvVars()
+      missingEnv: getMissingSupabaseEnvVars(),
+      diagnostics
     });
   }
 
@@ -43,5 +55,48 @@ export async function GET() {
     return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
   }
 
-  return NextResponse.json(await getStravaIntegrationStatus(user.id));
+  try {
+    const status = await getStravaIntegrationStatus(user.id);
+
+    return NextResponse.json({
+      ...status,
+      diagnostics
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unbekannter Fehler";
+
+    console.error("[strava-status] failed to load integration status", {
+      message,
+      diagnostics
+    });
+
+    return NextResponse.json({
+      configured: true,
+      connected: false,
+      provider: "strava",
+      status: "error",
+      activityCount: 0,
+      lastSyncError: "Strava-Status konnte serverseitig nicht geladen werden. Details stehen in den Vercel Runtime Logs.",
+      diagnostics
+    });
+  }
+}
+
+function createConfigDiagnostics() {
+  return {
+    nodeEnv: process.env.NODE_ENV ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
+    hasSupabaseUrl: hasEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    hasSupabasePublishableKey: hasEnvValue(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
+    hasSupabaseAnonKey: hasEnvValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    hasSupabaseServiceRoleKey: hasEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    hasStravaClientId: hasEnvValue(process.env.STRAVA_CLIENT_ID),
+    hasStravaClientSecret: hasEnvValue(process.env.STRAVA_CLIENT_SECRET),
+    hasStravaRedirectUri: hasEnvValue(process.env.STRAVA_REDIRECT_URI),
+    hasStravaOAuthStateSecret: hasEnvValue(process.env.STRAVA_OAUTH_STATE_SECRET)
+  };
+}
+
+function hasEnvValue(value: string | undefined): boolean {
+  return typeof value === "string" && value.trim().length > 0;
 }

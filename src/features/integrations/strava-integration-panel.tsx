@@ -8,6 +8,7 @@ type StravaStatus = {
   configured: boolean;
   connected: boolean;
   missingEnv?: string[];
+  diagnostics?: Record<string, boolean | string | null>;
   status?: string;
   athlete?: {
     id?: string;
@@ -116,6 +117,7 @@ export function StravaIntegrationPanel() {
           <p className="mt-2">
             In Vercel müssen die Variablen für die aktive Umgebung gesetzt sein. Nach Änderungen bitte neu deployen.
           </p>
+          {status?.diagnostics ? <DiagnosticsList diagnostics={status.diagnostics} /> : null}
         </div>
       ) : status.connected ? (
         <div className="grid gap-4">
@@ -145,6 +147,7 @@ export function StravaIntegrationPanel() {
           {status.lastSyncError ? (
             <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3 text-sm text-rose-700">
               {status.lastSyncError}
+              {status.diagnostics ? <DiagnosticsList diagnostics={status.diagnostics} /> : null}
             </div>
           ) : null}
 
@@ -185,6 +188,24 @@ export function StravaIntegrationPanel() {
         </div>
       ) : null}
     </Panel>
+  );
+}
+
+function DiagnosticsList({ diagnostics }: { diagnostics: Record<string, boolean | string | null> }) {
+  return (
+    <details className="mt-3 rounded-lg bg-white/70 px-3 py-2">
+      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.14em]">Runtime Checks</summary>
+      <dl className="mt-2 grid gap-1 text-xs">
+        {Object.entries(diagnostics).map(([key, value]) => (
+          <div key={key} className="flex items-center justify-between gap-3">
+            <dt><code>{key}</code></dt>
+            <dd className={value === false ? "font-semibold text-rose-700" : "text-muted"}>
+              {String(value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }
 

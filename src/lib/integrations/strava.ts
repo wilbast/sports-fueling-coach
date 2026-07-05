@@ -75,8 +75,8 @@ type StravaStream = {
 };
 
 export function getStravaConfig(): StravaConfig | null {
-  const clientId = process.env.STRAVA_CLIENT_ID;
-  const clientSecret = process.env.STRAVA_CLIENT_SECRET;
+  const clientId = process.env.STRAVA_CLIENT_ID?.trim();
+  const clientSecret = process.env.STRAVA_CLIENT_SECRET?.trim();
 
   if (!clientId || !clientSecret) return null;
 
@@ -86,8 +86,8 @@ export function getStravaConfig(): StravaConfig | null {
 export function getMissingStravaEnvVars(): string[] {
   const missing: string[] = [];
 
-  if (!process.env.STRAVA_CLIENT_ID) missing.push("STRAVA_CLIENT_ID");
-  if (!process.env.STRAVA_CLIENT_SECRET) missing.push("STRAVA_CLIENT_SECRET");
+  if (!process.env.STRAVA_CLIENT_ID?.trim()) missing.push("STRAVA_CLIENT_ID");
+  if (!process.env.STRAVA_CLIENT_SECRET?.trim()) missing.push("STRAVA_CLIENT_SECRET");
 
   return missing;
 }

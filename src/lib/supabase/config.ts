@@ -1,6 +1,6 @@
 export function getSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const publishableKey = normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) ?? normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
   if (!url || !publishableKey) return null;
 
@@ -17,13 +17,19 @@ export function isSupabaseConfigured(): boolean {
 export function getMissingSupabaseEnvVars(): string[] {
   const missing: string[] = [];
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL)) {
     missing.push("NEXT_PUBLIC_SUPABASE_URL");
   }
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY && !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  if (!normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) && !normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
     missing.push("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY oder NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
 
   return missing;
+}
+
+function normalizeEnvValue(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : undefined;
 }
