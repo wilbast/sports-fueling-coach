@@ -132,7 +132,7 @@ export function PlanningView() {
     isLoading: activitiesLoading,
     error: activitiesError
   } = useExternalActivities(weekStart, weekEnd);
-  const selectedActivities = activitiesByDate[selectedDay.date] ?? [];
+  const selectedActivities = useMemo(() => activitiesByDate[selectedDay.date] ?? [], [activitiesByDate, selectedDay.date]);
 
   useEffect(() => {
     if (!selectedWorkoutStandardId && state.standards.workouts[0]) {
@@ -143,13 +143,6 @@ export function PlanningView() {
       setSelectedWeekTemplateId(state.standards.weeks[0].id);
     }
   }, [selectedWeekTemplateId, selectedWorkoutStandardId, state.standards.weeks, state.standards.workouts]);
-
-  const briefing = useMemo(() => createDailyBriefing({
-    profile: state.profile,
-    goals: state.goals,
-    dayPlan: selectedDay,
-    mealTemplates: state.mealTemplates
-  }), [selectedDay, state.goals, state.mealTemplates, state.profile]);
 
   function submitWorkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -204,6 +197,14 @@ export function PlanningView() {
     saveCurrentWeekAsStandard(name, "Planung, Training und Fueling aus der aktuellen Woche.");
     setWeekStandardName("");
   }
+
+  const briefing = useMemo(() => createDailyBriefing({
+    profile: state.profile,
+    goals: state.goals,
+    dayPlan: selectedDay,
+    mealTemplates: state.mealTemplates,
+    actualActivities: selectedActivities
+  }), [selectedActivities, selectedDay, state.goals, state.mealTemplates, state.profile]);
 
   return (
     <div>

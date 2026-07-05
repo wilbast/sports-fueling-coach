@@ -10,6 +10,21 @@ export type DailyBriefingInput = {
   goals: UserGoals;
   dayPlan: DayPlan;
   mealTemplates: MealTemplate[];
+  actualActivities?: ActualActivityForBriefing[];
+};
+
+export type ActualActivityForBriefing = {
+  name: string;
+  sportType: string;
+  startDate: string;
+  startDateLocal?: string | null;
+  distanceMeters?: number | null;
+  movingTimeSeconds?: number | null;
+  elapsedTimeSeconds?: number | null;
+  calories?: number | null;
+  averageHeartrate?: number | null;
+  relativeEffort?: number | null;
+  trainingLoad?: number | null;
 };
 
 export type BriefingWorkout = {

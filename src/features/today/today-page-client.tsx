@@ -32,8 +32,9 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     profile: state.profile,
     goals: state.goals,
     dayPlan,
-    mealTemplates: state.mealTemplates
-  }), [dayPlan, state.goals, state.mealTemplates, state.profile]);
+    mealTemplates: state.mealTemplates,
+    actualActivities: activitiesByDate[activeDate] ?? []
+  }), [activitiesByDate, activeDate, dayPlan, state.goals, state.mealTemplates, state.profile]);
 
   return (
     <TodayView

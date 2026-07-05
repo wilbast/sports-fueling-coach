@@ -13,6 +13,7 @@ export type ExternalActivitySummary = {
   startDate: string;
   startDateLocal?: string | null;
   distanceMeters?: number | null;
+  calories?: number | null;
   movingTimeSeconds?: number | null;
   elapsedTimeSeconds?: number | null;
   averageHeartrate?: number | null;
@@ -143,8 +144,9 @@ function ExternalActivityCard({ activity }: { activity: ExternalActivitySummary 
         <Pill tone={intensity.tone}>{intensity.label}</Pill>
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-4">
+      <div className="mt-3 grid gap-2 sm:grid-cols-5">
         <Metric icon={Route} label="Länge" value={formatDistance(activity.distanceMeters)} />
+        <Metric icon={Activity} label="KCAL" value={formatCalories(activity.calories, activity)} />
         <Metric icon={Timer} label="Dauer" value={formatDuration(activity.movingTimeSeconds ?? activity.elapsedTimeSeconds)} />
         <Metric icon={HeartPulse} label="Ø Puls" value={formatHeartRate(activity.averageHeartrate)} />
         <Metric icon={Gauge} label="Intensität" value={intensity.detail} />
@@ -212,6 +214,29 @@ function formatDuration(seconds?: number | null): string {
   const rest = minutes % 60;
 
   return `${hours}:${String(rest).padStart(2, "0")} h`;
+}
+
+function formatCalories(value: number | null | undefined, activity?: ExternalActivitySummary): string {
+  if (value) return `${Math.round(value).toLocaleString("de-DE")} kcal`;
+  if (!activity) return "offen";
+
+  const estimate = estimateCalories(activity);
+
+  return estimate > 0 ? `ca. ${Math.round(estimate).toLocaleString("de-DE")} kcal` : "offen";
+}
+
+function estimateCalories(activity: ExternalActivitySummary): number {
+  const distanceKm = (activity.distanceMeters ?? 0) / 1000;
+  if (activity.sportType.toLowerCase().includes("run") && distanceKm > 0) {
+    return distanceKm * 75;
+  }
+
+  const minutes = (activity.movingTimeSeconds ?? activity.elapsedTimeSeconds ?? 0) / 60;
+  if (minutes > 0) {
+    return minutes * 8;
+  }
+
+  return 0;
 }
 
 function formatHeartRate(value?: number | null): string {

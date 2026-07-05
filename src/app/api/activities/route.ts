@@ -14,6 +14,7 @@ type ActivityRow = {
   start_date: string;
   start_date_local: string | null;
   distance_meters: number | null;
+  calories: number | null;
   moving_time_seconds: number | null;
   elapsed_time_seconds: number | null;
   average_heartrate: number | null;
@@ -43,14 +44,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ activities: [] });
   }
 
+  const startInclusive = new Date(`${start}T00:00:00.000Z`);
+  startInclusive.setUTCDate(startInclusive.getUTCDate() - 1);
   const endExclusive = new Date(`${end}T00:00:00.000Z`);
   endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
 
   const { data, error } = await supabase
     .from("activities")
-    .select("id,source_provider,source_activity_id,name,sport_type,start_date,start_date_local,distance_meters,moving_time_seconds,elapsed_time_seconds,average_heartrate,relative_effort,training_load,average_pace_seconds_per_km")
+    .select("id,source_provider,source_activity_id,name,sport_type,start_date,start_date_local,distance_meters,calories,moving_time_seconds,elapsed_time_seconds,average_heartrate,relative_effort,training_load,average_pace_seconds_per_km")
     .eq("user_id", user.id)
-    .gte("start_date", `${start}T00:00:00.000Z`)
+    .gte("start_date", startInclusive.toISOString())
     .lt("start_date", endExclusive.toISOString())
     .order("start_date", { ascending: true });
 
@@ -75,6 +78,7 @@ function mapActivity(activity: ActivityRow) {
     startDate: activity.start_date,
     startDateLocal: activity.start_date_local,
     distanceMeters: activity.distance_meters,
+    calories: activity.calories,
     movingTimeSeconds: activity.moving_time_seconds,
     elapsedTimeSeconds: activity.elapsed_time_seconds,
     averageHeartrate: activity.average_heartrate,
