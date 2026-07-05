@@ -13,7 +13,7 @@ type TodayPageClientProps = {
 };
 
 export function TodayPageClient({ date }: TodayPageClientProps) {
-  const { state, setSelectedDate } = useAppState();
+  const { state, setSelectedDate, updateManualActivityForecastCalories } = useAppState();
   const activeDate = date ?? state.selectedDate;
   const dayPlan = getDayPlanByDate(state.weekPlan, activeDate);
   const {
@@ -44,6 +44,8 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
       externalActivities={activitiesByDate[activeDate] ?? []}
       externalActivitiesLoading={activitiesLoading}
       externalActivitiesError={activitiesError}
+      manualForecastCalories={state.energySettings.manualActivityForecastCaloriesByDate[activeDate]}
+      onManualForecastCaloriesChange={(calories) => updateManualActivityForecastCalories(activeDate, calories)}
     />
   );
 }

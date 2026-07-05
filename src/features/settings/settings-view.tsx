@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { BriefcaseBusiness, Flame, RotateCcw, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { PerformanceStrategy, RaceGoal, WeightStrategy } from "@/domain/goals/types";
@@ -18,6 +19,7 @@ export function SettingsView() {
     updateRaceGoal,
     updateBaselineCaloriesWithoutActivity,
     updateManualActivityForecastCalories,
+    saveStateNow,
     resetDemoState,
     resetBetaState
   } = useAppState();
@@ -29,6 +31,14 @@ export function SettingsView() {
   const family = profile.family ?? createFallbackFamilyProfile();
   const job = profile.job ?? createFallbackJobProfile();
   const onlineMode = isSupabaseConfigured();
+  const [saveLabel, setSaveLabel] = useState("Speichern");
+
+  async function saveSettings() {
+    setSaveLabel("Speichert...");
+    await saveStateNow();
+    setSaveLabel("Gespeichert");
+    window.setTimeout(() => setSaveLabel("Speichern"), 1800);
+  }
 
   return (
     <div>
@@ -36,6 +46,15 @@ export function SettingsView() {
         eyebrow="Einstellungen"
         title="Profil, Ziele und Daten"
         description="Stammdaten steuern die Coach-Empfehlungen."
+        action={
+          <button
+            type="button"
+            onClick={saveSettings}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
+          >
+            {saveLabel}
+          </button>
+        }
       />
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.95fr]">
@@ -102,6 +121,14 @@ export function SettingsView() {
                 />
               </label>
             </div>
+
+            <button
+              type="button"
+              onClick={saveSettings}
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700"
+            >
+              Profil speichern
+            </button>
           </Panel>
 
           <Panel>

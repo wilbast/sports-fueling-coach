@@ -7,6 +7,12 @@ export type NutritionTarget = {
   calories: MacroTarget;
   protein: MacroTarget;
   carbohydrates: MacroTarget;
+  energyExpenditure: {
+    baselineCalories: number;
+    activityCalories: number;
+    totalCalories: number;
+    source: "actual" | "manual_forecast" | "planned" | "none";
+  };
   rationale: string[];
 };
 

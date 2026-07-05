@@ -110,6 +110,7 @@ type AppStateContextValue = {
   updateProfile: (profile: UserProfile) => void;
   updateGoals: (goals: UserGoals) => void;
   updateRaceGoal: (raceGoal: RaceGoal) => void;
+  saveStateNow: () => Promise<void>;
   resetDemoState: () => void;
   resetBetaState: () => void;
 };
@@ -223,17 +224,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     if (!supabaseUserId) return;
 
     const saveTimeout = window.setTimeout(async () => {
-      const supabase = createSupabaseClient();
-      const { error } = await supabase
-        .from("app_states")
-        .upsert({
-          user_id: supabaseUserId,
-          state: stateToPersist
-        }, { onConflict: "user_id" });
-
-      if (error) {
-        console.warn("Supabase app state could not be saved.", error.message);
-      }
+      await persistStateToSupabase(supabaseUserId, stateToPersist);
     }, 500);
 
     return () => window.clearTimeout(saveTimeout);
@@ -571,6 +562,14 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         goals: { ...current.goals, raceGoal }
       }));
     },
+    saveStateNow: async () => {
+      const stateToPersist = markUpdated(state);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist));
+
+      if (isSupabaseConfigured() && supabaseUserId) {
+        await persistStateToSupabase(supabaseUserId, stateToPersist);
+      }
+    },
     resetDemoState: () => {
       window.localStorage.removeItem(STORAGE_KEY);
       setState(createInitialAppState());
@@ -617,6 +616,20 @@ export function useAppState() {
   }
 
   return context;
+}
+
+async function persistStateToSupabase(userId: string, state: AppState): Promise<void> {
+  const supabase = createSupabaseClient();
+  const { error } = await supabase
+    .from("app_states")
+    .upsert({
+      user_id: userId,
+      state
+    }, { onConflict: "user_id" });
+
+  if (error) {
+    console.warn("Supabase app state could not be saved.", error.message);
+  }
 }
 
 function createInitialAppState(): AppState {

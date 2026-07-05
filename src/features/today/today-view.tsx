@@ -19,6 +19,8 @@ type TodayViewProps = {
   externalActivities?: ExternalActivitySummary[];
   externalActivitiesLoading?: boolean;
   externalActivitiesError?: string | null;
+  manualForecastCalories?: number;
+  onManualForecastCaloriesChange?: (calories?: number) => void;
 };
 
 export function TodayView({
@@ -26,7 +28,9 @@ export function TodayView({
   calendar,
   externalActivities = [],
   externalActivitiesLoading = false,
-  externalActivitiesError = null
+  externalActivitiesError = null,
+  manualForecastCalories,
+  onManualForecastCaloriesChange
 }: TodayViewProps) {
   return (
     <div>
@@ -80,7 +84,7 @@ export function TodayView({
         </div>
       </section>
 
-      <section className="mb-8 grid gap-3 md:grid-cols-3">
+      <section className="mb-8 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {briefing.metrics.map((metric) => (
           <StatCard
             key={metric.label}
@@ -146,6 +150,33 @@ export function TodayView({
             error={externalActivitiesError}
             emptyText="Noch keine importierte Aktivität für heute."
           />
+          <div className="mt-4 rounded-2xl border border-line bg-white p-4 shadow-soft">
+            <div className="mb-3 flex items-center gap-2">
+              <Flame className="h-4 w-4 text-amber-700" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-ink">KCAL Forecast heute</h3>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                value={manualForecastCalories ?? ""}
+                onChange={(event) => onManualForecastCaloriesChange?.(parseOptionalNumber(event.target.value))}
+                placeholder="z. B. 650"
+                inputMode="numeric"
+                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                aria-label="KCAL Forecast für heute"
+              />
+              <button
+                type="button"
+                onClick={() => onManualForecastCaloriesChange?.()}
+                disabled={!manualForecastCalories}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Entfernen
+              </button>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted">
+              Ohne Forecast nutzt der Coach geplante Aktivität, nach Strava-Sync die tatsächlichen KCAL.
+            </p>
+          </div>
         </section>
       </div>
 
@@ -235,4 +266,12 @@ export function TodayView({
       </section>
     </div>
   );
+}
+
+function parseOptionalNumber(value: string): number | undefined {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return undefined;
+
+  const parsed = Number.parseFloat(trimmedValue.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
