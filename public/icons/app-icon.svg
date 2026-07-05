@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sports & Fueling Coach">
+  <rect width="512" height="512" rx="112" fill="#3f7f5f"/>
+  <circle cx="256" cy="256" r="166" fill="#f7f5ef"/>
+  <path d="M168 300c34-86 84-132 176-154-18 92-66 144-154 176l-22-22Z" fill="#3f7f5f"/>
+  <path d="M188 323c48 28 101 28 154 0" fill="none" stroke="#1f2a24" stroke-width="24" stroke-linecap="round"/>
+  <path d="M196 198h120" fill="none" stroke="#1f2a24" stroke-width="24" stroke-linecap="round"/>
+</svg>

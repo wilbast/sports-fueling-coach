@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { BookmarkPlus, CalendarRange, Dumbbell, Plus, Salad, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BookmarkPlus, Bot, CalendarRange, Dumbbell, Pencil, Plus, Salad, SlidersHorizontal, Trash2 } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
+import type { MealTemplate } from "@/domain/nutrition/types";
 import type { PlanningContext } from "@/domain/standards/types";
 import {
   describeWorkoutType,
@@ -41,7 +42,10 @@ export function ConfigurationView() {
     addWorkoutStandard,
     removeWorkoutStandard,
     addMealTemplate,
+    updateMealTemplate,
     removeMealStandard,
+    deleteMealTemplate,
+    moveMealTemplate,
     saveCurrentWeekAsStandard,
     removeWeekStandard
   } = useAppState();
@@ -68,7 +72,12 @@ export function ConfigurationView() {
   const [caloriesMax, setCaloriesMax] = useState("650");
   const [proteinMin, setProteinMin] = useState("30");
   const [proteinMax, setProteinMax] = useState("45");
+  const [carbsGrams, setCarbsGrams] = useState("70");
+  const [fatGrams, setFatGrams] = useState("20");
   const [mealTags, setMealTags] = useState("standard, protein");
+  const [mealEditingId, setMealEditingId] = useState<string | null>(null);
+  const [isEstimatingMeal, setIsEstimatingMeal] = useState(false);
+  const [mealEstimateNotice, setMealEstimateNotice] = useState<string | null>(null);
 
   const [weekName, setWeekName] = useState("");
   const [weekDescription, setWeekDescription] = useState("Planung, Training und Fueling aus der aktuellen Woche.");
@@ -118,17 +127,101 @@ export function ConfigurationView() {
     const description = mealDescription.trim();
     if (!name || !description) return;
 
-    addMealTemplate({
+    const template = {
       name,
       description,
       caloriesMin: parseNumber(caloriesMin, 0),
       caloriesMax: parseNumber(caloriesMax, 0),
       proteinMin: parseNumber(proteinMin, 0),
       proteinMax: parseNumber(proteinMax, 0),
+      carbsGrams: parseNumber(carbsGrams, 0),
+      fatGrams: parseNumber(fatGrams, 0),
+      nutritionSource: mealEstimateNotice ? "ai_estimate" as const : "manual" as const,
+      nutritionConfidence: mealEstimateNotice ? "medium" as const : "manual" as const,
+      nutritionRationale: mealEstimateNotice ?? "Manuell gepflegte Standardmahlzeit.",
       tags: mealTags.split(",").map((tag) => tag.trim()).filter(Boolean)
-    });
+    };
+
+    if (mealEditingId) {
+      updateMealTemplate(mealEditingId, template);
+    } else {
+      addMealTemplate(template);
+    }
+
+    resetMealForm();
+  }
+
+  async function estimateMealStandard() {
+    const input = [mealName, mealDescription].filter(Boolean).join(": ").trim();
+    if (!input || isEstimatingMeal) return;
+
+    setIsEstimatingMeal(true);
+    setMealEstimateNotice(null);
+
+    try {
+      const response = await fetch("/api/nutrition/estimate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input })
+      });
+      const result = await response.json() as {
+        estimate?: {
+          name: string;
+          calories: number;
+          proteinGrams: number;
+          carbohydrateGrams: number;
+          fatGrams: number;
+          confidence: "low" | "medium" | "high";
+          rationale: string;
+        };
+      };
+      const estimate = result.estimate;
+
+      if (response.ok && estimate) {
+        if (!mealName.trim()) setMealName(estimate.name);
+        setCaloriesMin(String(Math.max(0, estimate.calories - 80)));
+        setCaloriesMax(String(estimate.calories + 80));
+        setProteinMin(String(Math.max(0, estimate.proteinGrams - 6)));
+        setProteinMax(String(estimate.proteinGrams + 6));
+        setCarbsGrams(String(estimate.carbohydrateGrams));
+        setFatGrams(String(estimate.fatGrams));
+        setMealEstimateNotice(`KI-Schätzung (${confidenceLabel(estimate.confidence)}): ${estimate.rationale}`);
+      } else {
+        setMealEstimateNotice("KI-Schätzung konnte nicht geladen werden. Du kannst die Werte manuell pflegen.");
+      }
+    } catch {
+      setMealEstimateNotice("KI-Schätzung konnte nicht geladen werden. Du kannst die Werte manuell pflegen.");
+    } finally {
+      setIsEstimatingMeal(false);
+    }
+  }
+
+  function editMealStandard(meal: MealTemplate) {
+    setMealEditingId(meal.id);
+    setMealName(meal.name);
+    setMealDescription(meal.description);
+    setCaloriesMin(String(meal.estimatedCalories.min));
+    setCaloriesMax(String(meal.estimatedCalories.max));
+    setProteinMin(String(meal.estimatedProteinGrams.min));
+    setProteinMax(String(meal.estimatedProteinGrams.max));
+    setCarbsGrams(String(meal.estimatedCarbohydratesGrams?.min ?? 0));
+    setFatGrams(String(meal.estimatedFatGrams?.min ?? 0));
+    setMealTags(meal.tags.join(", "));
+    setMealEstimateNotice(meal.nutritionRationale ?? null);
+  }
+
+  function resetMealForm() {
     setMealName("");
     setMealDescription("");
+    setCaloriesMin("450");
+    setCaloriesMax("650");
+    setProteinMin("30");
+    setProteinMax("45");
+    setCarbsGrams("70");
+    setFatGrams("20");
+    setMealTags("standard, protein");
+    setMealEditingId(null);
+    setMealEstimateNotice(null);
   }
 
   function submitWeekStandard(event: FormEvent<HTMLFormElement>) {
@@ -143,7 +236,7 @@ export function ConfigurationView() {
   return (
     <div>
       <PageHeader
-        eyebrow="Konfig"
+        eyebrow="Standards"
         title="Standards verwalten"
         description="Gespeicherte Vorlagen nach Kategorie pflegen. Standards bleiben zentral, die Tagesplanung bleibt leicht."
       />
@@ -331,23 +424,48 @@ export function ConfigurationView() {
           <div className="grid gap-2 sm:grid-cols-2">
             {standardMeals.length === 0 ? (
               <EmptyState text="Noch keine Fuelingstandards gespeichert." />
-            ) : standardMeals.map((meal) => (
+            ) : standardMeals.map((meal, index) => (
               <div key={meal.id} className="rounded-xl border border-line px-3 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-ink">{meal.name}</p>
                     <p className="mt-1 text-sm leading-5 text-muted">{meal.description}</p>
+                    <p className="mt-2 text-xs text-muted">{meal.tags.join(" · ") || "ohne Kategorie"}</p>
                   </div>
-                  <DeleteButton label="Fuelingstandard löschen" onClick={() => removeMealStandard(meal.id)} />
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    <IconButton label="Nach oben" disabled={index === 0} onClick={() => moveMealTemplate(meal.id, "up")}>
+                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                    </IconButton>
+                    <IconButton label="Nach unten" disabled={index === standardMeals.length - 1} onClick={() => moveMealTemplate(meal.id, "down")}>
+                      <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                    </IconButton>
+                    <IconButton label="Fuelingstandard bearbeiten" onClick={() => editMealStandard(meal)}>
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </IconButton>
+                    <DeleteButton label="Aus Standards entfernen" onClick={() => removeMealStandard(meal.id)} />
+                    <DeleteButton label="Fuelingstandard löschen" onClick={() => deleteMealTemplate(meal.id)} />
+                  </div>
                 </div>
                 <p className="mt-3 text-xs font-semibold text-coach-700">
                   {meal.estimatedCalories.min}-{meal.estimatedCalories.max} kcal · {meal.estimatedProteinGrams.min}-{meal.estimatedProteinGrams.max} g Protein
+                  {meal.estimatedCarbohydratesGrams ? ` · ${meal.estimatedCarbohydratesGrams.min} g Carbs` : ""}
+                  {meal.estimatedFatGrams ? ` · ${meal.estimatedFatGrams.min} g Fett` : ""}
                 </p>
               </div>
             ))}
           </div>
 
           <form onSubmit={submitMealStandard} className="mt-5 grid gap-3 rounded-xl bg-canvas p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-ink">
+                {mealEditingId ? "Standard bearbeiten" : "Standard hinzufügen"}
+              </p>
+              {mealEditingId ? (
+                <button type="button" onClick={resetMealForm} className="text-xs font-semibold text-muted hover:text-ink">
+                  Bearbeitung abbrechen
+                </button>
+              ) : null}
+            </div>
             <input
               value={mealName}
               onChange={(event) => setMealName(event.target.value)}
@@ -396,6 +514,24 @@ export function ConfigurationView() {
                 aria-label="Protein Maximum"
               />
             </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                value={carbsGrams}
+                onChange={(event) => setCarbsGrams(event.target.value)}
+                inputMode="numeric"
+                placeholder="Kohlenhydrate g"
+                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                aria-label="Kohlenhydrate in Gramm"
+              />
+              <input
+                value={fatGrams}
+                onChange={(event) => setFatGrams(event.target.value)}
+                inputMode="numeric"
+                placeholder="Fett g"
+                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                aria-label="Fett in Gramm"
+              />
+            </div>
             <input
               value={mealTags}
               onChange={(event) => setMealTags(event.target.value)}
@@ -403,7 +539,23 @@ export function ConfigurationView() {
               className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
               aria-label="Tags des Fuelingstandards"
             />
-            <SubmitButton label="Fuelingstandard hinzufügen" />
+            {mealEstimateNotice ? (
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                {mealEstimateNotice}
+              </div>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={estimateMealStandard}
+                disabled={isEstimatingMeal || (!mealName.trim() && !mealDescription.trim())}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-coach-200 bg-white px-4 text-sm font-semibold text-coach-800 transition hover:bg-coach-50 disabled:cursor-not-allowed disabled:text-muted"
+              >
+                <Bot className="h-4 w-4" aria-hidden="true" />
+                {isEstimatingMeal ? "Schätzt..." : "KI schätzen lassen"}
+              </button>
+              <SubmitButton label={mealEditingId ? "Änderungen speichern" : "Fuelingstandard hinzufügen"} />
+            </div>
           </form>
         </Panel>
 
@@ -497,6 +649,27 @@ function DeleteButton({ label, onClick }: DeleteButtonProps) {
   );
 }
 
+type IconButtonProps = {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+};
+
+function IconButton({ label, disabled = false, onClick, children }: IconButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+      aria-label={label}
+    >
+      {children}
+    </button>
+  );
+}
+
 type EmptyStateProps = {
   text: string;
 };
@@ -545,4 +718,11 @@ function parseNumber(value: string, fallback: number): number {
   const parsed = Number.parseFloat(value.replace(",", "."));
 
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function confidenceLabel(confidence: "low" | "medium" | "high"): string {
+  if (confidence === "high") return "hoch";
+  if (confidence === "medium") return "mittel";
+
+  return "niedrig";
 }

@@ -1,13 +1,16 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { Beef, BookmarkPlus, Plus, Salad, Soup, Trash2, Wheat } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Beef, BookmarkPlus, History, Plus, Salad, Soup, Trash2, Utensils, Wheat } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
+import type { MealLog } from "@/domain/nutrition/logs";
+import { sourceLabel } from "@/domain/nutrition/logs";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
+import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
 const mealIcons = [Salad, Beef, Soup, Wheat];
 
@@ -30,6 +33,9 @@ export function FuelingView() {
   const [slotTime, setSlotTime] = useState("12:30");
   const [slotRole, setSlotRole] = useState<MealPlanSlot["role"]>("lunch");
   const selectedDayTotals = useMemo(() => calculateDayMealTotals(selectedDay.mealPlan, state.mealTemplates), [selectedDay.mealPlan, state.mealTemplates]);
+  const { logs: selectedDayLogs, isLoading: logsLoading, error: logsError } = useNutritionLogs(selectedDay.date);
+  const weeklyLogs = useWeekMealLogs(state.weekPlan.days.map((day) => day.date));
+  const selectedDayLoggedTotals = useMemo(() => calculateMealLogTotals(selectedDayLogs), [selectedDayLogs]);
 
   function submitTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,14 +92,14 @@ export function FuelingView() {
 
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
         <Panel>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Tageskalorien</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Geplant</p>
           <p className="mt-3 text-2xl font-semibold text-ink">{selectedDayTotals.calories}</p>
           <p className="mt-2 text-sm text-muted">aus geplanten Mahlzeiten</p>
         </Panel>
         <Panel>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Protein</p>
-          <p className="mt-3 text-2xl font-semibold text-ink">{selectedDayTotals.protein}</p>
-          <p className="mt-2 text-sm text-muted">grober Tagesrahmen</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Geloggt</p>
+          <p className="mt-3 text-2xl font-semibold text-ink">{selectedDayLoggedTotals.calories}</p>
+          <p className="mt-2 text-sm text-muted">{selectedDayLogs.length} Einträge am aktiven Tag</p>
         </Panel>
         <Panel>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Aktiver Tag</p>
@@ -105,6 +111,49 @@ export function FuelingView() {
       <div className="mb-6">
         <QuickFuelingPanel date={selectedDay.date} />
       </div>
+
+      <section className="mb-6 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+        <Panel>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Utensils className="h-5 w-5 text-coach-600" aria-hidden="true" />
+              <h2 className="text-lg font-semibold text-ink">Geloggt am aktiven Tag</h2>
+            </div>
+            <Pill tone="amber">{selectedDayLogs.length} Einträge</Pill>
+          </div>
+
+          <MealLogList logs={selectedDayLogs} isLoading={logsLoading} error={logsError} emptyText="Noch nichts geloggt. Nutze den Chat oder einen Standard, um Fueling zum Tag hinzuzufügen." />
+        </Panel>
+
+        <Panel>
+          <div className="mb-4 flex items-center gap-2">
+            <History className="h-5 w-5 text-coach-600" aria-hidden="true" />
+            <h2 className="text-lg font-semibold text-ink">Historie dieser Woche</h2>
+          </div>
+          <div className="grid gap-2">
+            {weeklyLogs.isLoading ? (
+              <p className="rounded-xl bg-canvas px-3 py-3 text-sm text-muted">Historie wird geladen...</p>
+            ) : weeklyLogs.logs.length === 0 ? (
+              <p className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">Noch keine geloggten Mahlzeiten in dieser Woche.</p>
+            ) : weeklyLogs.logs.slice(0, 8).map((log) => (
+              <div key={log.id} className="rounded-xl border border-line px-3 py-3">
+                <p className="text-sm font-semibold text-ink">{formatShortDate(log.date)} · {log.name}</p>
+                <p className="mt-1 text-xs text-muted">{log.values.calories} kcal · {log.values.proteinGrams} g Protein · {sourceLabel(log.source, log.manuallyConfirmed)}</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel className="lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-ink">Rezepte</h2>
+            <Pill tone="neutral">vorbereitet</Pill>
+          </div>
+          <p className="text-sm leading-6 text-muted">
+            Rezepte sind als Datenmodell vorbereitet. Für die Bedienung bleibt Fueling aktuell bewusst bei Standardmahlzeiten, Chat-Schätzung und Tageslogs. Die Rezeptverwaltung sollte als eigener Sprint folgen, damit Portionen, Zutaten und Nährwerte sauber editierbar sind.
+          </p>
+        </Panel>
+      </section>
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.82fr]">
         <div className="grid gap-6">
@@ -367,6 +416,105 @@ function calculateDayMealTotals(slots: MealPlanSlot[], mealTemplates: MealTempla
     calories: `${totals.caloriesMin}-${totals.caloriesMax} kcal`,
     protein: `${totals.proteinMin}-${totals.proteinMax} g`
   };
+}
+
+function calculateMealLogTotals(logs: MealLog[]) {
+  return logs.reduce((sum, log) => ({
+    calories: sum.calories + log.values.calories,
+    protein: sum.protein + log.values.proteinGrams,
+    carbs: sum.carbs + log.values.carbohydrateGrams
+  }), {
+    calories: 0,
+    protein: 0,
+    carbs: 0
+  });
+}
+
+function MealLogList({
+  logs,
+  isLoading,
+  error,
+  emptyText
+}: {
+  logs: MealLog[];
+  isLoading: boolean;
+  error: string | null;
+  emptyText: string;
+}) {
+  if (isLoading) {
+    return <p className="rounded-xl bg-canvas px-3 py-3 text-sm text-muted">Mahlzeiten werden geladen...</p>;
+  }
+
+  if (error) {
+    return <p className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3 text-sm text-rose-700">{error}</p>;
+  }
+
+  if (logs.length === 0) {
+    return <p className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">{emptyText}</p>;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {logs.map((log) => (
+        <div key={log.id} className="rounded-xl border border-line px-3 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-ink">{log.name}</p>
+              <p className="mt-1 text-sm text-muted">{log.time ?? "ohne Uhrzeit"} · {sourceLabel(log.source, log.manuallyConfirmed)}</p>
+            </div>
+            <Pill tone={log.manuallyConfirmed ? "green" : "amber"}>
+              {log.confidence === "manual" ? "bestätigt" : "Schätzung"}
+            </Pill>
+          </div>
+          <p className="mt-3 text-xs font-semibold text-coach-700">
+            {log.values.calories} kcal · {log.values.proteinGrams} g Protein · {log.values.carbohydrateGrams} g Carbs{typeof log.values.fatGrams === "number" ? ` · ${log.values.fatGrams} g Fett` : ""}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function useWeekMealLogs(dates: string[]) {
+  const [logs, setLogs] = useState<MealLog[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const datesKey = dates.join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+    const selectedDates = datesKey.split("|").filter(Boolean);
+
+    async function loadLogs() {
+      setIsLoading(true);
+
+      try {
+        const results = await Promise.all(selectedDates.map(async (date) => {
+          const response = await fetch(`/api/nutrition/logs?date=${encodeURIComponent(date)}`);
+          const result = await response.json() as { logs?: MealLog[] };
+
+          return response.ok ? result.logs ?? [] : [];
+        }));
+
+        if (!cancelled) {
+          setLogs(results.flat().sort((left, right) => `${right.date}${right.time ?? ""}`.localeCompare(`${left.date}${left.time ?? ""}`)));
+        }
+      } catch {
+        if (!cancelled) setLogs([]);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    if (selectedDates.length > 0) {
+      void loadLogs();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [datesKey]);
+
+  return { logs, isLoading };
 }
 
 function formatMealEstimate(meal: MealTemplate): string {

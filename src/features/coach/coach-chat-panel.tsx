@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Lightbulb, Loader2, MessageCircle, SendHorizontal, Sparkles } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Lightbulb, Loader2, MessageCircle, RotateCcw, SendHorizontal, Sparkles } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
 import type { CoachChatMessage, CoachMealDraft, CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import { describeWorkoutType } from "@/domain/training/catalog";
@@ -13,6 +13,8 @@ type CoachChatPanelProps = {
   intro?: string;
   compact?: boolean;
 };
+
+const CHAT_RESET_STORAGE_KEY = "sports-fueling-coach:coach-chat-reset-at";
 
 export function CoachChatPanel({
   title = "Coach fragen",
@@ -29,6 +31,7 @@ export function CoachChatPanel({
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
   const [pendingPlan, setPendingPlan] = useState<{ id: string; changes: CoachPlanChange[] } | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const payloadState = useMemo(() => ({
     selectedDate: state.selectedDate,
     profile: state.profile,
@@ -39,6 +42,10 @@ export function CoachChatPanel({
     standards: state.standards
   }), [state.goals, state.mealTemplates, state.profile, state.selectedDate, state.standards, state.weekPlan, state.weekPlans]);
   const visibleMessages = compact ? messages.slice(-3) : messages;
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [visibleMessages.length, isLoadingHistory]);
 
   useEffect(() => {
     let active = true;
@@ -57,13 +64,16 @@ export function CoachChatPanel({
         }> };
 
         if (active && response.ok) {
-          setMessages((result.messages ?? []).map((message) => ({
-            id: message.id,
-            role: message.role,
-            content: message.content,
-            mode: message.mode,
-            createdAt: message.createdAt
-          })));
+          const resetAt = getLocalChatResetAt();
+          setMessages((result.messages ?? [])
+            .filter((message) => isAfterReset(message.createdAt, resetAt))
+            .map((message) => ({
+              id: message.id,
+              role: message.role,
+              content: message.content,
+              mode: message.mode,
+              createdAt: message.createdAt
+            })));
         }
       } catch {
         if (active) {
@@ -80,6 +90,16 @@ export function CoachChatPanel({
       active = false;
     };
   }, []);
+
+  function resetVisibleChat() {
+    const resetAt = new Date().toISOString();
+    window.localStorage.setItem(CHAT_RESET_STORAGE_KEY, resetAt);
+    setMessages([]);
+    setPendingPlan(null);
+    setAppliedIds([]);
+    setError(null);
+    setAiNotice("Chat-Anzeige zurückgesetzt. Der Verlauf bleibt im Hintergrund gespeichert und kann weiter als Kontext dienen.");
+  }
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -163,7 +183,7 @@ export function CoachChatPanel({
     }
   }
 
-  async function applyChanges(changes: CoachPlanChange[], id: string, options?: { saveMealAsStandard?: boolean }) {
+  async function applyChanges(changes: CoachPlanChange[], id: string, options?: { saveMealAsStandard?: boolean; standardOnly?: boolean }) {
     if (changes.length === 0 || appliedIds.includes(id)) return;
 
     await applyConfirmedChanges(changes, options);
@@ -175,6 +195,8 @@ export function CoachChatPanel({
       hasMealChanges
         ? options?.saveMealAsStandard
           ? "Gespeichert. Ich habe das Fueling heute hinzugefügt und als Standard abgelegt."
+          : options?.standardOnly
+            ? "Gespeichert. Ich habe das Fueling als Standard abgelegt."
           : "Gespeichert. Ich habe das Fueling dem Tag hinzugefügt."
         : "Übernommen. Ich habe den bestätigten Vorschlag in deinen Wochenplan eingetragen.",
       "change"
@@ -199,7 +221,7 @@ export function CoachChatPanel({
     ]);
   }
 
-  async function applyConfirmedChanges(changes: CoachPlanChange[], options?: { saveMealAsStandard?: boolean }) {
+  async function applyConfirmedChanges(changes: CoachPlanChange[], options?: { saveMealAsStandard?: boolean; standardOnly?: boolean }) {
     const planChanges = changes.filter((change) => change.type !== "add_meal");
     const mealChanges = changes.filter((change): change is Extract<CoachPlanChange, { type: "add_meal" }> => change.type === "add_meal");
 
@@ -210,6 +232,11 @@ export function CoachChatPanel({
     for (const change of mealChanges) {
       const saveAsStandard = options?.saveMealAsStandard ?? change.meal.saveAsStandard ?? false;
       const template = coachMealToTemplate(change.meal);
+      if (options?.standardOnly) {
+        addMealTemplate(template);
+        continue;
+      }
+
       const savedLog = await addLog({
         date: change.date,
         time: change.meal.time,
@@ -248,26 +275,45 @@ export function CoachChatPanel({
             <h2 className="mt-1 text-lg font-semibold text-ink">{title}</h2>
           </div>
         </div>
-        <Pill tone="blue">Beta</Pill>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={resetVisibleChat}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-muted transition hover:bg-canvas hover:text-ink"
+          >
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            Reset
+          </button>
+          <Pill tone="blue">Beta</Pill>
+        </div>
       </div>
 
-      <div className="grid gap-3">
-        {isLoadingHistory ? (
-          <div className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
-            Chat-Historie wird geladen...
-          </div>
-        ) : visibleMessages.length === 0 ? (
-          <div className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
-            {intro}
-          </div>
-        ) : visibleMessages.map((message) => (
-          <ChatBubble
-            key={message.id}
-            message={message}
-            appliedIds={appliedIds}
-            onApply={applyChanges}
-          />
-        ))}
+      <div className="rounded-2xl border border-line bg-white">
+        <div className="border-b border-line px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+          Chatfenster
+        </div>
+        <div className={compact
+          ? "grid max-h-[42dvh] min-h-64 gap-3 overflow-y-auto bg-canvas/50 p-3"
+          : "grid max-h-[52dvh] min-h-[50dvh] gap-3 overflow-y-auto bg-canvas/50 p-3"}
+        >
+          {isLoadingHistory ? (
+            <div className="rounded-xl bg-white px-3 py-3 text-sm leading-6 text-muted">
+              Chat-Historie wird geladen...
+            </div>
+          ) : visibleMessages.length === 0 ? (
+            <div className="rounded-xl bg-white px-3 py-3 text-sm leading-6 text-muted">
+              {intro}
+            </div>
+          ) : visibleMessages.map((message) => (
+            <ChatBubble
+              key={message.id}
+              message={message}
+              appliedIds={appliedIds}
+              onApply={applyChanges}
+            />
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {pendingPlan ? (
@@ -329,6 +375,24 @@ async function persistLocalMessages(messages: Array<{
   }
 }
 
+function getLocalChatResetAt(): string | null {
+  try {
+    return window.localStorage.getItem(CHAT_RESET_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function isAfterReset(createdAt: string, resetAt: string | null): boolean {
+  if (!resetAt) return true;
+  const createdTime = Date.parse(createdAt);
+  const resetTime = Date.parse(resetAt);
+
+  if (!Number.isFinite(createdTime) || !Number.isFinite(resetTime)) return true;
+
+  return createdTime > resetTime;
+}
+
 function formatAiDebugNotice(ai: NonNullable<CoachPlanResponse["ai"]>): string {
   const fallbackMessage = ai.message ?? "OpenAI ist nicht aktiv. Der regelbasierte Fallback antwortet.";
 
@@ -352,7 +416,7 @@ function ChatBubble({
 }: {
   message: CoachChatMessage;
   appliedIds: string[];
-  onApply: (changes: CoachPlanChange[], id: string, options?: { saveMealAsStandard?: boolean }) => void;
+  onApply: (changes: CoachPlanChange[], id: string, options?: { saveMealAsStandard?: boolean; standardOnly?: boolean }) => void;
 }) {
   const isAssistant = message.role === "assistant";
   const directChangeId = `${message.id}-changes`;
@@ -458,7 +522,7 @@ function SuggestionCard({
 }: {
   suggestion: CoachSuggestion;
   applied: boolean;
-  onApply: (options?: { saveMealAsStandard?: boolean }) => void;
+  onApply: (options?: { saveMealAsStandard?: boolean; standardOnly?: boolean }) => void;
 }) {
   const mealChanges = suggestion.changes.filter((change) => change.type === "add_meal");
   const hasOnlyMealChanges = mealChanges.length > 0 && mealChanges.length === suggestion.changes.length;
@@ -501,14 +565,24 @@ function SuggestionCard({
             {applied ? "Übernommen" : hasOnlyMealChanges ? "Zum Tag hinzufügen" : "In Planung übernehmen"}
           </button>
           {hasOnlyMealChanges ? (
-            <button
-              type="button"
-              onClick={() => onApply({ saveMealAsStandard: true })}
-              disabled={applied}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-coach-200 bg-white px-3 text-xs font-semibold text-coach-800 transition hover:bg-coach-50 disabled:cursor-not-allowed disabled:text-muted"
-            >
-              {applied ? "Standard gespeichert" : "Zum Tag + Standard"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => onApply({ saveMealAsStandard: true })}
+                disabled={applied}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-coach-200 bg-white px-3 text-xs font-semibold text-coach-800 transition hover:bg-coach-50 disabled:cursor-not-allowed disabled:text-muted"
+              >
+                {applied ? "Standard gespeichert" : "Zum Tag + Standard"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onApply({ standardOnly: true })}
+                disabled={applied}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:text-muted"
+              >
+                Nur als Standard
+              </button>
+            </>
           ) : null}
         </div>
       ) : null}

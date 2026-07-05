@@ -341,6 +341,7 @@ function createSystemPrompt(): string {
     "Bei Empfehlungsfragen: gib konkrete Mengen, Timing, Mahlzeiten, Snacks, Flüssigkeit oder Regenerationstipps ohne changes zu erzwingen.",
     "Ausnahme für Fueling/Nutrition: Wenn der Nutzer eine konkrete Mahlzeit, ein Rezept oder ein Fueling beschreibt, darfst du einen speicherbaren Entwurf in suggestion.changes mit type=add_meal liefern. Das ist nur ein Vorschlag und wird erst bei Bestätigung gespeichert.",
     "Bei add_meal schätze alltagstauglich caloriesMin/caloriesMax, proteinMin/proteinMax, carbohydrateGrams und fatGrams. Stelle die Werte nicht als exakt dar.",
+    "Wenn der Nutzer sagt 'Merke dir das als Standard', 'Füge ... als Standard hinzu' oder 'Standardfrühstück', liefere einen add_meal-Entwurf mit saveAsStandard=true. Der Client zeigt danach eine Standard-Speichern-Aktion.",
     "Bei unklarem Kontext: stelle maximal 1-2 gezielte Rückfragen.",
     "Erlaubte Sportarten: running, padel, swimming, squash, hiit, strength, cycling.",
     "Bei running nutze runningType: easy_run, tempo_run, fartlek oder intervals.",
@@ -1099,6 +1100,7 @@ function createFuelingLogSuggestion(message: string, date: IsoDate): CoachSugges
   const fatGrams = Math.round(Math.max(3, (calories - protein * 4 - carbohydrateGrams * 4) / 9));
   const mealName = createFallbackMealName(message);
   const role = inferMealRoleFromText(lower);
+  const saveAsStandard = lower.includes("standard") || lower.includes("merke") || lower.includes("merk dir");
 
   return {
     id: `fueling-log-${date}`,
@@ -1108,7 +1110,7 @@ function createFuelingLogSuggestion(message: string, date: IsoDate): CoachSugges
     rationale: "Das ist eine alltagstaugliche Schätzung aus deiner Beschreibung. Du kannst sie später genauer korrigieren.",
     tips: [
       "Zum Tagesstatus hinzufügen, wenn du es gegessen hast.",
-      "Als Standard speichern, wenn du diese Mahlzeit öfter nutzt."
+      saveAsStandard ? "Als Standard speichern, damit du sie künftig per Klick nutzen kannst." : "Als Standard speichern, wenn du diese Mahlzeit öfter nutzt."
     ],
     changes: [
       {
@@ -1126,7 +1128,7 @@ function createFuelingLogSuggestion(message: string, date: IsoDate): CoachSugges
           carbohydrateGrams,
           fatGrams,
           tags: ["coach", "fueling", role],
-          saveAsStandard: false
+          saveAsStandard
         }
       }
     ]
@@ -1480,6 +1482,8 @@ function mentionsConcreteFuelingDraft(lower: string): boolean {
     lower.includes("eintragen") ||
     lower.includes("hinzufügen") ||
     lower.includes("hinzufuegen") ||
+    lower.includes("standard") ||
+    lower.includes("merke") ||
     lower.includes("gegessen") ||
     lower.includes("mahlzeit") ||
     lower.includes("rezept") ||

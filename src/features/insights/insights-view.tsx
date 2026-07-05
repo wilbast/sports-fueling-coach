@@ -1,15 +1,26 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { ArrowDownRight, BarChart3, Info, Target } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
+import { createDailyBriefing } from "@/domain/briefing/create-daily-briefing";
+import { createDailyNutritionSummary, type MealLog } from "@/domain/nutrition/logs";
 import { getWeekTrainingLoad } from "@/domain/planning/week";
 import type { WeekPlan } from "@/domain/planning/types";
+import type { ExternalActivitySummary } from "@/features/activities/external-activities";
+import { useExternalActivities } from "@/features/activities/external-activities";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
+import type { AppState } from "@/features/app-state/app-state-provider";
 import { useAppState } from "@/features/app-state/app-state-provider";
 
 export function InsightsView() {
   const { state } = useAppState();
   const insights = createInsights(state.weekPlan);
+  const weekStart = state.weekPlan.days[0]?.date ?? state.selectedDate;
+  const weekEnd = state.weekPlan.days[state.weekPlan.days.length - 1]?.date ?? state.selectedDate;
+  const { activitiesByDate } = useExternalActivities(weekStart, weekEnd);
+  const weekLogs = useWeekMealLogs(state.weekPlan.days.map((day) => day.date));
+  const planVsActual = useMemo(() => createPlanVsActual(state, activitiesByDate, weekLogs.logs), [activitiesByDate, state, weekLogs.logs]);
   const currentWeight = state.profile.bodyMetrics.weightKg;
   const targetWeight = state.profile.bodyMetrics.targetWeightKg ?? currentWeight;
   const weightDelta = currentWeight - targetWeight;
@@ -18,20 +29,53 @@ export function InsightsView() {
     <div>
       <PageHeader
         eyebrow="Insights"
-        title="Einordnung statt Zahlenwand"
-        description="Training und Zielkontext werden aus dem lokalen Plan abgeleitet."
+        title="Plan vs. Ist"
+        description="Training, Fueling und Zielwerte werden pro Tag und Woche gegenübergestellt."
       />
 
       <WeekCalendar />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <InsightCard label="Laufumfang" value={`${insights.runningKm} km`} detail="aktive Laufplanung" />
-        <InsightCard label="Harte Einheiten" value={`${insights.hardSessions}`} detail="Qualitätsbelastung" />
+        <InsightCard label="Training" value={`${planVsActual.week.trainingActual}/${planVsActual.week.trainingPlanned}`} detail="durchgeführt / geplant" />
+        <InsightCard label="Kalorien" value={`${planVsActual.week.caloriesActual}`} detail={`von ca. ${planVsActual.week.caloriesTarget} kcal Ziel`} />
+        <InsightCard label="Protein" value={`${planVsActual.week.proteinActual} g`} detail={`von ca. ${planVsActual.week.proteinTarget} g Ziel`} />
         <InsightCard label="Trainingsbelastung" value={insights.trainingLoad} detail={`${insights.runningKm} km Laufen geplant`} />
-        <InsightCard label="Zielgewicht" value={`${formatNumber(weightDelta)} kg`} detail="Differenz zum Ziel" trend={weightDelta > 0} />
       </section>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <Panel className="lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-ink">Tage im Vergleich</h2>
+            <Pill tone="blue">{planVsActual.days.length} Tage</Pill>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                <tr>
+                  <th className="px-3 py-2">Tag</th>
+                  <th className="px-3 py-2">Training</th>
+                  <th className="px-3 py-2">Ernährung</th>
+                  <th className="px-3 py-2">Kalorien</th>
+                  <th className="px-3 py-2">Protein</th>
+                  <th className="px-3 py-2">Carbs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {planVsActual.days.map((day) => (
+                  <tr key={day.date} className="border-t border-line">
+                    <td className="px-3 py-3 font-semibold text-ink">{formatWeekday(day.date)}</td>
+                    <td className="px-3 py-3 text-muted">{day.trainingActual}/{day.trainingPlanned}</td>
+                    <td className="px-3 py-3 text-muted">{day.mealsActual}/{day.mealsPlanned}</td>
+                    <td className="px-3 py-3 text-muted">{day.caloriesActual}/{day.caloriesTarget}</td>
+                    <td className="px-3 py-3 text-muted">{day.proteinActual}/{day.proteinTarget} g</td>
+                    <td className="px-3 py-3 text-muted">{day.carbsActual}/{day.carbsTarget} g</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+
         <Panel>
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-ink">Wocheninterpretation</h2>
@@ -82,6 +126,16 @@ export function InsightsView() {
               <p className="mt-2 font-semibold text-ink">{state.profile.raceGoal?.targetTime ?? "-"}</p>
             </div>
           </div>
+        </Panel>
+
+        <Panel className="lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-ink">Gewicht</h2>
+            <Pill tone={weightDelta > 0 ? "amber" : "green"}>{`${formatNumber(weightDelta)} kg zum Ziel`}</Pill>
+          </div>
+          <p className="text-sm leading-6 text-muted">
+            Aktuell ist nur der Profilwert verfügbar. Ein echter Trend braucht regelmäßige Gewichtseinträge als normalisierte Historie.
+          </p>
         </Panel>
       </div>
     </div>
@@ -152,6 +206,108 @@ function createInsights(weekPlan: WeekPlan) {
   };
 }
 
+function createPlanVsActual(
+  state: AppState,
+  activitiesByDate: Record<string, ExternalActivitySummary[]>,
+  logs: MealLog[]
+) {
+  const logsByDate = logs.reduce<Record<string, MealLog[]>>((groups, log) => {
+    groups[log.date] = [...(groups[log.date] ?? []), log];
+
+    return groups;
+  }, {});
+
+  const days = state.weekPlan.days.map((day) => {
+    const briefing = createDailyBriefing({
+      profile: state.profile,
+      goals: state.goals,
+      dayPlan: day,
+      mealTemplates: state.mealTemplates,
+      actualActivities: activitiesByDate[day.date] ?? [],
+      energySettings: state.energySettings
+    });
+    const nutritionSummary = createDailyNutritionSummary(logsByDate[day.date] ?? [], briefing.nutritionTarget);
+    const trainingPlanned = day.workouts.filter((workout) => workout.status !== "cancelled").length;
+    const trainingActual = activitiesByDate[day.date]?.length ?? 0;
+
+    return {
+      date: day.date,
+      trainingPlanned,
+      trainingActual,
+      mealsPlanned: day.mealPlan.length,
+      mealsActual: logsByDate[day.date]?.length ?? 0,
+      caloriesActual: nutritionSummary.intake.calories,
+      caloriesTarget: nutritionSummary.targets.caloriesMax,
+      proteinActual: nutritionSummary.intake.proteinGrams,
+      proteinTarget: nutritionSummary.targets.proteinMin,
+      carbsActual: nutritionSummary.intake.carbohydrateGrams,
+      carbsTarget: nutritionSummary.targets.carbsMin
+    };
+  });
+
+  return {
+    days,
+    week: days.reduce((sum, day) => ({
+      trainingPlanned: sum.trainingPlanned + day.trainingPlanned,
+      trainingActual: sum.trainingActual + day.trainingActual,
+      mealsPlanned: sum.mealsPlanned + day.mealsPlanned,
+      mealsActual: sum.mealsActual + day.mealsActual,
+      caloriesActual: sum.caloriesActual + day.caloriesActual,
+      caloriesTarget: sum.caloriesTarget + day.caloriesTarget,
+      proteinActual: sum.proteinActual + day.proteinActual,
+      proteinTarget: sum.proteinTarget + day.proteinTarget,
+      carbsActual: sum.carbsActual + day.carbsActual,
+      carbsTarget: sum.carbsTarget + day.carbsTarget
+    }), {
+      trainingPlanned: 0,
+      trainingActual: 0,
+      mealsPlanned: 0,
+      mealsActual: 0,
+      caloriesActual: 0,
+      caloriesTarget: 0,
+      proteinActual: 0,
+      proteinTarget: 0,
+      carbsActual: 0,
+      carbsTarget: 0
+    })
+  };
+}
+
+function useWeekMealLogs(dates: string[]) {
+  const [logs, setLogs] = useState<MealLog[]>([]);
+  const datesKey = dates.join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+    const selectedDates = datesKey.split("|").filter(Boolean);
+
+    async function loadLogs() {
+      try {
+        const results = await Promise.all(selectedDates.map(async (date) => {
+          const response = await fetch(`/api/nutrition/logs?date=${encodeURIComponent(date)}`);
+          const result = await response.json() as { logs?: MealLog[] };
+
+          return response.ok ? result.logs ?? [] : [];
+        }));
+
+        if (!cancelled) setLogs(results.flat());
+      } catch {
+        if (!cancelled) setLogs([]);
+      }
+    }
+
+    if (selectedDates.length > 0) {
+      void loadLogs();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [datesKey]);
+
+  return { logs };
+}
+
 function createInterpretation(trainingLoad: "niedrig" | "mittel" | "hoch", runningKm: number, hardSessions: number): string {
   if (trainingLoad === "hoch") {
     return `Mit ${formatNumber(runningKm)} km und ${hardSessions} harter Einheit ist die Woche trainingsrelevant. Fueling sollte an Lauf- und Qualitätstagen Vorrang vor einem aggressiven Defizit haben.`;
@@ -166,4 +322,9 @@ function createInterpretation(trainingLoad: "niedrig" | "mittel" | "hoch", runni
 
 function formatNumber(value: number): string {
   return value.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+}
+
+function formatWeekday(date: string): string {
+  return new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "numeric", month: "numeric" })
+    .format(new Date(`${date}T12:00:00`));
 }

@@ -98,8 +98,11 @@ type AppStateContextValue = {
   addMealSlot: (date: string, slot: MealPlanSlot) => void;
   removeMealSlot: (date: string, slotIndex: number) => void;
   addMealTemplate: (template: MealTemplateDraft) => void;
+  updateMealTemplate: (mealTemplateId: string, template: MealTemplateDraft) => void;
   saveMealTemplateAsStandard: (mealTemplateId: string) => void;
   removeMealStandard: (mealTemplateId: string) => void;
+  deleteMealTemplate: (mealTemplateId: string) => void;
+  moveMealTemplate: (mealTemplateId: string, direction: "up" | "down") => void;
   addMealEntry: (
     date: string,
     template: MealTemplateDraft,
@@ -440,6 +443,17 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         ]
       }));
     },
+    updateMealTemplate: (mealTemplateId, template) => {
+      setState((current) => ({
+        ...current,
+        mealTemplates: current.mealTemplates.map((meal) => meal.id === mealTemplateId
+          ? {
+            ...createMealTemplate(template, meal.isStandard !== false),
+            id: meal.id
+          }
+          : meal)
+      }));
+    },
     saveMealTemplateAsStandard: (mealTemplateId) => {
       setState((current) => ({
         ...current,
@@ -455,6 +469,42 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
           ? { ...meal, isStandard: false }
           : meal)
       }));
+    },
+    deleteMealTemplate: (mealTemplateId) => {
+      setState((current) => ({
+        ...current,
+        mealTemplates: current.mealTemplates.filter((meal) => meal.id !== mealTemplateId),
+        weekPlans: current.weekPlans.map((week) => ({
+          ...week,
+          days: week.days.map((day) => ({
+            ...day,
+            mealPlan: day.mealPlan.filter((slot) => slot.mealTemplateId !== mealTemplateId)
+          }))
+        })),
+        weekPlan: {
+          ...current.weekPlan,
+          days: current.weekPlan.days.map((day) => ({
+            ...day,
+            mealPlan: day.mealPlan.filter((slot) => slot.mealTemplateId !== mealTemplateId)
+          }))
+        }
+      }));
+    },
+    moveMealTemplate: (mealTemplateId, direction) => {
+      setState((current) => {
+        const index = current.mealTemplates.findIndex((meal) => meal.id === mealTemplateId);
+        const targetIndex = direction === "up" ? index - 1 : index + 1;
+        if (index < 0 || targetIndex < 0 || targetIndex >= current.mealTemplates.length) return current;
+
+        const mealTemplates = [...current.mealTemplates];
+        const [item] = mealTemplates.splice(index, 1);
+        mealTemplates.splice(targetIndex, 0, item);
+
+        return {
+          ...current,
+          mealTemplates
+        };
+      });
     },
     addMealEntry: (date, template, slot, options) => {
       setState((current) => {
