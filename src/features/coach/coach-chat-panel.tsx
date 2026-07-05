@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Lightbulb, Loader2, MessageCircle, SendHorizontal, Sparkles } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
 import type { CoachChatMessage, CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
@@ -22,7 +22,9 @@ export function CoachChatPanel({
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<CoachChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
   const [pendingPlan, setPendingPlan] = useState<{ id: string; changes: CoachPlanChange[] } | null>(null);
   const payloadState = useMemo(() => ({
@@ -34,6 +36,48 @@ export function CoachChatPanel({
     mealTemplates: state.mealTemplates,
     standards: state.standards
   }), [state.goals, state.mealTemplates, state.profile, state.selectedDate, state.standards, state.weekPlan, state.weekPlans]);
+  const visibleMessages = compact ? messages.slice(-3) : messages;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadHistory() {
+      setIsLoadingHistory(true);
+
+      try {
+        const response = await fetch("/api/coach?threadId=default");
+        const result = await response.json() as { messages?: Array<{
+          id: string;
+          role: CoachChatMessage["role"];
+          content: string;
+          mode?: CoachMode;
+          createdAt: string;
+        }> };
+
+        if (active && response.ok) {
+          setMessages((result.messages ?? []).map((message) => ({
+            id: message.id,
+            role: message.role,
+            content: message.content,
+            mode: message.mode,
+            createdAt: message.createdAt
+          })));
+        }
+      } catch {
+        if (active) {
+          setAiNotice("Chat-Historie konnte gerade nicht geladen werden. Du kannst trotzdem weiter chatten.");
+        }
+      } finally {
+        if (active) setIsLoadingHistory(false);
+      }
+    }
+
+    void loadHistory();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,6 +86,7 @@ export function CoachChatPanel({
 
     setInput("");
     setError(null);
+    setAiNotice(null);
     setIsSending(true);
 
     const userMessage = createMessage("user", message);
@@ -51,10 +96,15 @@ export function CoachChatPanel({
       applyCoachPlanChanges(pendingPlan.changes);
       setAppliedIds((current) => [...current, pendingPlan.id]);
       setPendingPlan(null);
+      const assistantMessage = createMessage("assistant", "Passt, ich habe den bestätigten Vorschlag in deinen Wochenplan übernommen.", "change");
+      void persistLocalMessages([
+        { role: "user", content: message },
+        { role: "assistant", content: assistantMessage.content, mode: assistantMessage.mode }
+      ]);
       setMessages((current) => [
         ...current,
         {
-          ...createMessage("assistant", "Passt, ich habe den bestätigten Vorschlag in deinen Wochenplan übernommen.", "change"),
+          ...assistantMessage,
           outcomes: [{
             type: "plan_change",
             domain: "planning",
@@ -76,6 +126,7 @@ export function CoachChatPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
+          threadId: "default",
           state: payloadState
         })
       });
@@ -85,6 +136,9 @@ export function CoachChatPanel({
       }
 
       const result = await response.json() as CoachPlanResponse;
+      if (result.ai?.status === "fallback") {
+        setAiNotice(result.ai.message ?? "OpenAI ist nicht aktiv. Der regelbasierte Fallback antwortet.");
+      }
       const proposalChanges = [...result.changes, ...collectSuggestionChanges(result.suggestions)];
       if (proposalChanges.length > 0) {
         setPendingPlan({ id: `proposal-${Date.now().toString(36)}`, changes: proposalChanges });
@@ -113,10 +167,14 @@ export function CoachChatPanel({
     applyCoachPlanChanges(changes);
     setAppliedIds((current) => [...current, id]);
     setPendingPlan(null);
+    const assistantMessage = createMessage("assistant", "Übernommen. Ich habe den bestätigten Vorschlag in deinen Wochenplan eingetragen.", "change");
+    void persistLocalMessages([
+      { role: "assistant", content: assistantMessage.content, mode: assistantMessage.mode }
+    ]);
     setMessages((current) => [
       ...current,
       {
-        ...createMessage("assistant", "Übernommen. Ich habe den bestätigten Vorschlag in deinen Wochenplan eingetragen.", "change"),
+        ...assistantMessage,
         outcomes: [{
           type: "plan_change",
           domain: "planning",
@@ -146,11 +204,15 @@ export function CoachChatPanel({
       </div>
 
       <div className="grid gap-3">
-        {messages.length === 0 ? (
+        {isLoadingHistory ? (
+          <div className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
+            Chat-Historie wird geladen...
+          </div>
+        ) : visibleMessages.length === 0 ? (
           <div className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
             {intro}
           </div>
-        ) : messages.slice(compact ? -3 : -6).map((message) => (
+        ) : visibleMessages.map((message) => (
           <ChatBubble
             key={message.id}
             message={message}
@@ -169,6 +231,12 @@ export function CoachChatPanel({
       {error ? (
         <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
+        </div>
+      ) : null}
+
+      {aiNotice ? (
+        <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {aiNotice}
         </div>
       ) : null}
 
@@ -192,6 +260,25 @@ export function CoachChatPanel({
       </form>
     </Panel>
   );
+}
+
+async function persistLocalMessages(messages: Array<{
+  role: "user" | "assistant";
+  content: string;
+  mode?: CoachMode;
+}>) {
+  try {
+    await fetch("/api/coach/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        threadId: "default",
+        messages
+      })
+    });
+  } catch {
+    // Chat history is helpful context, but it must never block the coach flow.
+  }
 }
 
 function ChatBubble({
@@ -219,7 +306,7 @@ function ChatBubble({
         </p>
         {isAssistant && message.mode ? <ModePill mode={message.mode} /> : null}
       </div>
-      <p className="text-sm leading-6 text-ink">{message.content}</p>
+      <p className="whitespace-pre-line text-sm leading-6 text-ink">{message.content}</p>
 
       {message.mode === "change" && message.changes && message.changes.length > 0 ? (
         <div className="mt-3 grid gap-2">

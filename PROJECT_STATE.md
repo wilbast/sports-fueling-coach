@@ -1,7 +1,7 @@
 # Project State
 
 **Datum:** 2026-07-05  
-**Status:** Externe Datenbasis mit Strava-Integration aufgebaut
+**Status:** Coach-Chat mit serverseitigem Kontext und gespeicherter Historie
 
 ## Produktstand
 
@@ -26,6 +26,8 @@ Der aktuelle Sprint trennt Demo und Beta klarer: Online-Nutzer starten mit einem
 Der neueste Sprint erweitert den Coach von einer Planungseingabe zu einer eigenen Beratungsfläche unter `/coach`. Nachrichten werden über `/api/coach` verarbeitet, bei gesetztem `AI_PROVIDER` serverseitig über den konfigurierten Provider und sonst über einen lokalen Fallback-Parser. Der Coach nutzt Profil, Ziele, Training, Fueling, Standards und Wochenplanung, gibt konkrete Vorschläge und kann übernehmbare Änderungen für Training oder Fueling liefern.
 
 Der aktuelle Coach-Sprint schärft die Benutzererfahrung grundlegend: Coach Mode ist der Standard und dient reiner Beratung. Planning Mode erzeugt nur Vorschläge. Change Mode entsteht erst durch ausdrückliche Bestätigung, z. B. per Button oder kurzer Übernahme-Nachricht. Damit kann der Nutzer frei mit dem Coach diskutieren, ohne Angst vor automatischen Planänderungen zu haben.
+
+Der neueste Coach-Sprint macht den Chat näher an ChatGPT: Für eingeloggte Nutzer wird die Unterhaltung in `coach_chat_messages` gespeichert, beim Öffnen wieder geladen und bei neuen Nachrichten als Verlauf an die serverseitige Coach-API gegeben. OpenAI läuft ausschließlich serverseitig über `OPENAI_API_KEY` oder den generischen `AI_API_KEY`; fehlt die Konfiguration, bleibt die App nutzbar und zeigt den regelbasierten Fallback transparent an.
 
 Die Trainingsplanung unterscheidet jetzt Laufen, Padel Tennis, Schwimmen, Squash, HIIT, Krafttraining und Radfahren. Laufen hat zusätzlich Laufart und Fokus: Lockerer Lauf, Tempodauerlauf, Fahrtspiel, Intervalltraining sowie Basis, Regeneration, Schwellentraining und VO2Max.
 
@@ -88,6 +90,7 @@ Weitere Bereiche:
 - Persistenz online: JSONB-State in Supabase mit RLS pro `auth.uid()`
 - KI: providerunabhängige serverseitige AI-Schicht, aktueller Startprovider OpenAI, Fallback regelbasiert
 - Coach-Modi: `coach`, `planning`, `change`; Planänderungen werden erst nach Bestätigung angewendet
+- Coach-Historie: `coach_chat_messages` speichert User-/Coach-Nachrichten RLS-geschützt pro Nutzer und Thread
 - Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale und manuelle Synchronisation, providerneutrale Aktivitätstabellen
 - Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `equipment`, `sync_jobs`
 - Coach-Kontext: externe Aktivitäten werden serverseitig aus Supabase geladen und strukturiert zusammengefasst; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
@@ -105,6 +108,7 @@ Weitere Bereiche:
 - Insights sind abgeleitet, aber noch nicht tief analysiert.
 - Es gibt noch keine automatisierten Unit-Tests.
 - Der Coach bietet übernehmbare Vorschläge, hat aber noch keine Undo-Historie.
+- Alte Coach-Antworten werden als Textverlauf wiederhergestellt; frühere Vorschlagsbuttons werden nach Reload nicht rekonstruiert.
 - Strava-Synchronisation ist implementiert, aber ohne echte Strava-Credentials und produktive Supabase-Migration nicht live verifiziert.
 
 ## Nächster sinnvoller Sprint

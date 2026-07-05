@@ -114,4 +114,8 @@ export type CoachPlanResponse = {
   changes: CoachPlanChange[];
   suggestions: CoachSuggestion[];
   confidence: "low" | "medium" | "high";
+  ai?: {
+    status: "configured" | "fallback";
+    message?: string;
+  };
 };

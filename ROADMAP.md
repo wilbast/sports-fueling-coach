@@ -145,7 +145,23 @@ Umgesetzt:
 - serverseitige AI-/Fallback-Schätzung für Mahlzeiten
 - Coach-Kontext enthält heutige Nutrition Logs
 
-## Sprint 10: Regelqualität und Tests
+## Sprint 10: Persistenter Coach-Chat
+
+Status: umgesetzt
+
+Ziel:
+
+Der Coach fühlt sich mehr wie ChatGPT an: freie Unterhaltung, gespeicherter Kontext, serverseitiger App-Kontext und keine Datenänderung ohne Bestätigung.
+
+Umgesetzt:
+
+- OpenAI serverseitig über `OPENAI_API_KEY` oder generischen `AI_API_KEY`
+- Chat-Historie in Supabase mit RLS
+- Verlauf wird beim Öffnen geladen und an die Coach-API gegeben
+- Fallback-Hinweis, wenn OpenAI fehlt oder nicht antwortet
+- lokale Bestätigungen werden ebenfalls im Verlauf protokolliert
+
+## Sprint 11: Regelqualität und Tests
 
 Ziel:
 

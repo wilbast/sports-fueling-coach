@@ -64,13 +64,15 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 ## Coach-Chat
 
 - API-Route: `/api/coach`
+- Chat-Historie: `GET /api/coach` und `POST /api/coach/history`
 - Provider-Auswahl über `AI_PROVIDER`
 - Modell-Auswahl über `AI_MODEL`
-- API-Key generisch über `AI_API_KEY`
+- API-Key generisch über `AI_API_KEY`, für OpenAI alternativ direkt über `OPENAI_API_KEY`
 - aktueller Startprovider: `openai`
 - ohne AI-Env nutzt die App einen regelbasierten lokalen Parser
 - eigener Coach-Bereich unter `/coach`
 - Coach nutzt Profil, Ziele, Training, Fueling, Standards und Wochenplanung als Kontext
+- Chat-Verlauf wird für eingeloggte Nutzer in Supabase gespeichert und als Gesprächskontext an die serverseitige Coach-API gegeben
 - Coach Mode ist der Standard: Beratung, Einschätzung, Varianten und Empfehlungen ohne Planänderung
 - Planning Mode entsteht nur bei ausdrücklichem Wunsch nach einem konkreten Plan
 - Change Mode entsteht erst durch Bestätigung per Button oder klare Übernahme-Nachricht
@@ -79,13 +81,14 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - Fueling- und Rezeptvorschläge sind Teil der Coach-Antwort
 - Laufen unterscheidet Laufart und Fokus
 - Coach-Kontext wird serverseitig gebaut und enthält importierte externe Aktivitäten nur als strukturierte Zusammenfassung
+- Migration: `supabase/004_coach_chat_history.sql`
 
 Beispiel für Vercel:
 
 ```text
 AI_PROVIDER=openai
 AI_MODEL=gpt-5-mini
-AI_API_KEY=...
+OPENAI_API_KEY=...
 ```
 
 ## Strava-Integration

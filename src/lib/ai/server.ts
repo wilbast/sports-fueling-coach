@@ -20,7 +20,7 @@ const providerConfigs: Record<AiProvider, {
 };
 
 export function resolveAiJsonClient(): AiJsonResult {
-  const rawProvider = process.env.AI_PROVIDER?.trim().toLowerCase();
+  const rawProvider = process.env.AI_PROVIDER?.trim().toLowerCase() || (process.env.OPENAI_API_KEY?.trim() ? "openai" : "");
 
   if (!rawProvider) {
     return { status: "disabled" };
@@ -34,11 +34,12 @@ export function resolveAiJsonClient(): AiJsonResult {
   }
 
   const providerConfig = providerConfigs[rawProvider];
-  const model = process.env.AI_MODEL?.trim();
-  const apiKey = process.env.AI_API_KEY?.trim();
+  const model = process.env.AI_MODEL?.trim() || (rawProvider === "openai" ? "gpt-5-mini" : "");
+  const apiKey = process.env.AI_API_KEY?.trim() || (rawProvider === "openai" ? process.env.OPENAI_API_KEY?.trim() : "");
+  const apiKeyName = rawProvider === "openai" ? "OPENAI_API_KEY oder AI_API_KEY" : "AI_API_KEY";
   const missing = [
     model ? "" : "AI_MODEL",
-    apiKey ? "" : "AI_API_KEY"
+    apiKey ? "" : apiKeyName
   ].filter(Boolean);
 
   if (missing.length > 0) {

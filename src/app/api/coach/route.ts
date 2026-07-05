@@ -19,6 +19,15 @@ export const runtime = "nodejs";
 type CoachRequestBody = {
   message?: string;
   state?: CoachContextSource;
+  threadId?: string;
+};
+
+type CoachChatHistoryMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  mode?: CoachMode;
+  createdAt: string;
 };
 
 const sportValues: SportType[] = ["running", "padel", "swimming", "squash", "hiit", "strength", "cycling"];
@@ -36,60 +45,111 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as CoachRequestBody | null;
   const message = body?.message?.trim();
   const state = body?.state;
+  const threadId = normalizeThreadId(body?.threadId);
 
   if (!message || !state) {
     return NextResponse.json({ error: "Nachricht oder App-Zustand fehlt." }, { status: 400 });
   }
 
-  const coachState = await resolveCoachSourceState(state);
+  const user = await getCurrentUser();
+  const conversationHistory = user ? await loadCoachChatHistory(user.id, threadId, 16) : [];
+  const coachState = await resolveCoachSourceState(state, user?.id);
   const aiClient = resolveAiJsonClient();
 
   if (aiClient.status === "disabled") {
-    return NextResponse.json(createFallbackCoachResponse(message, coachState));
+    const fallback = {
+      ...createFallbackCoachResponse(message, coachState),
+      ai: {
+        status: "fallback" as const,
+        message: "OPENAI_API_KEY fehlt oder AI ist nicht konfiguriert. Der regelbasierte Fallback antwortet."
+      }
+    };
+    await persistCoachExchange(user?.id, threadId, message, fallback);
+    return NextResponse.json(fallback);
   }
 
   if (aiClient.status === "invalid") {
     const fallback = createFallbackCoachResponse(message, coachState);
-
-    return NextResponse.json({
+    const response = {
       ...fallback,
-      assistantMessage: `${fallback.assistantMessage} ${aiClient.message} Ich nutze deshalb den regelbasierten Fallback.`
-    });
+      assistantMessage: `${fallback.assistantMessage} ${aiClient.message} Ich nutze deshalb den regelbasierten Fallback.`,
+      ai: {
+        status: "fallback" as const,
+        message: aiClient.message
+      }
+    };
+    await persistCoachExchange(user?.id, threadId, message, response);
+
+    return NextResponse.json(response);
   }
 
   try {
     const outputText = await aiClient.generateJson({
       systemPrompt: createSystemPrompt(),
-      userPayload: buildCoachContext(message, coachState),
+      userPayload: {
+        ...buildCoachContext(message, coachState),
+        conversationHistory: conversationHistory.map((item) => ({
+          role: item.role,
+          content: item.content,
+          mode: item.mode,
+          createdAt: item.createdAt
+        }))
+      },
       schemaName: "sports_fueling_coach_plan_response",
       schema: createCoachResponseSchema()
     });
     const parsed = outputText ? JSON.parse(outputText) as Partial<CoachPlanResponse> : null;
+    const response = {
+      ...normalizeCoachResponse(parsed, coachState.weekPlan.days, message),
+      ai: {
+        status: "configured" as const
+      }
+    };
+    await persistCoachExchange(user?.id, threadId, message, response);
 
-    return NextResponse.json(normalizeCoachResponse(parsed, coachState.weekPlan.days, message));
+    return NextResponse.json(response);
   } catch {
-    return NextResponse.json(createFallbackCoachResponse(message, coachState));
+    const fallback = {
+      ...createFallbackCoachResponse(message, coachState),
+      ai: {
+        status: "fallback" as const,
+        message: "OpenAI konnte gerade nicht antworten. Der regelbasierte Fallback wurde genutzt."
+      }
+    };
+    await persistCoachExchange(user?.id, threadId, message, fallback);
+    return NextResponse.json(fallback);
   }
 }
 
-async function resolveCoachSourceState(requestState: CoachContextSource): Promise<CoachContextSource> {
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ messages: [] });
+  }
+
+  const threadId = normalizeThreadId(request.nextUrl.searchParams.get("threadId"));
+  const messages = await loadCoachChatHistory(user.id, threadId, 80);
+
+  return NextResponse.json({ messages });
+}
+
+async function resolveCoachSourceState(requestState: CoachContextSource, userId?: string): Promise<CoachContextSource> {
   if (!isSupabaseConfigured()) return requestState;
 
   try {
+    if (!userId) return requestState;
     const supabase = createSupabaseServerClient();
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    if (!user) return requestState;
 
     const { data } = await supabase
       .from("app_states")
       .select("state")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
     const storedState = data?.state;
 
-    const externalActivities = await loadRecentExternalActivitiesForCoach(user.id);
-    const nutritionLogsToday = await loadNutritionLogsForCoach(user.id, requestState.selectedDate);
+    const externalActivities = await loadRecentExternalActivitiesForCoach(userId);
+    const nutritionLogsToday = await loadNutritionLogsForCoach(userId, requestState.selectedDate);
 
     if (isCoachContextSource(storedState)) {
       return {
@@ -109,6 +169,91 @@ async function resolveCoachSourceState(requestState: CoachContextSource): Promis
   }
 
   return requestState;
+}
+
+async function getCurrentUser(): Promise<{ id: string } | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  try {
+    const supabase = createSupabaseServerClient();
+    const { data } = await supabase.auth.getUser();
+    return data.user ? { id: data.user.id } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadCoachChatHistory(userId: string, threadId: string, limit: number): Promise<CoachChatHistoryMessage[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("coach_chat_messages")
+    .select("id, role, content, mode, created_at")
+    .eq("user_id", userId)
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.warn("[coach] chat history not available", { message: error.message });
+    return [];
+  }
+
+  return (data ?? [])
+    .reverse()
+    .map((row) => ({
+      id: String(row.id),
+      role: row.role === "assistant" ? "assistant" : "user",
+      content: String(row.content ?? ""),
+      mode: row.mode === "coach" || row.mode === "planning" || row.mode === "change" ? row.mode : undefined,
+      createdAt: String(row.created_at)
+    }));
+}
+
+async function persistCoachExchange(
+  userId: string | undefined,
+  threadId: string,
+  userMessage: string,
+  response: CoachPlanResponse
+): Promise<void> {
+  if (!isSupabaseConfigured() || !userId) return;
+
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase
+    .from("coach_chat_messages")
+    .insert([
+      {
+        user_id: userId,
+        thread_id: threadId,
+        role: "user",
+        content: userMessage,
+        metadata: {}
+      },
+      {
+        user_id: userId,
+        thread_id: threadId,
+        role: "assistant",
+        content: response.assistantMessage,
+        mode: response.mode,
+        metadata: {
+          outcomes: response.outcomes,
+          suggestions: response.suggestions,
+          changes: response.changes,
+          questions: response.questions,
+          confidence: response.confidence,
+          ai: response.ai
+        }
+      }
+    ]);
+
+  if (error) {
+    console.warn("[coach] chat exchange could not be persisted", { message: error.message });
+  }
+}
+
+function normalizeThreadId(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 80) : "default";
 }
 
 async function loadNutritionLogsForCoach(userId: string, date: string): Promise<MealLog[]> {

@@ -239,3 +239,13 @@ Tages-Fueling wird für eingeloggte Nutzer nicht mehr nur aus dem JSONB-App-Stat
 Begründung:
 
 Fueling ist ein mehrfach täglicher Workflow und braucht andere Datenqualität als grobe Wochenplanung. Geplante Mahlzeiten bleiben als Planungs-/Demo-Konzept erhalten, aber echte gegessene Mahlzeiten müssen redeploy-sicher, RLS-geschützt und später analysierbar sein. KI darf Nährwerte alltagstauglich schätzen, aber die UI kennzeichnet Quelle und Confidence; manuell bestätigte Werte haben Vorrang.
+
+## ADR-025: Coach-Chat speichert Verlauf, aber keine ungefragten Änderungen
+
+Entscheidung:
+
+Coach-Unterhaltungen werden für eingeloggte Nutzer in `coach_chat_messages` gespeichert und beim nächsten Öffnen wieder geladen. Die Coach-API erhält neben dem strukturierten Coach-Kontext auch die letzten Nachrichten als Gesprächsverlauf. OpenAI wird ausschließlich serverseitig über `OPENAI_API_KEY` oder `AI_API_KEY` genutzt. Wenn keine AI-Konfiguration vorhanden ist oder der Provider fehlschlägt, antwortet ein transparenter regelbasierter Fallback.
+
+Begründung:
+
+Der Coach soll sich wie ein persönlicher Gesprächspartner anfühlen und Kontext behalten, ohne dem AI-Provider direkten Supabase-Zugriff zu geben. Die gespeicherte Historie verbessert Anschlussfähigkeit und Rückfragen, während RLS den Verlauf pro Nutzer schützt. Planänderungen bleiben trotzdem getrennt: Beratung und Vorschläge dürfen jederzeit entstehen, echte Änderungen passieren erst nach ausdrücklicher Bestätigung im Client.

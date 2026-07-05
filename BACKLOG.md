@@ -10,6 +10,7 @@
 - Automatischen Sync-Job für externe Quellen entwerfen.
 - Standardmahlzeiten und Rezepte vollständig aus `standard_meals`/`recipes` statt App-State verwalten.
 - Manuelle Korrekturmaske für KI-Nährwertschätzungen pro Meal Log ergänzen.
+- Coach-Verlauf um Thread-Auswahl und Löschen/Archivieren erweitern.
 
 ## P1
 
@@ -40,6 +41,7 @@
 - Supabase Auth und RLS umgesetzt.
 - Coach-Chat mit serverseitiger AI-Schicht und Fallback umgesetzt.
 - Context Builder für strukturierte Coach-Kontexte umgesetzt.
+- Persistente Coach-Chat-Historie mit Supabase RLS umgesetzt.
 - Strava OAuth, Synchronisation und providerneutrales Aktivitätsmodell umgesetzt.
 - Today Nutrition Status mit geloggten Mahlzeiten, Tagesbilanz und Protein-/Carb-Fortschritt umgesetzt.
 - Serverroute für AI-/Fallback-Nährwertschätzung und persistente Meal Logs umgesetzt.
