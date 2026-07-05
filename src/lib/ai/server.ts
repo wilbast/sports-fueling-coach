@@ -1,5 +1,5 @@
 import "server-only";
-import type { AiJsonRequest, AiJsonResult, AiProvider } from "@/lib/ai/types";
+import type { AiDebugInfo, AiJsonRequest, AiJsonResult, AiProvider } from "@/lib/ai/types";
 
 const providerConfigs: Record<AiProvider, {
   endpoint: string;
@@ -29,7 +29,14 @@ export function resolveAiJsonClient(): AiJsonResult {
   if (!isAiProvider(rawProvider)) {
     return {
       status: "invalid",
-      message: `AI_PROVIDER="${rawProvider}" wird nicht unterstützt. Erlaubt sind: groq, openai, openrouter.`
+      message: `AI_PROVIDER="${rawProvider}" wird nicht unterstützt. Erlaubt sind: groq, openai, openrouter.`,
+      debug: {
+        httpStatus: null,
+        errorCode: "unsupported_provider",
+        message: `AI_PROVIDER="${rawProvider}" wird nicht unterstützt.`,
+        model: process.env.AI_MODEL?.trim() || null,
+        hasApiKey: Boolean(process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim())
+      }
     };
   }
 
@@ -45,14 +52,28 @@ export function resolveAiJsonClient(): AiJsonResult {
   if (missing.length > 0) {
     return {
       status: "invalid",
-      message: `${providerConfig.label} ist als AI_PROVIDER gesetzt, aber ${missing.join(" und ")} ${missing.length === 1 ? "fehlt" : "fehlen"}.`
+      message: `${providerConfig.label} ist als AI_PROVIDER gesetzt, aber ${missing.join(" und ")} ${missing.length === 1 ? "fehlt" : "fehlen"}.`,
+      debug: {
+        httpStatus: null,
+        errorCode: "missing_ai_env",
+        message: `${missing.join(" und ")} ${missing.length === 1 ? "fehlt" : "fehlen"}.`,
+        model: model || null,
+        hasApiKey: Boolean(apiKey)
+      }
     };
   }
 
   if (!model || !apiKey) {
     return {
       status: "invalid",
-      message: `${providerConfig.label} ist nicht vollständig konfiguriert.`
+      message: `${providerConfig.label} ist nicht vollständig konfiguriert.`,
+      debug: {
+        httpStatus: null,
+        errorCode: "incomplete_ai_config",
+        message: `${providerConfig.label} ist nicht vollständig konfiguriert.`,
+        model: model || null,
+        hasApiKey: Boolean(apiKey)
+      }
     };
   }
 
@@ -63,6 +84,7 @@ export function resolveAiJsonClient(): AiJsonResult {
     status: "configured",
     provider: rawProvider,
     model: configuredModel,
+    hasApiKey: Boolean(configuredApiKey),
     generateJson: (request) => requestProviderJson({
       ...request,
       endpoint: providerConfig.endpoint,
@@ -79,6 +101,30 @@ type ProviderJsonRequest = AiJsonRequest & {
   model: string;
   provider: AiProvider;
 };
+
+export class AiProviderRequestError extends Error {
+  debug: AiDebugInfo;
+
+  constructor(debug: AiDebugInfo) {
+    super(debug.message);
+    this.name = "AiProviderRequestError";
+    this.debug = debug;
+  }
+}
+
+export function getAiErrorDebug(error: unknown, client: Extract<AiJsonResult, { status: "configured" }>): AiDebugInfo {
+  if (error instanceof AiProviderRequestError) {
+    return error.debug;
+  }
+
+  return {
+    httpStatus: null,
+    errorCode: "ai_request_failed",
+    message: error instanceof Error && error.message ? error.message : "AI request failed.",
+    model: client.model,
+    hasApiKey: client.hasApiKey
+  };
+}
 
 async function requestProviderJson(request: ProviderJsonRequest): Promise<string> {
   const response = await fetch(request.endpoint, {
@@ -110,7 +156,14 @@ async function requestProviderJson(request: ProviderJsonRequest): Promise<string
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`AI provider request failed with ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ""}`);
+    const providerError = parseProviderError(detail);
+    throw new AiProviderRequestError({
+      httpStatus: response.status,
+      errorCode: providerError.code,
+      message: providerError.message || `AI provider request failed with HTTP ${response.status}.`,
+      model: request.model,
+      hasApiKey: Boolean(request.apiKey)
+    });
   }
 
   const data = await response.json() as {
@@ -123,10 +176,50 @@ async function requestProviderJson(request: ProviderJsonRequest): Promise<string
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
-    throw new Error("AI provider returned no message content.");
+    throw new AiProviderRequestError({
+      httpStatus: response.status,
+      errorCode: "empty_ai_response",
+      message: "AI provider returned no message content.",
+      model: request.model,
+      hasApiKey: Boolean(request.apiKey)
+    });
   }
 
   return content;
+}
+
+function parseProviderError(detail: string): { code: string | null; message: string } {
+  if (!detail.trim()) {
+    return {
+      code: null,
+      message: ""
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(detail) as {
+      error?: {
+        code?: unknown;
+        message?: unknown;
+        type?: unknown;
+      };
+    };
+
+    const error = parsed.error;
+    const code = typeof error?.code === "string"
+      ? error.code
+      : typeof error?.type === "string"
+        ? error.type
+        : null;
+    const message = typeof error?.message === "string" ? error.message : detail.slice(0, 500);
+
+    return { code, message };
+  } catch {
+    return {
+      code: null,
+      message: detail.slice(0, 500)
+    };
+  }
 }
 
 function createHeaders(provider: AiProvider, apiKey: string): Record<string, string> {

@@ -106,6 +106,14 @@ export type CoachSuggestion = {
   changes: CoachPlanChange[];
 };
 
+export type CoachAiDebugInfo = {
+  httpStatus: number | null;
+  errorCode: string | null;
+  message: string;
+  model: string | null;
+  hasApiKey: boolean;
+};
+
 export type CoachPlanResponse = {
   mode: CoachMode;
   assistantMessage: string;
@@ -117,5 +125,6 @@ export type CoachPlanResponse = {
   ai?: {
     status: "configured" | "fallback";
     message?: string;
+    debug?: CoachAiDebugInfo;
   };
 };

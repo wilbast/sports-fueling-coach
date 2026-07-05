@@ -10,7 +10,7 @@ import type {
   SportType,
   WorkoutIntensity
 } from "@/domain/training/types";
-import { resolveAiJsonClient } from "@/lib/ai/server";
+import { getAiErrorDebug, resolveAiJsonClient } from "@/lib/ai/server";
 import { loadRecentExternalActivitiesForCoach } from "@/lib/integrations/activity-sync";
 import { createClient as createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
@@ -61,7 +61,14 @@ export async function POST(request: NextRequest) {
       ...createFallbackCoachResponse(message, coachState),
       ai: {
         status: "fallback" as const,
-        message: "OPENAI_API_KEY fehlt oder AI ist nicht konfiguriert. Der regelbasierte Fallback antwortet."
+        message: "OPENAI_API_KEY fehlt oder AI ist nicht konfiguriert. Der regelbasierte Fallback antwortet.",
+        debug: {
+          httpStatus: null,
+          errorCode: "ai_disabled",
+          message: "AI_PROVIDER, AI_API_KEY oder OPENAI_API_KEY ist nicht gesetzt.",
+          model: process.env.AI_MODEL?.trim() || null,
+          hasApiKey: Boolean(process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim())
+        }
       }
     };
     await persistCoachExchange(user?.id, threadId, message, fallback);
@@ -75,7 +82,8 @@ export async function POST(request: NextRequest) {
       assistantMessage: `${fallback.assistantMessage} ${aiClient.message} Ich nutze deshalb den regelbasierten Fallback.`,
       ai: {
         status: "fallback" as const,
-        message: aiClient.message
+        message: aiClient.message,
+        debug: aiClient.debug
       }
     };
     await persistCoachExchange(user?.id, threadId, message, response);
@@ -108,12 +116,14 @@ export async function POST(request: NextRequest) {
     await persistCoachExchange(user?.id, threadId, message, response);
 
     return NextResponse.json(response);
-  } catch {
+  } catch (error) {
+    const debug = getAiErrorDebug(error, aiClient);
     const fallback = {
       ...createFallbackCoachResponse(message, coachState),
       ai: {
         status: "fallback" as const,
-        message: "OpenAI konnte gerade nicht antworten. Der regelbasierte Fallback wurde genutzt."
+        message: "OpenAI konnte gerade nicht antworten. Der regelbasierte Fallback wurde genutzt.",
+        debug
       }
     };
     await persistCoachExchange(user?.id, threadId, message, fallback);

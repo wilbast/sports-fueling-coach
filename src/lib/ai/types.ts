@@ -12,6 +12,14 @@ export type AiJsonRequest = {
   schema: Record<string, unknown>;
 };
 
+export type AiDebugInfo = {
+  httpStatus: number | null;
+  errorCode: string | null;
+  message: string;
+  model: string | null;
+  hasApiKey: boolean;
+};
+
 export type AiJsonResult =
   | {
     status: "disabled";
@@ -20,9 +28,11 @@ export type AiJsonResult =
     status: "configured";
     provider: AiProvider;
     model: string;
+    hasApiKey: boolean;
     generateJson: (request: AiJsonRequest) => Promise<string>;
   }
   | {
     status: "invalid";
     message: string;
+    debug: AiDebugInfo;
   };

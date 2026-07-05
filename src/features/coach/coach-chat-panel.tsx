@@ -137,7 +137,7 @@ export function CoachChatPanel({
 
       const result = await response.json() as CoachPlanResponse;
       if (result.ai?.status === "fallback") {
-        setAiNotice(result.ai.message ?? "OpenAI ist nicht aktiv. Der regelbasierte Fallback antwortet.");
+        setAiNotice(formatAiDebugNotice(result.ai));
       }
       const proposalChanges = [...result.changes, ...collectSuggestionChanges(result.suggestions)];
       if (proposalChanges.length > 0) {
@@ -235,7 +235,7 @@ export function CoachChatPanel({
       ) : null}
 
       {aiNotice ? (
-        <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div className="mt-3 whitespace-pre-line rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
           {aiNotice}
         </div>
       ) : null}
@@ -279,6 +279,22 @@ async function persistLocalMessages(messages: Array<{
   } catch {
     // Chat history is helpful context, but it must never block the coach flow.
   }
+}
+
+function formatAiDebugNotice(ai: NonNullable<CoachPlanResponse["ai"]>): string {
+  const fallbackMessage = ai.message ?? "OpenAI ist nicht aktiv. Der regelbasierte Fallback antwortet.";
+
+  if (!ai.debug) return fallbackMessage;
+
+  return [
+    fallbackMessage,
+    "AI-Debug:",
+    `HTTP Status: ${ai.debug.httpStatus ?? "n/a"}`,
+    `Error Code: ${ai.debug.errorCode ?? "n/a"}`,
+    `Message: ${ai.debug.message}`,
+    `Model: ${ai.debug.model ?? "n/a"}`,
+    `hasApiKey: ${ai.debug.hasApiKey ? "true" : "false"}`
+  ].join("\n");
 }
 
 function ChatBubble({
