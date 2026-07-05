@@ -18,7 +18,8 @@ export type NutritionTarget = {
 
 export type EnergySettings = {
   baselineCaloriesWithoutActivity: number;
-  manualActivityForecastCaloriesByDate: Record<string, number>;
+  manualDailyBurnForecastCaloriesByDate: Record<string, number>;
+  manualActivityForecastCaloriesByDate?: Record<string, number>;
 };
 
 export type NutritionMetric = {

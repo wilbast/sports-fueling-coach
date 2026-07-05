@@ -106,7 +106,7 @@ type AppStateContextValue = {
   applyWeekStandard: (templateId: string) => void;
   applyCoachPlanChanges: (changes: CoachPlanChange[]) => void;
   updateBaselineCaloriesWithoutActivity: (calories: number) => void;
-  updateManualActivityForecastCalories: (date: string, calories?: number) => void;
+  updateManualDailyBurnForecastCalories: (date: string, calories?: number) => void;
   updateProfile: (profile: UserProfile) => void;
   updateGoals: (goals: UserGoals) => void;
   updateRaceGoal: (raceGoal: RaceGoal) => void;
@@ -529,9 +529,9 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         }
       }));
     },
-    updateManualActivityForecastCalories: (date, calories) => {
+    updateManualDailyBurnForecastCalories: (date, calories) => {
       setState((current) => {
-        const forecastByDate = { ...current.energySettings.manualActivityForecastCaloriesByDate };
+        const forecastByDate = { ...current.energySettings.manualDailyBurnForecastCaloriesByDate };
         const normalizedCalories = typeof calories === "number" ? normalizeCalories(calories, 0) : 0;
 
         if (normalizedCalories > 0) {
@@ -544,7 +544,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
           ...current,
           energySettings: {
             ...current.energySettings,
-            manualActivityForecastCaloriesByDate: forecastByDate
+            manualDailyBurnForecastCaloriesByDate: forecastByDate
           }
         };
       });
@@ -686,7 +686,7 @@ function normalizeAppState(parsed: Partial<AppState>): AppState {
 function createDefaultEnergySettings(): EnergySettings {
   return {
     baselineCaloriesWithoutActivity: 2700,
-    manualActivityForecastCaloriesByDate: {}
+    manualDailyBurnForecastCaloriesByDate: {}
   };
 }
 
@@ -699,8 +699,8 @@ function normalizeEnergySettings(
       settings?.baselineCaloriesWithoutActivity,
       fallback.baselineCaloriesWithoutActivity
     ),
-    manualActivityForecastCaloriesByDate: Object.fromEntries(
-      Object.entries(settings?.manualActivityForecastCaloriesByDate ?? {})
+    manualDailyBurnForecastCaloriesByDate: Object.fromEntries(
+      Object.entries(settings?.manualDailyBurnForecastCaloriesByDate ?? {})
         .map(([date, calories]) => [asIsoDate(date), normalizeCalories(calories, 0)] as const)
         .filter(([, calories]) => calories > 0)
     )

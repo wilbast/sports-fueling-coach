@@ -21,6 +21,7 @@ type TodayViewProps = {
   externalActivitiesError?: string | null;
   manualForecastCalories?: number;
   onManualForecastCaloriesChange?: (calories?: number) => void;
+  fuelingQuickAdd?: React.ReactNode;
 };
 
 export function TodayView({
@@ -30,7 +31,8 @@ export function TodayView({
   externalActivitiesLoading = false,
   externalActivitiesError = null,
   manualForecastCalories,
-  onManualForecastCaloriesChange
+  onManualForecastCaloriesChange,
+  fuelingQuickAdd
 }: TodayViewProps) {
   return (
     <div>
@@ -84,7 +86,7 @@ export function TodayView({
         </div>
       </section>
 
-      <section className="mb-8 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-8 grid gap-3 md:grid-cols-3">
         {briefing.metrics.map((metric) => (
           <StatCard
             key={metric.label}
@@ -96,6 +98,12 @@ export function TodayView({
           />
         ))}
       </section>
+
+      {fuelingQuickAdd ? (
+        <div className="mb-6">
+          {fuelingQuickAdd}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <section>
@@ -153,16 +161,16 @@ export function TodayView({
           <div className="mt-4 rounded-2xl border border-line bg-white p-4 shadow-soft">
             <div className="mb-3 flex items-center gap-2">
               <Flame className="h-4 w-4 text-amber-700" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-ink">KCAL Forecast heute</h3>
+              <h3 className="text-sm font-semibold text-ink">Tagesverbrauch überschreiben</h3>
             </div>
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <input
                 value={manualForecastCalories ?? ""}
                 onChange={(event) => onManualForecastCaloriesChange?.(parseOptionalNumber(event.target.value))}
-                placeholder="z. B. 650"
+                placeholder="z. B. 3200"
                 inputMode="numeric"
                 className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="KCAL Forecast für heute"
+                aria-label="Prognostizierter Gesamtverbrauch für heute"
               />
               <button
                 type="button"
@@ -174,7 +182,7 @@ export function TodayView({
               </button>
             </div>
             <p className="mt-2 text-xs leading-5 text-muted">
-              Ohne Forecast nutzt der Coach geplante Aktivität, nach Strava-Sync die tatsächlichen KCAL.
+              Trage hier den prognostizierten Gesamtverbrauch für heute ein. Dieser Wert überschreibt Basis, Planung und Strava für den Tagesverbrauch.
             </p>
           </div>
         </section>

@@ -85,8 +85,8 @@ export function CoachChatPanel({
       }
 
       const result = await response.json() as CoachPlanResponse;
-      const proposalChanges = collectSuggestionChanges(result.suggestions);
-      if (result.mode === "planning" && proposalChanges.length > 0) {
+      const proposalChanges = [...result.changes, ...collectSuggestionChanges(result.suggestions)];
+      if (proposalChanges.length > 0) {
         setPendingPlan({ id: `proposal-${Date.now().toString(36)}`, changes: proposalChanges });
       }
 
@@ -162,7 +162,7 @@ export function CoachChatPanel({
 
       {pendingPlan ? (
         <div className="mt-3 rounded-xl border border-coach-100 bg-coach-50 px-3 py-2 text-xs leading-5 text-coach-800">
-          Vorschlag wartet auf Bestätigung. Nutze den Button am Vorschlag oder antworte mit „passt“.
+          Vorschlag wartet auf Bestätigung. Nutze den Button am Vorschlag oder antworte mit „speichern“.
         </div>
       ) : null}
 

@@ -76,7 +76,7 @@ export function createBetaAppState(input: CreateBetaAppStateInput = {}): BetaApp
 function createBaseEnergySettings(): EnergySettings {
   return {
     baselineCaloriesWithoutActivity: 2700,
-    manualActivityForecastCaloriesByDate: {}
+    manualDailyBurnForecastCaloriesByDate: {}
   };
 }
 

@@ -7,13 +7,14 @@ import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { useExternalActivities } from "@/features/activities/external-activities";
 import { TodayView } from "@/features/today/today-view";
+import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
 
 type TodayPageClientProps = {
   date?: string;
 };
 
 export function TodayPageClient({ date }: TodayPageClientProps) {
-  const { state, setSelectedDate, updateManualActivityForecastCalories } = useAppState();
+  const { state, setSelectedDate, updateManualDailyBurnForecastCalories } = useAppState();
   const activeDate = date ?? state.selectedDate;
   const dayPlan = getDayPlanByDate(state.weekPlan, activeDate);
   const {
@@ -44,8 +45,9 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
       externalActivities={activitiesByDate[activeDate] ?? []}
       externalActivitiesLoading={activitiesLoading}
       externalActivitiesError={activitiesError}
-      manualForecastCalories={state.energySettings.manualActivityForecastCaloriesByDate[activeDate]}
-      onManualForecastCaloriesChange={(calories) => updateManualActivityForecastCalories(activeDate, calories)}
+      manualForecastCalories={state.energySettings.manualDailyBurnForecastCaloriesByDate[activeDate]}
+      onManualForecastCaloriesChange={(calories) => updateManualDailyBurnForecastCalories(activeDate, calories)}
+      fuelingQuickAdd={<QuickFuelingPanel date={activeDate} compact />}
     />
   );
 }

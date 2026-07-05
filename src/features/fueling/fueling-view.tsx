@@ -7,6 +7,7 @@ import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
 
 const mealIcons = [Salad, Beef, Soup, Wheat];
 
@@ -101,6 +102,10 @@ export function FuelingView() {
         </Panel>
       </section>
 
+      <div className="mb-6">
+        <QuickFuelingPanel date={selectedDay.date} />
+      </div>
+
       <section className="grid gap-6 lg:grid-cols-[1fr_0.82fr]">
         <div className="grid gap-6">
           <Panel>
@@ -113,7 +118,16 @@ export function FuelingView() {
                 const Icon = mealIcons[index % mealIcons.length];
 
                 return (
-                  <article key={meal.id} className="rounded-xl border border-line px-3 py-3">
+                  <button
+                    key={meal.id}
+                    type="button"
+                    onClick={() => addMealSlot(selectedDay.date, {
+                      time: inferNextMealTime(selectedDay.mealPlan.length),
+                      role: inferMealRole(meal),
+                      mealTemplateId: meal.id
+                    })}
+                    className="rounded-xl border border-line px-3 py-3 text-left transition hover:border-coach-200 hover:bg-coach-50"
+                  >
                     <div className="flex items-start gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-coach-50 text-coach-700">
                         <Icon className="h-4 w-4" aria-hidden="true" />
@@ -124,7 +138,7 @@ export function FuelingView() {
                         <p className="mt-2 text-xs font-semibold text-coach-700">{formatMealEstimate(meal)}</p>
                       </div>
                     </div>
-                  </article>
+                  </button>
                 );
               })}
             </div>
@@ -369,6 +383,21 @@ function roleLabel(role: MealPlanSlot["role"]): string {
   };
 
   return labels[role];
+}
+
+function inferNextMealTime(mealCount: number): string {
+  const times = ["08:00", "12:30", "16:30", "19:00", "21:00"];
+  return times[Math.min(mealCount, times.length - 1)];
+}
+
+function inferMealRole(meal: MealTemplate): MealPlanSlot["role"] {
+  const text = `${meal.name} ${meal.tags.join(" ")}`.toLowerCase();
+  if (text.includes("breakfast") || text.includes("frühstück")) return "breakfast";
+  if (text.includes("pre")) return "pre_workout";
+  if (text.includes("post") || text.includes("recovery")) return "post_workout";
+  if (text.includes("dinner") || text.includes("abend")) return "dinner";
+
+  return "lunch";
 }
 
 function formatShortDate(date: string): string {

@@ -146,6 +146,7 @@ function createSystemPrompt(): string {
     "Bei Beratungsfragen: analysiere, vergleiche Varianten, nenne Vor- und Nachteile und gib eine klare Empfehlung mit Begründung.",
     "Bei Info/Wunsch/Stimmung, z. B. Alkohol, Restaurant, Müdigkeit: keine automatische Planänderung. Gib kurze Einordnung und optionales Angebot.",
     "Bei Empfehlungsfragen: gib konkrete Mengen, Timing, Mahlzeiten, Snacks, Flüssigkeit oder Regenerationstipps ohne changes zu erzwingen.",
+    "Ausnahme für Fueling/Nutrition: Wenn der Nutzer eine konkrete Mahlzeit, ein Rezept oder ein Fueling zum Speichern beschreibt, darfst du einen speicherbaren Entwurf in suggestion.changes mit type=add_meal liefern. Das ist nur ein Vorschlag und wird erst bei Bestätigung gespeichert.",
     "Bei unklarem Kontext: stelle maximal 1-2 gezielte Rückfragen.",
     "Erlaubte Sportarten: running, padel, swimming, squash, hiit, strength, cycling.",
     "Bei running nutze runningType: easy_run, tempo_run, fartlek oder intervals.",
@@ -153,7 +154,7 @@ function createSystemPrompt(): string {
     "Erlaubte Tageskontexte: homeoffice, office, travel, free, vacation.",
     "Berücksichtige Familie, Job, Pendelzeit und Betreuungsaufwand, wenn du Zeitfenster, Intensität oder Fueling empfiehlst.",
     "Nutze nur Datumswerte aus der übergebenen Woche. Wenn der Nutzer einen Wochentag nennt, ordne ihn dieser Woche zu.",
-    "Für Rezeptvorschläge nur dann suggestion.changes nutzen, wenn mode=planning. Sonst Empfehlung ohne Planänderung.",
+    "Für Trainings- und Wochenplanung suggestion.changes nur in mode=planning nutzen. Für Fueling-/Rezept-Entwürfe sind suggestion.changes auch in mode=coach erlaubt, solange klar ist, dass noch nichts gespeichert wurde.",
     "Keine medizinischen Diagnosen. Keine erfundenen externen Daten. Antworte ausschließlich als JSON im geforderten Schema."
   ].join("\n");
 }
@@ -274,7 +275,7 @@ function normalizeCoachResponse(
 
   const intent = inferCoachIntent(originalMessage.toLowerCase());
   const mode = normalizeResponseMode(parsed.mode, intent.mode);
-  const allowDraftChanges = mode === "planning";
+  const allowDraftChanges = mode === "planning" || intent.domain === "fueling" || intent.domain === "nutrition";
   const allowDirectChanges = false;
   const normalizedChanges = Array.isArray(parsed.changes)
     ? parsed.changes.map((change) => normalizeCoachPlanChange(change, days)).filter((change): change is CoachPlanChange => Boolean(change))
@@ -568,7 +569,14 @@ function createFallbackCoachResponse(
     questions.push("Soll ich daraus einen konkreten Wochenvorschlag machen oder erst Varianten vergleichen?");
   }
 
-  const suggestions = createFallbackSuggestions(message, state, date, shouldCreateDraft ? workout : inferWorkout(message), shouldCreateDraft && draftChanges.length > 0);
+  const includeFuelingDraft = (intent.domain === "fueling" || intent.domain === "nutrition") && mentionsConcreteFuelingDraft(lower);
+  const suggestions = createFallbackSuggestions(
+    message,
+    state,
+    date,
+    shouldCreateDraft ? workout : inferWorkout(message),
+    (shouldCreateDraft && draftChanges.length > 0) || includeFuelingDraft
+  );
   const outcomes = createFallbackOutcomes(intent, message, date, day, suggestions, [], questions);
 
   return {
@@ -1213,6 +1221,20 @@ function mentionsAlcohol(lower: string): boolean {
     lower.includes("alkohol") ||
     lower.includes("drink") ||
     lower.includes("trinken gehen");
+}
+
+function mentionsConcreteFuelingDraft(lower: string): boolean {
+  return lower.includes("speicher") ||
+    lower.includes("eintragen") ||
+    lower.includes("hinzufügen") ||
+    lower.includes("hinzufuegen") ||
+    lower.includes("gegessen") ||
+    lower.includes("mahlzeit") ||
+    lower.includes("rezept") ||
+    lower.includes("bowl") ||
+    lower.includes("skyr") ||
+    lower.includes("quark") ||
+    lower.includes("snack");
 }
 
 function mentionsTrainingWeekDiscussion(lower: string): boolean {

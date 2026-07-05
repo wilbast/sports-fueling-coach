@@ -328,18 +328,21 @@ export function ConfigurationView() {
             count={standardMeals.length}
           />
 
-          <div className="grid gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             {standardMeals.length === 0 ? (
               <EmptyState text="Noch keine Fuelingstandards gespeichert." />
             ) : standardMeals.map((meal) => (
-              <div key={meal.id} className="flex items-start justify-between gap-3 rounded-xl border border-line px-3 py-3">
-                <div>
-                  <p className="font-semibold text-ink">{meal.name}</p>
-                  <p className="mt-1 text-sm text-muted">
-                    {meal.description} · {meal.estimatedCalories.min}-{meal.estimatedCalories.max} kcal · {meal.estimatedProteinGrams.min}-{meal.estimatedProteinGrams.max} g Protein
-                  </p>
+              <div key={meal.id} className="rounded-xl border border-line px-3 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-ink">{meal.name}</p>
+                    <p className="mt-1 text-sm leading-5 text-muted">{meal.description}</p>
+                  </div>
+                  <DeleteButton label="Fuelingstandard löschen" onClick={() => removeMealStandard(meal.id)} />
                 </div>
-                <DeleteButton label="Fuelingstandard löschen" onClick={() => removeMealStandard(meal.id)} />
+                <p className="mt-3 text-xs font-semibold text-coach-700">
+                  {meal.estimatedCalories.min}-{meal.estimatedCalories.max} kcal · {meal.estimatedProteinGrams.min}-{meal.estimatedProteinGrams.max} g Protein
+                </p>
               </div>
             ))}
           </div>

@@ -18,7 +18,7 @@ export function SettingsView() {
     updateGoals,
     updateRaceGoal,
     updateBaselineCaloriesWithoutActivity,
-    updateManualActivityForecastCalories,
+    updateManualDailyBurnForecastCalories,
     saveStateNow,
     resetDemoState,
     resetBetaState
@@ -26,7 +26,7 @@ export function SettingsView() {
   const profile = state.profile;
   const goals = state.goals;
   const energySettings = state.energySettings;
-  const selectedForecastCalories = energySettings.manualActivityForecastCaloriesByDate[state.selectedDate];
+  const selectedForecastCalories = energySettings.manualDailyBurnForecastCaloriesByDate[state.selectedDate];
   const raceGoal = profile.raceGoal ?? createFallbackRaceGoal();
   const family = profile.family ?? createFallbackFamilyProfile();
   const job = profile.job ?? createFallbackJobProfile();
@@ -321,7 +321,7 @@ export function SettingsView() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-ink">Energieverbrauch</h2>
-                <p className="mt-1 text-sm text-muted">Basis und Forecast steuern Kalorien, Makros und Fueling-Hinweise.</p>
+                <p className="mt-1 text-sm text-muted">Basis und Gesamtverbrauch-Forecast steuern Makros und Fueling-Hinweise.</p>
               </div>
             </div>
 
@@ -347,14 +347,14 @@ export function SettingsView() {
                 />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink">
-                Aktivitäts-Forecast
+                Tagesverbrauch-Forecast
                 <input
                   value={selectedForecastCalories ?? ""}
-                  onChange={(event) => updateManualActivityForecastCalories(
+                  onChange={(event) => updateManualDailyBurnForecastCalories(
                     state.selectedDate,
                     parseOptionalNumber(event.target.value)
                   )}
-                  placeholder="z. B. 650"
+                  placeholder="z. B. 3200"
                   inputMode="numeric"
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                 />
@@ -362,7 +362,7 @@ export function SettingsView() {
               <div className="flex items-end">
                 <button
                   type="button"
-                  onClick={() => updateManualActivityForecastCalories(state.selectedDate)}
+                  onClick={() => updateManualDailyBurnForecastCalories(state.selectedDate)}
                   disabled={!selectedForecastCalories}
                   className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >

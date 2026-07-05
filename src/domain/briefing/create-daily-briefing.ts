@@ -7,8 +7,9 @@ export function createDailyBriefing(input: DailyBriefingInput): DailyBriefing {
   const { profile, goals, dayPlan, mealTemplates, actualActivities = [] } = input;
   const plannedWorkouts = dayPlan.workouts.filter((workout) => workout.status !== "cancelled");
   const primaryWorkout = plannedWorkouts.find((workout) => workout.status === "planned") ?? plannedWorkouts[0];
-  const manualForecastCalories = input.energySettings?.manualActivityForecastCaloriesByDate?.[dayPlan.date] ?? 0;
-  const activitySummary = summarizeActualActivities(actualActivities, manualForecastCalories, plannedWorkouts);
+  const baselineCalories = resolveBaselineCalories(goals.weightStrategy, input.energySettings?.baselineCaloriesWithoutActivity);
+  const manualForecastCalories = input.energySettings?.manualDailyBurnForecastCaloriesByDate?.[dayPlan.date] ?? 0;
+  const activitySummary = summarizeActualActivities(actualActivities, manualForecastCalories, plannedWorkouts, baselineCalories);
   const runningDistanceKm = plannedWorkouts
     .filter((workout) => workout.sport === "running" && workout.status !== "optional")
     .reduce((sum, workout) => sum + (workout.distanceKm ?? 0), 0) || activitySummary.runningDistanceKm;
@@ -27,7 +28,7 @@ export function createDailyBriefing(input: DailyBriefingInput): DailyBriefing {
 
   return {
     dateLabel: formatDate(dayPlan.date, profile.locale),
-    greeting: `Guten Morgen, ${profile.firstName}`,
+    greeting: `${createGreeting()} ${profile.firstName}`,
     focus: createFocusLabel(goals.weightStrategy, primaryWorkout, activitySummary),
     heroTitle: createHeroTitle(primaryWorkout, activitySummary),
     lead: createLead(primaryWorkout, runningDistanceKm, optionalWorkouts.length, activitySummary),
@@ -49,6 +50,7 @@ type ActualActivitySummary = {
   calories: number;
   actualCalories: number;
   forecastCalories: number;
+  forecastTotalCalories: number;
   plannedCalories: number;
   baselineCalories: number;
   totalDailyBurnCalories: number;
@@ -63,20 +65,24 @@ type ActualActivitySummary = {
 function summarizeActualActivities(
   activities: ActualActivityForBriefing[],
   forecastCalories: number,
-  plannedWorkouts: WorkoutPlan[]
+  plannedWorkouts: WorkoutPlan[],
+  baselineCalories: number
 ): ActualActivitySummary {
   const actualCalories = activities.reduce((sum, activity) => sum + estimateActivityCalories(activity), 0);
-  const normalizedForecastCalories = Math.max(0, Math.round(forecastCalories));
+  const normalizedForecastTotalCalories = Math.max(0, Math.round(forecastCalories));
+  const forecastActivityCalories = normalizedForecastTotalCalories > 0
+    ? Math.max(0, normalizedForecastTotalCalories - baselineCalories)
+    : 0;
   const plannedCalories = estimatePlannedActivityCalories(plannedWorkouts);
-  const effectiveCalories = activities.length > 0
-    ? actualCalories
-    : normalizedForecastCalories > 0
-      ? normalizedForecastCalories
+  const effectiveCalories = normalizedForecastTotalCalories > 0
+    ? forecastActivityCalories
+    : activities.length > 0
+      ? actualCalories
       : plannedCalories;
-  const calorieSource = activities.length > 0
-    ? "actual"
-    : normalizedForecastCalories > 0
-      ? "manual_forecast"
+  const calorieSource = normalizedForecastTotalCalories > 0
+    ? "manual_forecast"
+    : activities.length > 0
+      ? "actual"
       : plannedCalories > 0
         ? "planned"
         : "none";
@@ -97,10 +103,11 @@ function summarizeActualActivities(
     count: activities.length,
     calories: Math.round(effectiveCalories),
     actualCalories: Math.round(actualCalories),
-    forecastCalories: activities.length > 0 ? 0 : normalizedForecastCalories,
+    forecastCalories: forecastActivityCalories,
+    forecastTotalCalories: normalizedForecastTotalCalories,
     plannedCalories: Math.round(plannedCalories),
-    baselineCalories: 0,
-    totalDailyBurnCalories: Math.round(effectiveCalories),
+    baselineCalories,
+    totalDailyBurnCalories: normalizedForecastTotalCalories > 0 ? normalizedForecastTotalCalories : baselineCalories + Math.round(effectiveCalories),
     calorieSource,
     runningDistanceKm,
     movingMinutes,
@@ -120,7 +127,9 @@ function createNutritionTarget(
 ): NutritionTarget {
   const baseCalories = createBaseCalorieTarget(weightStrategy, baselineCaloriesWithoutActivity);
   actual.baselineCalories = baseCalories.baseline;
-  actual.totalDailyBurnCalories = baseCalories.baseline + actual.calories;
+  actual.totalDailyBurnCalories = actual.calorieSource === "manual_forecast" && actual.forecastTotalCalories > 0
+    ? actual.forecastTotalCalories
+    : baseCalories.baseline + actual.calories;
   const calorieTarget = createCalorieIntakeTarget(weightStrategy, actual.totalDailyBurnCalories);
   const calories = {
     min: calorieTarget.min,
@@ -159,11 +168,11 @@ function createNutritionTarget(
     rationale: [
       "Gewicht reduzieren bleibt aktiv, aber nicht auf Kosten der Trainingsqualität.",
       "Protein bleibt hoch für Sättigung und Muskelerhalt.",
-      actual.count > 0
+      actual.calorieSource === "actual"
         ? `Tagesverbrauch: ${formatNumber(baseCalories.baseline)} kcal Basis plus ca. ${formatNumber(actual.calories)} kcal aus synchronisierter Aktivität.`
-        : actual.forecastCalories > 0
-          ? `Tagesverbrauch: ${formatNumber(baseCalories.baseline)} kcal Basis plus ca. ${formatNumber(actual.forecastCalories)} kcal manueller Forecast.`
-          : actual.plannedCalories > 0
+        : actual.calorieSource === "manual_forecast"
+          ? `Tagesverbrauch manuell überschrieben: ca. ${formatNumber(actual.forecastTotalCalories)} kcal Gesamtverbrauch.`
+          : actual.calorieSource === "planned"
             ? `Tagesverbrauch: ${formatNumber(baseCalories.baseline)} kcal Basis plus ca. ${formatNumber(actual.plannedCalories)} kcal aus geplanter Aktivität.`
           : runningDistanceKm >= 8
           ? "Kohlenhydrate werden rund um den Lauf priorisiert."
@@ -173,16 +182,17 @@ function createNutritionTarget(
 }
 
 function createBaseCalorieTarget(weightStrategy: string, baselineCaloriesWithoutActivity?: number): { baseline: number; min: number; max: number } {
-  const baseline = typeof baselineCaloriesWithoutActivity === "number" && Number.isFinite(baselineCaloriesWithoutActivity) && baselineCaloriesWithoutActivity > 0
-    ? Math.round(baselineCaloriesWithoutActivity)
-    : undefined;
-
-  if (!baseline) {
-    const fallback = weightStrategy === "reduce" ? 2700 : 2850;
-    return { baseline: fallback, ...createCalorieIntakeTarget(weightStrategy, fallback) };
-  }
+  const baseline = resolveBaselineCalories(weightStrategy, baselineCaloriesWithoutActivity);
 
   return { baseline, ...createCalorieIntakeTarget(weightStrategy, baseline) };
+}
+
+function resolveBaselineCalories(weightStrategy: string, baselineCaloriesWithoutActivity?: number): number {
+  if (typeof baselineCaloriesWithoutActivity === "number" && Number.isFinite(baselineCaloriesWithoutActivity) && baselineCaloriesWithoutActivity > 0) {
+    return Math.round(baselineCaloriesWithoutActivity);
+  }
+
+  return weightStrategy === "reduce" ? 2700 : 2850;
 }
 
 function createCalorieIntakeTarget(weightStrategy: string, totalDailyBurnCalories: number): { min: number; max: number } {
@@ -207,13 +217,6 @@ function createNutritionMetrics(target: NutritionTarget): NutritionMetric[] {
       tone: "amber"
     },
     {
-      label: "Kalorien",
-      value: formatRange(target.calories),
-      unit: target.calories.unit,
-      note: "moderates Defizit ohne Trainingsloch",
-      tone: "green"
-    },
-    {
       label: "Protein",
       value: formatRange(target.protein),
       unit: target.protein.unit,
@@ -232,7 +235,7 @@ function createNutritionMetrics(target: NutritionTarget): NutritionMetric[] {
 
 function createEnergyExpenditureNote(source: NutritionTarget["energyExpenditure"]["source"], activityCalories: number): string {
   if (source === "actual") return `Basis plus ${formatNumber(activityCalories)} kcal synchronisierte Aktivität`;
-  if (source === "manual_forecast") return `Basis plus ${formatNumber(activityCalories)} kcal manueller Forecast`;
+  if (source === "manual_forecast") return "Manuell überschrieben";
   if (source === "planned") return `Basis plus ${formatNumber(activityCalories)} kcal geplante Aktivität`;
 
   return "Standardverbrauch ohne zusätzliche Aktivität";
@@ -273,10 +276,10 @@ function createMealRecommendations(
 ) {
   const plannedMeals = slots.map((slot) => createMealRecommendation(slot, mealTemplates, runningDistanceKm, actual));
 
-  if (actual.count === 0 && actual.forecastCalories === 0 && actual.plannedCalories === 0) return plannedMeals;
+  if (actual.calorieSource === "none") return plannedMeals;
 
-  const isForecast = actual.count === 0 && actual.forecastCalories > 0;
-  const isPlanned = actual.count === 0 && actual.forecastCalories === 0 && actual.plannedCalories > 0;
+  const isForecast = actual.calorieSource === "manual_forecast";
+  const isPlanned = actual.calorieSource === "planned";
 
   const recoveryMeal = {
     time: isForecast || isPlanned ? "rund um die Belastung" : "innerhalb 90 min",
@@ -288,7 +291,7 @@ function createMealRecommendations(
       ? "30-45 g Protein, 70-110 g Kohlenhydrate, Flüssigkeit aktiv auffüllen"
       : "25-35 g Protein, 40-70 g Kohlenhydrate",
     reason: isForecast
-      ? `Forecast ca. ${formatNumber(actual.forecastCalories)} kcal Aktivitätsverbrauch; Energie vorher und danach ruhiger verteilen.`
+      ? `Forecast überschreibt den Tagesverbrauch auf ca. ${formatNumber(actual.forecastTotalCalories)} kcal; Energie vorher und danach ruhiger verteilen.`
       : isPlanned
         ? `Geplante Aktivität ca. ${formatNumber(actual.plannedCalories)} kcal Verbrauch; Fueling vorab einplanen.`
       : `Aktivität verbraucht ca. ${formatNumber(actual.calories)} kcal; Regeneration und nächste Einheit absichern.`
@@ -301,7 +304,7 @@ function createMealRecommendations(
       : "Gemüse, Proteinquelle und kleine Carb-Portion nach Hunger. Kein Crash-Defizit nach Training.",
     macroHint: actual.highIntensity ? "Carbs auffüllen, Protein sichern" : "Protein hoch, Carbs nach Hunger",
     reason: isForecast || isPlanned
-      ? "Tagesabschluss an den erwarteten Aktivitätsverbrauch anpassen."
+      ? "Tagesabschluss an den erwarteten Tagesverbrauch anpassen."
       : "Tagesabschluss an die tatsächlich absolvierte Einheit anpassen."
   };
 
@@ -346,7 +349,15 @@ function createMealReason(role: MealPlanSlot["role"]): string {
 }
 
 function createPriorities(runningDistanceKm: number, optionalWorkoutCount: number, actual: ActualActivitySummary): string[] {
-  if (actual.count > 0) {
+  if (actual.calorieSource === "manual_forecast") {
+    return [
+      `Manueller Forecast: ca. ${formatNumber(actual.forecastTotalCalories)} kcal Gesamtverbrauch`,
+      actual.highIntensity ? "Heute nicht zu hart ins Defizit gehen" : "Defizit möglich halten, aber Fueling nicht wegkürzen",
+      "Protein, Flüssigkeit und Carbs rund um die Belastung absichern"
+    ];
+  }
+
+  if (actual.calorieSource === "actual") {
     return [
       `Verbrauchte Energie berücksichtigen: ca. ${formatNumber(actual.calories)} kcal aus Aktivität`,
       actual.highIntensity ? "Heute kein hartes Restdefizit erzwingen" : "Defizit ruhig halten, aber Recovery nicht wegkürzen",
@@ -354,15 +365,7 @@ function createPriorities(runningDistanceKm: number, optionalWorkoutCount: numbe
     ];
   }
 
-  if (actual.forecastCalories > 0) {
-    return [
-      `Manueller Forecast: ca. ${formatNumber(actual.forecastCalories)} kcal Aktivitätsverbrauch einplanen`,
-      actual.highIntensity ? "Heute nicht zu hart ins Defizit gehen" : "Defizit möglich halten, aber Fueling nicht wegkürzen",
-      "Protein, Flüssigkeit und Carbs rund um die Belastung absichern"
-    ];
-  }
-
-  if (actual.plannedCalories > 0) {
+  if (actual.calorieSource === "planned") {
     return [
       `Geplante Aktivität: ca. ${formatNumber(actual.plannedCalories)} kcal Verbrauch einkalkulieren`,
       actual.highIntensity ? "Fueling nicht zu knapp planen" : "Defizit möglich halten, aber Training nicht unterfuelen",
@@ -400,7 +403,15 @@ function createCoachHint(
   raceContext: string | undefined,
   actual: ActualActivitySummary
 ): string {
-  if (actual.count > 0) {
+  if (actual.calorieSource === "manual_forecast") {
+    const deficitHint = weightStrategy === "reduce"
+      ? "Das Defizit bleibt möglich, aber bitte nicht über fehlendes Training-Fueling erzwingen."
+      : "Heute darf die Energie stärker Richtung Belastung und Regeneration gehen.";
+
+    return `Für heute ist der Tagesverbrauch manuell auf ca. ${formatNumber(actual.forecastTotalCalories)} kcal gesetzt. ${deficitHint} Plane eine klare Proteinbasis, genug Flüssigkeit und Carbs passend vor oder nach der Belastung.`;
+  }
+
+  if (actual.calorieSource === "actual") {
     const intro = actual.labels.length ? `${actual.labels.join(" + ")} ist erledigt.` : "Die Aktivität ist erledigt.";
     const heartRate = actual.averageHeartRate ? ` Ø Puls ${Math.round(actual.averageHeartRate)} bpm.` : "";
     const deficitHint = weightStrategy === "reduce"
@@ -410,15 +421,7 @@ function createCoachHint(
     return `${intro} Ca. ${formatNumber(actual.calories)} kcal Verbrauch, ${Math.round(actual.movingMinutes)} Minuten Belastung.${heartRate} ${deficitHint} Priorität: trinken, Protein sichern und Kohlenhydrate passend nachziehen.`;
   }
 
-  if (actual.forecastCalories > 0) {
-    const deficitHint = weightStrategy === "reduce"
-      ? "Das Defizit bleibt möglich, aber bitte nicht über fehlendes Training-Fueling erzwingen."
-      : "Heute darf die Energie stärker Richtung Belastung und Regeneration gehen.";
-
-    return `Für heute sind ca. ${formatNumber(actual.forecastCalories)} kcal Aktivitätsverbrauch manuell eingeplant. ${deficitHint} Plane eine klare Proteinbasis, genug Flüssigkeit und Carbs passend vor oder nach der Belastung.`;
-  }
-
-  if (actual.plannedCalories > 0) {
+  if (actual.calorieSource === "planned") {
     return `Heute sind ca. ${formatNumber(actual.plannedCalories)} kcal aus geplanter Aktivität im Tagesverbrauch berücksichtigt. Plane Fueling rund um die Einheit pragmatisch: Proteinbasis, Flüssigkeit und Carbs passend zur Belastung.`;
   }
 
@@ -434,7 +437,27 @@ function createCoachHint(
 }
 
 function createCoachCards(runningDistanceKm: number, actual: ActualActivitySummary) {
-  if (actual.count > 0) {
+  if (actual.calorieSource === "manual_forecast") {
+    return [
+      {
+        title: "Forecast aktiv",
+        body: `${formatNumber(actual.forecastTotalCalories)} kcal Gesamtverbrauch überschreiben den Tagesrahmen.`,
+        tone: "amber" as const
+      },
+      {
+        title: "Fueling vorbereiten",
+        body: actual.highIntensity ? "Carbs vor und nach der Belastung einplanen." : "Snack oder Carb-Portion nach Hunger reicht oft.",
+        tone: "neutral" as const
+      },
+      {
+        title: "Protein sichern",
+        body: "25-45 g Protein in der nächsten Hauptmahlzeit einplanen.",
+        tone: "green" as const
+      }
+    ];
+  }
+
+  if (actual.calorieSource === "actual") {
     return [
       {
         title: "Aktivität verbucht",
@@ -454,27 +477,7 @@ function createCoachCards(runningDistanceKm: number, actual: ActualActivitySumma
     ];
   }
 
-  if (actual.forecastCalories > 0) {
-    return [
-      {
-        title: "Forecast aktiv",
-        body: `${formatNumber(actual.forecastCalories)} kcal erwarteter Aktivitätsverbrauch sind im Tagesrahmen berücksichtigt.`,
-        tone: "amber" as const
-      },
-      {
-        title: "Fueling vorbereiten",
-        body: actual.highIntensity ? "Carbs vor und nach der Belastung einplanen." : "Snack oder Carb-Portion nach Hunger reicht oft.",
-        tone: "neutral" as const
-      },
-      {
-        title: "Protein sichern",
-        body: "25-45 g Protein in der nächsten Hauptmahlzeit einplanen.",
-        tone: "green" as const
-      }
-    ];
-  }
-
-  if (actual.plannedCalories > 0) {
+  if (actual.calorieSource === "planned") {
     return [
       {
         title: "Plan berücksichtigt",
@@ -534,15 +537,15 @@ function createCoachCards(runningDistanceKm: number, actual: ActualActivitySumma
 }
 
 function createFocusLabel(weightStrategy: string, primaryWorkout: WorkoutPlan | undefined, actual: ActualActivitySummary): string {
-  if (actual.count > 0) {
+  if (actual.calorieSource === "manual_forecast") {
+    return "Forecast aktiv, Tagesverbrauch gesetzt";
+  }
+
+  if (actual.calorieSource === "actual") {
     return "Aktivität erledigt, Recovery fuelen";
   }
 
-  if (actual.forecastCalories > 0) {
-    return "Forecast aktiv, Fueling vorbereiten";
-  }
-
-  if (actual.plannedCalories > 0) {
+  if (actual.calorieSource === "planned") {
     return "Geplante Aktivität, Fueling vorbereiten";
   }
 
@@ -553,15 +556,15 @@ function createFocusLabel(weightStrategy: string, primaryWorkout: WorkoutPlan | 
 }
 
 function createHeroTitle(primaryWorkout: WorkoutPlan | undefined, actual: ActualActivitySummary): string {
-  if (actual.count > 0) {
+  if (actual.calorieSource === "manual_forecast") {
+    return "Tagesverbrauch-Forecast gesetzt. Heute Fueling bewusst planen.";
+  }
+
+  if (actual.calorieSource === "actual") {
     return "Einheit erledigt. Jetzt Fueling und Regeneration sauber nachziehen.";
   }
 
-  if (actual.forecastCalories > 0) {
-    return "Aktivitäts-Forecast gesetzt. Heute Fueling bewusst planen.";
-  }
-
-  if (actual.plannedCalories > 0) {
+  if (actual.calorieSource === "planned") {
     return "Training geplant. Tagesverbrauch und Fueling sind vorbereitet.";
   }
 
@@ -570,15 +573,15 @@ function createHeroTitle(primaryWorkout: WorkoutPlan | undefined, actual: Actual
 }
 
 function createLead(primaryWorkout: WorkoutPlan | undefined, runningDistanceKm: number, optionalWorkoutCount: number, actual: ActualActivitySummary): string {
-  if (actual.count > 0) {
+  if (actual.calorieSource === "manual_forecast") {
+    return `Für heute überschreibt ein Forecast den Tagesverbrauch auf ca. ${formatNumber(actual.forecastTotalCalories)} kcal. Protein, Kohlenhydrate und Mahlzeiten wurden daran angepasst.`;
+  }
+
+  if (actual.calorieSource === "actual") {
     return `Heute wurden ${actual.count} Aktivität${actual.count === 1 ? "" : "en"} importiert. Die Empfehlungen wurden an Verbrauch, Dauer und Intensität angepasst.`;
   }
 
-  if (actual.forecastCalories > 0) {
-    return `Für heute sind ca. ${formatNumber(actual.forecastCalories)} kcal Aktivitätsverbrauch eingeplant. Kalorien, Protein, Kohlenhydrate und Mahlzeiten wurden daran angepasst.`;
-  }
-
-  if (actual.plannedCalories > 0) {
+  if (actual.calorieSource === "planned") {
     return `Für heute sind ca. ${formatNumber(actual.plannedCalories)} kcal aus geplanter Aktivität eingerechnet. Nach einem Strava-Sync wird automatisch der tatsächliche Verbrauch genutzt.`;
   }
 
@@ -595,9 +598,9 @@ function createLead(primaryWorkout: WorkoutPlan | undefined, runningDistanceKm: 
 }
 
 function createReadiness(runningDistanceKm: number, actual: ActualActivitySummary): string {
-  if (actual.count > 0 && actual.highIntensity) return "Recovery priorisieren";
-  if (actual.count > 0) return "Belastung verarbeitet";
-  if (actual.forecastCalories > 0 || actual.plannedCalories > 0) return "Fueling vorbereiten";
+  if (actual.calorieSource === "actual" && actual.highIntensity) return "Recovery priorisieren";
+  if (actual.calorieSource === "actual") return "Belastung verarbeitet";
+  if (actual.calorieSource === "manual_forecast" || actual.calorieSource === "planned") return "Fueling vorbereiten";
 
   return runningDistanceKm >= 14 ? "Belastung bewusst steuern" : "Normal belastbar";
 }
@@ -621,6 +624,17 @@ function formatDate(date: string, locale: string): string {
     day: "numeric",
     month: "long"
   }).format(new Date(`${date}T12:00:00`));
+}
+
+function createGreeting(): string {
+  const hour = new Date().getHours();
+
+  if (hour < 5) return "Gute Nacht,";
+  if (hour < 11) return "Guten Morgen,";
+  if (hour < 18) return "Guten Tag,";
+  if (hour < 22) return "Guten Abend,";
+
+  return "Gute Nacht,";
 }
 
 function daysBetween(from: string, to: string): number {
