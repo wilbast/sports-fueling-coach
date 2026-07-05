@@ -11,13 +11,23 @@ import {
 } from "lucide-react";
 import { PageHeader, Panel, Pill, StatCard } from "@/components/ui";
 import type { DailyBriefing } from "@/domain/briefing/types";
+import { ExternalActivityList, type ExternalActivitySummary } from "@/features/activities/external-activities";
 
 type TodayViewProps = {
   briefing: DailyBriefing;
   calendar?: React.ReactNode;
+  externalActivities?: ExternalActivitySummary[];
+  externalActivitiesLoading?: boolean;
+  externalActivitiesError?: string | null;
 };
 
-export function TodayView({ briefing, calendar }: TodayViewProps) {
+export function TodayView({
+  briefing,
+  calendar,
+  externalActivities = [],
+  externalActivitiesLoading = false,
+  externalActivitiesError = null
+}: TodayViewProps) {
   return (
     <div>
       <PageHeader
@@ -123,6 +133,23 @@ export function TodayView({ briefing, calendar }: TodayViewProps) {
           </div>
         </section>
 
+        <section>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-ink">Durchgeführt</h2>
+            <Pill tone={externalActivities.length > 0 ? "amber" : "neutral"}>
+              {externalActivities.length} Strava
+            </Pill>
+          </div>
+          <ExternalActivityList
+            activities={externalActivities}
+            isLoading={externalActivitiesLoading}
+            error={externalActivitiesError}
+            emptyText="Noch keine importierte Aktivität für heute."
+          />
+        </section>
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-ink">Mahlzeitenvorschlag</h2>

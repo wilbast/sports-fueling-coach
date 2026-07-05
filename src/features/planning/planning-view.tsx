@@ -42,6 +42,7 @@ import type {
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
+import { ExternalActivityList, useExternalActivities } from "@/features/activities/external-activities";
 
 const planningContexts: Array<{
   value: PlanningContext;
@@ -124,6 +125,14 @@ export function PlanningView() {
   const [selectedWeekTemplateId, setSelectedWeekTemplateId] = useState(state.standards.weeks[0]?.id ?? "");
   const [weekStandardName, setWeekStandardName] = useState("");
   const trainingLoad = getWeekTrainingLoad(state.weekPlan);
+  const weekStart = state.weekPlan.days[0]?.date ?? state.weekPlan.startsOn;
+  const weekEnd = state.weekPlan.days[state.weekPlan.days.length - 1]?.date ?? state.weekPlan.startsOn;
+  const {
+    activitiesByDate,
+    isLoading: activitiesLoading,
+    error: activitiesError
+  } = useExternalActivities(weekStart, weekEnd);
+  const selectedActivities = activitiesByDate[selectedDay.date] ?? [];
 
   useEffect(() => {
     if (!selectedWorkoutStandardId && state.standards.workouts[0]) {
@@ -313,6 +322,7 @@ export function PlanningView() {
             <DayCard
               key={day.date}
               day={day}
+              activityCount={activitiesByDate[day.date]?.length ?? 0}
               selected={day.date === selectedDay.date}
               onSelect={() => setSelectedDate(day.date)}
             />
@@ -631,6 +641,24 @@ export function PlanningView() {
               </button>
             </form>
           </Panel>
+
+          <Panel>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-ink">Durchgeführt</h2>
+                <p className="mt-1 text-sm text-muted">Importierte Aktivitäten am ausgewählten Tag</p>
+              </div>
+              <Pill tone={selectedActivities.length > 0 ? "amber" : "neutral"}>
+                {selectedActivities.length} Strava
+              </Pill>
+            </div>
+            <ExternalActivityList
+              activities={selectedActivities}
+              isLoading={activitiesLoading}
+              error={activitiesError}
+              emptyText="Keine importierte Strava-Aktivität an diesem Tag."
+            />
+          </Panel>
         </div>
 
         <div className="grid content-start gap-6">
@@ -681,11 +709,12 @@ export function PlanningView() {
 
 type DayCardProps = {
   day: DayPlan;
+  activityCount: number;
   selected: boolean;
   onSelect: () => void;
 };
 
-function DayCard({ day, selected, onSelect }: DayCardProps) {
+function DayCard({ day, activityCount, selected, onSelect }: DayCardProps) {
   const context = getPlanningContext(day);
 
   return (
@@ -702,7 +731,10 @@ function DayCard({ day, selected, onSelect }: DayCardProps) {
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white font-semibold text-coach-700 ring-1 ring-coach-100">
           {formatWeekday(day.date)}
         </span>
-        <Pill tone={day.workouts.length === 0 ? "neutral" : "blue"}>{day.workouts.length}</Pill>
+        <div className="flex flex-wrap justify-end gap-1">
+          <Pill tone={day.workouts.length === 0 ? "neutral" : "blue"}>{day.workouts.length} Plan</Pill>
+          {activityCount > 0 ? <Pill tone="amber">{activityCount} Ist</Pill> : null}
+        </div>
       </div>
       <h3 className="font-semibold text-ink">{contextLabel(context)}</h3>
       <p className="mt-3 text-sm leading-5 text-muted">{getWorkoutSummary(day)}</p>

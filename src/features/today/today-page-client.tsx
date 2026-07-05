@@ -5,6 +5,7 @@ import { createDailyBriefing } from "@/domain/briefing/create-daily-briefing";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { useExternalActivities } from "@/features/activities/external-activities";
 import { TodayView } from "@/features/today/today-view";
 
 type TodayPageClientProps = {
@@ -15,6 +16,11 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
   const { state, setSelectedDate } = useAppState();
   const activeDate = date ?? state.selectedDate;
   const dayPlan = getDayPlanByDate(state.weekPlan, activeDate);
+  const {
+    activitiesByDate,
+    isLoading: activitiesLoading,
+    error: activitiesError
+  } = useExternalActivities(activeDate, activeDate);
 
   useEffect(() => {
     if (date && date !== state.selectedDate) {
@@ -29,5 +35,13 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     mealTemplates: state.mealTemplates
   }), [dayPlan, state.goals, state.mealTemplates, state.profile]);
 
-  return <TodayView briefing={briefing} calendar={<WeekCalendar />} />;
+  return (
+    <TodayView
+      briefing={briefing}
+      calendar={<WeekCalendar />}
+      externalActivities={activitiesByDate[activeDate] ?? []}
+      externalActivitiesLoading={activitiesLoading}
+      externalActivitiesError={activitiesError}
+    />
+  );
 }

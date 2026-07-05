@@ -22,6 +22,7 @@ import type {
 } from "@/domain/training/types";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { ExternalActivityList, useExternalActivities } from "@/features/activities/external-activities";
 
 const statusLabels: Record<WorkoutStatus, string> = {
   planned: "geplant",
@@ -57,6 +58,13 @@ export function TrainingView() {
     .filter((workout) => workout.sport === "running")
     .reduce((sum, workout) => sum + (workout.distanceKm ?? 0), 0);
   const hardSessions = activeWorkouts.filter((workout) => workout.intensity === "hard").length;
+  const weekStart = state.weekPlan.days[0]?.date ?? state.weekPlan.startsOn;
+  const weekEnd = state.weekPlan.days[state.weekPlan.days.length - 1]?.date ?? state.weekPlan.startsOn;
+  const {
+    activitiesByDate,
+    isLoading: activitiesLoading,
+    error: activitiesError
+  } = useExternalActivities(weekStart, weekEnd);
 
   useEffect(() => {
     if (!selectedStandardId && state.standards.workouts[0]) {
@@ -128,7 +136,7 @@ export function TrainingView() {
                   <p className="mt-1 text-sm text-muted">{day.focus}</p>
                 </div>
                 <Pill tone={day.date === selectedDay.date ? "green" : "neutral"}>
-                  {day.workouts.length} Einheiten
+                  {day.workouts.length} Plan · {activitiesByDate[day.date]?.length ?? 0} Ist
                 </Pill>
               </button>
 
@@ -144,6 +152,17 @@ export function TrainingView() {
                     onRemove={() => removeWorkout(day.date, workout.id)}
                   />
                 ))}
+
+                {(activitiesByDate[day.date]?.length ?? 0) > 0 ? (
+                  <div className="mt-1">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">Strava</p>
+                    <ExternalActivityList
+                      activities={activitiesByDate[day.date] ?? []}
+                      isLoading={activitiesLoading}
+                      error={activitiesError}
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
           ))}
