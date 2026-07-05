@@ -608,7 +608,11 @@ export function PlanningView() {
         </div>
 
         <div className="grid content-start gap-6">
-          <CoachChatPanel />
+          <CoachChatPanel
+            title="Coach fragen"
+            intro="Frag nach Einordnung oder Vorschlägen für den ausgewählten Tag. Für den vollen Coach-Bereich nutze die Coach-Navigation."
+            compact
+          />
 
           <Panel>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

@@ -69,7 +69,11 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - API-Key generisch über `AI_API_KEY`
 - aktueller Startprovider: `openai`
 - ohne AI-Env nutzt die App einen regelbasierten lokalen Parser
-- unterstützte Planänderungen: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten
+- eigener Coach-Bereich unter `/coach`
+- Coach nutzt Profil, Ziele, Training, Fueling, Standards und Wochenplanung als Kontext
+- Vorschläge können bewusst in Training oder Fueling übernommen werden
+- unterstützte Änderungen: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten
+- Fueling- und Rezeptvorschläge sind Teil der Coach-Antwort
 - Laufen unterscheidet Laufart und Fokus
 
 Beispiel für Vercel:

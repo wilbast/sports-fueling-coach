@@ -16,6 +16,7 @@ export type CoachChatMessage = {
   content: string;
   createdAt: string;
   changes?: CoachPlanChange[];
+  suggestions?: CoachSuggestion[];
   questions?: string[];
 };
 
@@ -75,9 +76,20 @@ export type CoachPlanChange =
     reason?: string;
   };
 
+export type CoachSuggestion = {
+  id: string;
+  title: string;
+  kind: "training" | "fueling" | "recipe" | "recovery" | "planning";
+  summary: string;
+  rationale: string;
+  tips: string[];
+  changes: CoachPlanChange[];
+};
+
 export type CoachPlanResponse = {
   assistantMessage: string;
   questions: string[];
   changes: CoachPlanChange[];
+  suggestions: CoachSuggestion[];
   confidence: "low" | "medium" | "high";
 };

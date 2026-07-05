@@ -3,6 +3,7 @@ import {
   CalendarRange,
   Dumbbell,
   Home,
+  MessageCircle,
   Salad,
   Settings,
   type LucideIcon
@@ -16,6 +17,7 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   { label: "Heute", href: "/today", icon: Home },
+  { label: "Coach", href: "/coach", icon: MessageCircle },
   { label: "Planung", href: "/planning", icon: CalendarRange },
   { label: "Training", href: "/training", icon: Dumbbell },
   { label: "Fueling", href: "/fueling", icon: Salad },

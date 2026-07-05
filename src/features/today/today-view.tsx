@@ -25,7 +25,7 @@ export function TodayView({ briefing }: TodayViewProps) {
         description={briefing.lead}
         action={
           <Link
-            href="/planning#coach"
+            href="/coach"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
           >
             <MessageCircle className="h-4 w-4" aria-hidden="true" />

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { CoachPlanChange, CoachPlanResponse } from "@/domain/coach/types";
+import type { CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import type { UserGoals } from "@/domain/goals/types";
+import type { MealTemplate } from "@/domain/nutrition/types";
 import type { DayBlockType, DayContext, DayPlan, WeekPlan } from "@/domain/planning/types";
 import type { UserProfile } from "@/domain/profile/types";
 import type { IsoDate } from "@/domain/shared";
+import type { AppStandards } from "@/domain/standards/types";
 import type {
   RunningFocus,
   RunningWorkoutType,
@@ -21,6 +23,8 @@ type CoachRequestBody = {
     profile: UserProfile;
     goals: UserGoals;
     weekPlan: WeekPlan;
+    mealTemplates?: MealTemplate[];
+    standards?: AppStandards;
   };
 };
 
@@ -71,12 +75,16 @@ export async function POST(request: NextRequest) {
 function createSystemPrompt(): string {
   return [
     "Du bist ein deutschsprachiger Sports & Fueling Coach für genau einen ambitionierten Freizeitsportler.",
-    "Du wandelst Chat-Nachrichten in konkrete Planänderungen um und stellst intelligente Rückfragen.",
+    "Du bist zuerst Berater, nicht nur Formularausfüller. Antworte konkret, coachig, knapp und mit klarer Empfehlung.",
+    "Nutze alle übergebenen Informationen: Profil, Ziele, Wettkampfziel, aktuelle Woche, Training, Fueling, Standards und vorhandene Mahlzeiten.",
+    "Gib konkrete Vorschläge für Training, Fueling, Regeneration oder Rezepte. Vorschläge dürfen Änderungen enthalten, die der Nutzer später übernehmen kann.",
+    "Nutze changes nur für sehr eindeutige direkt gewünschte Änderungen. Nutze suggestions für Empfehlungen, Rezepte und Optionen.",
     "Erlaubte Sportarten: running, padel, swimming, squash, hiit, strength, cycling.",
     "Bei running nutze runningType: easy_run, tempo_run, fartlek oder intervals.",
     "Bei running nutze runningFocus: base, recovery, threshold oder vo2max.",
     "Nutze nur Datumswerte aus der übergebenen Woche. Wenn der Nutzer einen Wochentag nennt, ordne ihn dieser Woche zu.",
-    "Wenn die Information eindeutig ist, gib passende changes zurück. Wenn etwas wesentlich fehlt, gib trotzdem sichere Changes zurück und frage gezielt nach.",
+    "Für Rezeptvorschläge nutze add_meal Changes mit groben Kalorien, Protein und Tags.",
+    "Wenn etwas wesentlich fehlt, stelle gezielte Rückfragen.",
     "Keine medizinischen Diagnosen. Keine erfundenen externen Daten. Antworte ausschließlich als JSON im geforderten Schema."
   ].join("\n");
 }
@@ -110,7 +118,32 @@ function createCoachContext(message: string, state: NonNullable<CoachRequestBody
       })),
       mealPlan: day.mealPlan,
       note: day.note
-    }))
+    })),
+    mealTemplates: state.mealTemplates?.map((meal) => ({
+      id: meal.id,
+      name: meal.name,
+      description: meal.description,
+      calories: meal.estimatedCalories,
+      protein: meal.estimatedProteinGrams,
+      tags: meal.tags
+    })) ?? [],
+    standards: {
+      planning: state.standards?.planning.map((standard) => ({
+        name: standard.name,
+        context: standard.context,
+        extraInfos: standard.extraInfos.map((info) => info.label)
+      })) ?? [],
+      workouts: state.standards?.workouts.map((workout) => ({
+        name: workout.name,
+        sport: workout.sport,
+        title: workout.title,
+        distanceKm: workout.distanceKm,
+        durationMinutes: workout.durationMinutes,
+        intensity: workout.intensity,
+        runningType: workout.runningType,
+        runningFocus: workout.runningFocus
+      })) ?? []
+    }
   };
 }
 
@@ -118,7 +151,7 @@ function createCoachResponseSchema() {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["assistantMessage", "questions", "changes", "confidence"],
+    required: ["assistantMessage", "questions", "changes", "suggestions", "confidence"],
     properties: {
       assistantMessage: { type: "string" },
       questions: {
@@ -142,6 +175,35 @@ function createCoachResponseSchema() {
             date: { type: "string" }
           }
         }
+      },
+      suggestions: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: true,
+          required: ["id", "title", "kind", "summary", "rationale", "tips", "changes"],
+          properties: {
+            id: { type: "string" },
+            title: { type: "string" },
+            kind: {
+              type: "string",
+              enum: ["training", "fueling", "recipe", "recovery", "planning"]
+            },
+            summary: { type: "string" },
+            rationale: { type: "string" },
+            tips: {
+              type: "array",
+              items: { type: "string" }
+            },
+            changes: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: true
+              }
+            }
+          }
+        }
       }
     }
   };
@@ -157,6 +219,7 @@ function normalizeCoachResponse(
       assistantMessage: "Ich konnte die Antwort nicht sicher lesen. Sag mir bitte Tag, Training und groben Zweck noch einmal.",
       questions: ["Für welchen Tag soll ich das einplanen?"],
       changes: [],
+      suggestions: [],
       confidence: "low"
     };
   }
@@ -164,18 +227,22 @@ function normalizeCoachResponse(
   const changes = Array.isArray(parsed.changes)
     ? parsed.changes.map((change) => normalizeCoachPlanChange(change, days)).filter((change): change is CoachPlanChange => Boolean(change))
     : [];
+  const suggestions = Array.isArray(parsed.suggestions)
+    ? parsed.suggestions.map((suggestion) => normalizeCoachSuggestion(suggestion, days)).filter((suggestion): suggestion is CoachSuggestion => Boolean(suggestion))
+    : [];
 
   return {
     assistantMessage: typeof parsed.assistantMessage === "string" && parsed.assistantMessage.trim()
       ? parsed.assistantMessage.trim()
-      : createAssistantSummary(changes, originalMessage),
+      : createAssistantSummary(changes, suggestions, originalMessage),
     questions: Array.isArray(parsed.questions)
       ? parsed.questions.filter((question): question is string => typeof question === "string" && question.trim().length > 0).slice(0, 3)
       : [],
     changes,
+    suggestions,
     confidence: parsed.confidence === "high" || parsed.confidence === "medium" || parsed.confidence === "low"
       ? parsed.confidence
-      : changes.length > 0 ? "medium" : "low"
+      : changes.length > 0 || suggestions.length > 0 ? "medium" : "low"
   };
 }
 
@@ -225,7 +292,61 @@ function normalizeCoachPlanChange(change: unknown, days: DayPlan[]): CoachPlanCh
     };
   }
 
+  if (change.type === "add_meal" && isRecord(change.meal)) {
+    const meal = change.meal;
+    if (typeof meal.time !== "string" || !isMealRole(meal.role) || typeof meal.name !== "string" || !meal.name.trim()) {
+      return null;
+    }
+
+    return {
+      type: "add_meal",
+      date: change.date as IsoDate,
+      meal: {
+        time: meal.time,
+        role: meal.role,
+        name: meal.name.trim(),
+        description: typeof meal.description === "string" && meal.description.trim()
+          ? meal.description.trim()
+          : "Grobe Coach-Mahlzeit ohne Grammtracking.",
+        caloriesMin: toOptionalNumber(meal.caloriesMin),
+        caloriesMax: toOptionalNumber(meal.caloriesMax),
+        proteinMin: toOptionalNumber(meal.proteinMin),
+        proteinMax: toOptionalNumber(meal.proteinMax),
+        tags: Array.isArray(meal.tags) ? meal.tags.filter((tag): tag is string => typeof tag === "string") : ["coach"],
+        saveAsStandard: typeof meal.saveAsStandard === "boolean" ? meal.saveAsStandard : undefined
+      }
+    };
+  }
+
   return null;
+}
+
+function normalizeCoachSuggestion(suggestion: unknown, days: DayPlan[]): CoachSuggestion | null {
+  if (!isRecord(suggestion)) return null;
+  if (typeof suggestion.title !== "string" || !suggestion.title.trim()) return null;
+  if (!isSuggestionKind(suggestion.kind)) return null;
+
+  const changes = Array.isArray(suggestion.changes)
+    ? suggestion.changes.map((change) => normalizeCoachPlanChange(change, days)).filter((change): change is CoachPlanChange => Boolean(change))
+    : [];
+
+  return {
+    id: typeof suggestion.id === "string" && suggestion.id.trim()
+      ? suggestion.id.trim()
+      : `suggestion-${suggestion.kind}-${changes.length}`,
+    title: suggestion.title.trim(),
+    kind: suggestion.kind,
+    summary: typeof suggestion.summary === "string" && suggestion.summary.trim()
+      ? suggestion.summary.trim()
+      : suggestion.title.trim(),
+    rationale: typeof suggestion.rationale === "string" && suggestion.rationale.trim()
+      ? suggestion.rationale.trim()
+      : "Passt zum aktuellen Trainings- und Fueling-Kontext.",
+    tips: Array.isArray(suggestion.tips)
+      ? suggestion.tips.filter((tip): tip is string => typeof tip === "string" && tip.trim().length > 0).slice(0, 4)
+      : [],
+    changes
+  };
 }
 
 function createFallbackCoachResponse(
@@ -238,6 +359,7 @@ function createFallbackCoachResponse(
   const context = inferPlanningContext(lower);
   const extraInfo = inferExtraInfo(message);
   const workout = inferWorkout(message);
+  const suggestions = createFallbackSuggestions(message, state, date, workout);
   const questions: string[] = [];
 
   if (context) {
@@ -271,15 +393,117 @@ function createFallbackCoachResponse(
     }
   }
 
-  if (changes.length === 0) {
-    questions.push("Welcher Tag ist betroffen und soll ich Training, Alltag oder Fueling ändern?");
+  if (changes.length === 0 && suggestions.length === 0) {
+    questions.push("Soll ich daraus eher Training, Fueling oder Regeneration konkret planen?");
   }
 
   return {
-    assistantMessage: createAssistantSummary(changes, message),
+    assistantMessage: createAssistantSummary(changes, suggestions, message),
     questions,
     changes,
-    confidence: changes.length > 0 ? "medium" : "low"
+    suggestions,
+    confidence: changes.length > 0 || suggestions.length > 0 ? "medium" : "low"
+  };
+}
+
+function createFallbackSuggestions(
+  message: string,
+  state: NonNullable<CoachRequestBody["state"]>,
+  date: IsoDate,
+  workout: ReturnType<typeof inferWorkout>
+): CoachSuggestion[] {
+  const lower = message.toLowerCase();
+  const suggestions: CoachSuggestion[] = [];
+  const day = state.weekPlan.days.find((item) => item.date === date);
+  const hasRun = workout?.sport === "running" || day?.workouts.some((item) => item.sport === "running");
+  const asksFueling = lower.includes("fuel") || lower.includes("essen") || lower.includes("rezept") || lower.includes("snack") || lower.includes("mahlzeit");
+  const asksTraining = lower.includes("training") || lower.includes("lauf") || lower.includes("plan") || Boolean(workout);
+
+  if (asksTraining) {
+    const trainingChange = workout
+      ? [{
+        type: "add_workout" as const,
+        date,
+        workout
+      }]
+      : [];
+
+    suggestions.push({
+      id: "training-context-suggestion",
+      title: hasRun ? "Training sinnvoll einordnen" : "Training mit klarem Zweck planen",
+      kind: "training",
+      summary: hasRun
+        ? "Der Lauf passt gut, wenn er bewusst als Qualität oder Basis geführt wird."
+        : "Lege zuerst Zweck und Belastung fest, bevor du Fueling ableitest.",
+      rationale: "Der Coach kann bessere Fueling- und Regenerationstipps geben, wenn Sportart, Intensität und Zweck klar sind.",
+      tips: [
+        "Bei lockeren Läufen wirklich locker bleiben.",
+        "Bei Intervallen oder Tempo kein aggressives Defizit planen.",
+        "Padel, Squash und HIIT als zusätzliche Belastung ernst nehmen."
+      ],
+      changes: trainingChange
+    });
+  }
+
+  if (asksFueling || hasRun) {
+    suggestions.push(createRecipeSuggestion(date, Boolean(hasRun)));
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push({
+      id: "coach-next-step",
+      title: "Nächsten sinnvollen Schritt wählen",
+      kind: "planning",
+      summary: "Ich würde zuerst klären, ob heute Training, Fueling oder Erholung der Engpass ist.",
+      rationale: "Ohne konkreten Engpass wäre jede Empfehlung zu breit.",
+      tips: [
+        "Frage nach einem Rezept, wenn Essen gerade die Hürde ist.",
+        "Frage nach einer Laufeinheit, wenn der Trainingsreiz unklar ist.",
+        "Frage nach Regeneration, wenn Müdigkeit oder Stress hoch sind."
+      ],
+      changes: []
+    });
+  }
+
+  return suggestions;
+}
+
+function createRecipeSuggestion(date: IsoDate, hasRun: boolean): CoachSuggestion {
+  return {
+    id: hasRun ? "recipe-run-bowl" : "recipe-protein-bowl",
+    title: hasRun ? "Fueling Bowl für den Lauftag" : "Proteinreiche Alltags-Bowl",
+    kind: "recipe",
+    summary: hasRun
+      ? "Reis oder Kartoffeln, Hähnchen/Tofu, Gemüse, etwas Olivenöl und Obst als einfache Carb-Basis."
+      : "Skyr oder Bowl mit Proteinquelle, Gemüse, Kartoffeln/Reis und einer einfachen Sauce.",
+    rationale: hasRun
+      ? "Du bekommst Kohlenhydrate für Trainingsqualität und genug Protein für Sättigung und Regeneration."
+      : "Das hält den Tag ruhig, proteinreich und ohne Grammtracking steuerbar.",
+    tips: [
+      "Portion grob nach Hunger und Trainingstag skalieren.",
+      "Proteinquelle zuerst festlegen.",
+      hasRun ? "Carbs vor und nach dem Lauf nicht zu knapp halten." : "Carbs moderat halten, aber nicht streichen."
+    ],
+    changes: [
+      {
+        type: "add_meal",
+        date,
+        meal: {
+          time: "12:30",
+          role: "lunch",
+          name: hasRun ? "Fueling Bowl" : "Protein-Bowl",
+          description: hasRun
+            ? "Reis oder Kartoffeln, Hähnchen oder Tofu, Gemüse, Sauce; gute Carb-Basis für den Lauftag."
+            : "Proteinquelle, Gemüse, Reis oder Kartoffeln; ruhig, sättigend und alltagstauglich.",
+          caloriesMin: hasRun ? 650 : 550,
+          caloriesMax: hasRun ? 850 : 750,
+          proteinMin: 35,
+          proteinMax: 55,
+          tags: ["coach", "recipe", hasRun ? "run-fueling" : "protein"],
+          saveAsStandard: true
+        }
+      }
+    ]
   };
 }
 
@@ -289,12 +513,16 @@ function inferWorkout(message: string) {
 
   if (!sport) return null;
 
-  const runningType = sport === "running" ? inferRunningType(lower) : undefined;
-  const runningFocus = sport === "running" ? inferRunningFocus(lower, runningType) : undefined;
-  const intensity = inferIntensity(lower, sport, runningType);
   const distanceKm = parseDistanceKm(lower);
   const durationMinutes = parseDurationMinutes(lower);
   const startTime = parseStartTime(lower);
+  const shouldCreateWorkout = Boolean(distanceKm || durationMinutes || startTime || lower.includes("plane") || lower.includes("eintragen"));
+
+  if (!shouldCreateWorkout) return null;
+
+  const runningType = sport === "running" ? inferRunningType(lower) : undefined;
+  const runningFocus = sport === "running" ? inferRunningFocus(lower, runningType) : undefined;
+  const intensity = inferIntensity(lower, sport, runningType);
   const title = createWorkoutTitle(sport, distanceKm, durationMinutes, runningType);
 
   return {
@@ -500,21 +728,24 @@ function parseStartTime(lower: string): string | undefined {
   return undefined;
 }
 
-function createAssistantSummary(changes: CoachPlanChange[], message: string): string {
-  if (changes.length === 0) {
-    return `Ich habe noch nichts direkt geändert. Mir fehlt eine klare Planinformation aus: "${message}".`;
+function createAssistantSummary(changes: CoachPlanChange[], suggestions: CoachSuggestion[], message: string): string {
+  if (changes.length === 0 && suggestions.length === 0) {
+    return `Ich habe noch nichts direkt geändert. Mir fehlt eine klare Coach-Frage aus: "${message}".`;
   }
 
   const workoutCount = changes.filter((change) => change.type === "add_workout").length;
   const contextCount = changes.filter((change) => change.type === "set_day_context").length;
   const infoCount = changes.filter((change) => change.type === "add_extra_info").length;
+  const mealCount = changes.filter((change) => change.type === "add_meal").length;
   const parts = [
     workoutCount ? `${workoutCount} Training` : "",
     contextCount ? `${contextCount} Tageskontext` : "",
-    infoCount ? `${infoCount} Zusatzinfo` : ""
+    infoCount ? `${infoCount} Zusatzinfo` : "",
+    mealCount ? `${mealCount} Mahlzeit` : "",
+    suggestions.length ? `${suggestions.length} ${suggestions.length === 1 ? "Vorschlag" : "Vorschläge"}` : ""
   ].filter(Boolean);
 
-  return `Übernommen: ${parts.join(", ")}.`;
+  return `Meine Empfehlung: ${parts.join(", ")}. Du kannst passende Vorschläge direkt übernehmen.`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -560,6 +791,22 @@ function isRunningFocus(value: unknown): value is RunningFocus {
 
 function isIntensity(value: unknown): value is WorkoutIntensity {
   return intensityValues.includes(value as WorkoutIntensity);
+}
+
+function isMealRole(value: unknown): value is "breakfast" | "lunch" | "pre_workout" | "post_workout" | "dinner" {
+  return value === "breakfast" ||
+    value === "lunch" ||
+    value === "pre_workout" ||
+    value === "post_workout" ||
+    value === "dinner";
+}
+
+function isSuggestionKind(value: unknown): value is CoachSuggestion["kind"] {
+  return value === "training" ||
+    value === "fueling" ||
+    value === "recipe" ||
+    value === "recovery" ||
+    value === "planning";
 }
 
 function toOptionalNumber(value: unknown): number | undefined {

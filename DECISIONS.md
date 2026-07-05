@@ -160,15 +160,15 @@ Begründung:
 
 Für echte Beta-Tests müssen die sichtbaren Daten vom Nutzer kommen. Demo-Daten sind gut für Produktgefühl und lokale Entwicklung, verfälschen aber Training, Fueling und Coach-Hinweise im privaten Online-Betrieb.
 
-## ADR-017: Coach-Chat schreibt nur strukturierte Planänderungen
+## ADR-017: Coach berät zuerst und schreibt nur strukturierte Änderungen
 
 Entscheidung:
 
-Der Coach-Chat nutzt eine serverseitige API-Route und gibt strukturierte Änderungen zurück. Der Client übernimmt nur erlaubte Change-Typen in den App-State: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten.
+Der Coach nutzt eine serverseitige API-Route und gibt beratende Antworten mit übernehmbaren Vorschlägen zurück. Der Client übernimmt nur erlaubte Change-Typen in den App-State: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten.
 
 Begründung:
 
-Ein freier Chat ohne kontrollierte Change-Schnittstelle wäre schwer nachvollziehbar und riskant für die Planung. Strukturierte Änderungen erlauben direkte Übernahme, Validierung, spätere Undo-Funktionen und eine saubere Migration in normalisierte Supabase-Tabellen.
+Ein freier Chat ohne kontrollierte Change-Schnittstelle wäre schwer nachvollziehbar und riskant für die Planung. Strukturierte Vorschläge erlauben Beratung wie in einem Coach-Gespräch, aber Änderungen bleiben validierbar, bewusst übernehmbar und später sauber in normalisierte Supabase-Tabellen migrierbar.
 
 ## ADR-018: Trainingsarten werden domainnah modelliert
 
