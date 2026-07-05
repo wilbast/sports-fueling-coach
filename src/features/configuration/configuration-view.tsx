@@ -68,10 +68,8 @@ export function ConfigurationView() {
 
   const [mealName, setMealName] = useState("");
   const [mealDescription, setMealDescription] = useState("");
-  const [caloriesMin, setCaloriesMin] = useState("450");
-  const [caloriesMax, setCaloriesMax] = useState("650");
-  const [proteinMin, setProteinMin] = useState("30");
-  const [proteinMax, setProteinMax] = useState("45");
+  const [calories, setCalories] = useState("550");
+  const [protein, setProtein] = useState("35");
   const [carbsGrams, setCarbsGrams] = useState("70");
   const [fatGrams, setFatGrams] = useState("20");
   const [mealTags, setMealTags] = useState("standard, protein");
@@ -130,10 +128,10 @@ export function ConfigurationView() {
     const template = {
       name,
       description,
-      caloriesMin: parseNumber(caloriesMin, 0),
-      caloriesMax: parseNumber(caloriesMax, 0),
-      proteinMin: parseNumber(proteinMin, 0),
-      proteinMax: parseNumber(proteinMax, 0),
+      caloriesMin: parseNumber(calories, 0),
+      caloriesMax: parseNumber(calories, 0),
+      proteinMin: parseNumber(protein, 0),
+      proteinMax: parseNumber(protein, 0),
       carbsGrams: parseNumber(carbsGrams, 0),
       fatGrams: parseNumber(fatGrams, 0),
       nutritionSource: mealEstimateNotice ? "ai_estimate" as const : "manual" as const,
@@ -179,10 +177,8 @@ export function ConfigurationView() {
 
       if (response.ok && estimate) {
         if (!mealName.trim()) setMealName(estimate.name);
-        setCaloriesMin(String(Math.max(0, estimate.calories - 80)));
-        setCaloriesMax(String(estimate.calories + 80));
-        setProteinMin(String(Math.max(0, estimate.proteinGrams - 6)));
-        setProteinMax(String(estimate.proteinGrams + 6));
+        setCalories(String(estimate.calories));
+        setProtein(String(estimate.proteinGrams));
         setCarbsGrams(String(estimate.carbohydrateGrams));
         setFatGrams(String(estimate.fatGrams));
         setMealEstimateNotice(`KI-Schätzung (${confidenceLabel(estimate.confidence)}): ${estimate.rationale}`);
@@ -200,10 +196,8 @@ export function ConfigurationView() {
     setMealEditingId(meal.id);
     setMealName(meal.name);
     setMealDescription(meal.description);
-    setCaloriesMin(String(meal.estimatedCalories.min));
-    setCaloriesMax(String(meal.estimatedCalories.max));
-    setProteinMin(String(meal.estimatedProteinGrams.min));
-    setProteinMax(String(meal.estimatedProteinGrams.max));
+    setCalories(String(midpoint(meal.estimatedCalories.min, meal.estimatedCalories.max)));
+    setProtein(String(midpoint(meal.estimatedProteinGrams.min, meal.estimatedProteinGrams.max)));
     setCarbsGrams(String(meal.estimatedCarbohydratesGrams?.min ?? 0));
     setFatGrams(String(meal.estimatedFatGrams?.min ?? 0));
     setMealTags(meal.tags.join(", "));
@@ -213,10 +207,8 @@ export function ConfigurationView() {
   function resetMealForm() {
     setMealName("");
     setMealDescription("");
-    setCaloriesMin("450");
-    setCaloriesMax("650");
-    setProteinMin("30");
-    setProteinMax("45");
+    setCalories("550");
+    setProtein("35");
     setCarbsGrams("70");
     setFatGrams("20");
     setMealTags("standard, protein");
@@ -447,7 +439,7 @@ export function ConfigurationView() {
                   </div>
                 </div>
                 <p className="mt-3 text-xs font-semibold text-coach-700">
-                  {meal.estimatedCalories.min}-{meal.estimatedCalories.max} kcal · {meal.estimatedProteinGrams.min}-{meal.estimatedProteinGrams.max} g Protein
+                  {formatRange(meal.estimatedCalories.min, meal.estimatedCalories.max)} kcal · {formatRange(meal.estimatedProteinGrams.min, meal.estimatedProteinGrams.max)} g Protein
                   {meal.estimatedCarbohydratesGrams ? ` · ${meal.estimatedCarbohydratesGrams.min} g Carbs` : ""}
                   {meal.estimatedFatGrams ? ` · ${meal.estimatedFatGrams.min} g Fett` : ""}
                 </p>
@@ -482,36 +474,20 @@ export function ConfigurationView() {
             />
             <div className="grid gap-2 sm:grid-cols-2">
               <input
-                value={caloriesMin}
-                onChange={(event) => setCaloriesMin(event.target.value)}
+                value={calories}
+                onChange={(event) => setCalories(event.target.value)}
                 inputMode="numeric"
-                placeholder="kcal min"
+                placeholder="kcal"
                 className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="Kalorien Minimum"
+                aria-label="Kalorien"
               />
               <input
-                value={caloriesMax}
-                onChange={(event) => setCaloriesMax(event.target.value)}
+                value={protein}
+                onChange={(event) => setProtein(event.target.value)}
                 inputMode="numeric"
-                placeholder="kcal max"
+                placeholder="Protein g"
                 className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="Kalorien Maximum"
-              />
-              <input
-                value={proteinMin}
-                onChange={(event) => setProteinMin(event.target.value)}
-                inputMode="numeric"
-                placeholder="Protein min"
-                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="Protein Minimum"
-              />
-              <input
-                value={proteinMax}
-                onChange={(event) => setProteinMax(event.target.value)}
-                inputMode="numeric"
-                placeholder="Protein max"
-                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="Protein Maximum"
+                aria-label="Protein in Gramm"
               />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -718,6 +694,14 @@ function parseNumber(value: string, fallback: number): number {
   const parsed = Number.parseFloat(value.replace(",", "."));
 
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function midpoint(min: number, max: number): number {
+  return Math.round((min + max) / 2);
+}
+
+function formatRange(min: number, max: number): string {
+  return min === max ? String(min) : `${min}-${max}`;
 }
 
 function confidenceLabel(confidence: "low" | "medium" | "high"): string {

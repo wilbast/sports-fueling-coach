@@ -110,8 +110,10 @@ function createFallbackEstimate(input: string): NutritionEstimateResponse {
     ? 650
     : lower.includes("skyr") || lower.includes("quark") || lower.includes("joghurt")
       ? 420
-      : lower.includes("banane") || lower.includes("riegel") || lower.includes("snack")
-        ? 180
+      : lower.includes("banane")
+        ? 105
+        : lower.includes("riegel") || lower.includes("snack")
+          ? 180
         : 500;
   const protein = lower.includes("skyr") || lower.includes("quark") || lower.includes("protein")
     ? 35

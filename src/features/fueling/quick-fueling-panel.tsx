@@ -333,10 +333,10 @@ async function createFuelingDraft(message: string, mealCount: number): Promise<F
     template: {
       name: estimate.name,
       description: message,
-      caloriesMin: Math.max(100, calories - 100),
-      caloriesMax: calories + 100,
-      proteinMin: Math.max(0, protein - 8),
-      proteinMax: protein + 8,
+      caloriesMin: calories,
+      caloriesMax: calories,
+      proteinMin: protein,
+      proteinMax: protein,
       carbsGrams: estimate.carbohydrateGrams,
       fatGrams: estimate.fatGrams,
       tags: ["chat", "fueling", role]
@@ -462,7 +462,8 @@ function inferMealRole(meal: MealTemplate): MealPlanSlot["role"] {
 function inferCalories(lower: string): number {
   if (lower.includes("bowl") || lower.includes("reis") || lower.includes("kartoffel")) return 650;
   if (lower.includes("skyr") || lower.includes("quark") || lower.includes("joghurt")) return 400;
-  if (lower.includes("banane") || lower.includes("riegel") || lower.includes("snack")) return 180;
+  if (lower.includes("banane")) return 105;
+  if (lower.includes("riegel") || lower.includes("snack")) return 180;
 
   return 500;
 }

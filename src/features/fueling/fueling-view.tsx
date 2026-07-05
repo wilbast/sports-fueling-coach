@@ -20,10 +20,8 @@ export function FuelingView() {
   const standardMealTemplates = state.mealTemplates.filter((meal) => meal.isStandard !== false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [caloriesMin, setCaloriesMin] = useState("450");
-  const [caloriesMax, setCaloriesMax] = useState("650");
-  const [proteinMin, setProteinMin] = useState("30");
-  const [proteinMax, setProteinMax] = useState("45");
+  const [calories, setCalories] = useState("550");
+  const [protein, setProtein] = useState("35");
   const [tags, setTags] = useState("standard, protein");
   const [saveMealAsStandard, setSaveMealAsStandard] = useState(true);
   const [addNewMealToDay, setAddNewMealToDay] = useState(true);
@@ -46,10 +44,10 @@ export function FuelingView() {
     const template = {
       name: trimmedName,
       description: trimmedDescription,
-      caloriesMin: parseNumber(caloriesMin, 0),
-      caloriesMax: parseNumber(caloriesMax, 0),
-      proteinMin: parseNumber(proteinMin, 0),
-      proteinMax: parseNumber(proteinMax, 0),
+      caloriesMin: parseNumber(calories, 0),
+      caloriesMax: parseNumber(calories, 0),
+      proteinMin: parseNumber(protein, 0),
+      proteinMax: parseNumber(protein, 0),
       tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean)
     };
 
@@ -212,36 +210,20 @@ export function FuelingView() {
               />
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
-                  value={caloriesMin}
-                  onChange={(event) => setCaloriesMin(event.target.value)}
+                  value={calories}
+                  onChange={(event) => setCalories(event.target.value)}
                   inputMode="numeric"
-                  placeholder="kcal min"
+                  placeholder="kcal"
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Kalorien Minimum"
+                  aria-label="Kalorien"
                 />
                 <input
-                  value={caloriesMax}
-                  onChange={(event) => setCaloriesMax(event.target.value)}
+                  value={protein}
+                  onChange={(event) => setProtein(event.target.value)}
                   inputMode="numeric"
-                  placeholder="kcal max"
+                  placeholder="Protein g"
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Kalorien Maximum"
-                />
-                <input
-                  value={proteinMin}
-                  onChange={(event) => setProteinMin(event.target.value)}
-                  inputMode="numeric"
-                  placeholder="Protein min"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Protein Minimum"
-                />
-                <input
-                  value={proteinMax}
-                  onChange={(event) => setProteinMax(event.target.value)}
-                  inputMode="numeric"
-                  placeholder="Protein max"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Protein Maximum"
+                  aria-label="Protein in Gramm"
                 />
               </div>
               <input
@@ -413,8 +395,8 @@ function calculateDayMealTotals(slots: MealPlanSlot[], mealTemplates: MealTempla
   }, { caloriesMin: 0, caloriesMax: 0, proteinMin: 0, proteinMax: 0 });
 
   return {
-    calories: `${totals.caloriesMin}-${totals.caloriesMax} kcal`,
-    protein: `${totals.proteinMin}-${totals.proteinMax} g`
+    calories: `${formatRange(totals.caloriesMin, totals.caloriesMax)} kcal`,
+    protein: `${formatRange(totals.proteinMin, totals.proteinMax)} g`
   };
 }
 
@@ -518,7 +500,11 @@ function useWeekMealLogs(dates: string[]) {
 }
 
 function formatMealEstimate(meal: MealTemplate): string {
-  return `${meal.estimatedCalories.min}-${meal.estimatedCalories.max} kcal · ${meal.estimatedProteinGrams.min}-${meal.estimatedProteinGrams.max} g Protein`;
+  return `${formatRange(meal.estimatedCalories.min, meal.estimatedCalories.max)} kcal · ${formatRange(meal.estimatedProteinGrams.min, meal.estimatedProteinGrams.max)} g Protein`;
+}
+
+function formatRange(min: number, max: number): string {
+  return min === max ? String(min) : `${min}-${max}`;
 }
 
 function roleLabel(role: MealPlanSlot["role"]): string {

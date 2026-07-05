@@ -340,7 +340,7 @@ function createSystemPrompt(): string {
     "Bei Info/Wunsch/Stimmung, z. B. Alkohol, Restaurant, Müdigkeit: keine automatische Planänderung. Gib kurze Einordnung und optionales Angebot.",
     "Bei Empfehlungsfragen: gib konkrete Mengen, Timing, Mahlzeiten, Snacks, Flüssigkeit oder Regenerationstipps ohne changes zu erzwingen.",
     "Ausnahme für Fueling/Nutrition: Wenn der Nutzer eine konkrete Mahlzeit, ein Rezept oder ein Fueling beschreibt, darfst du einen speicherbaren Entwurf in suggestion.changes mit type=add_meal liefern. Das ist nur ein Vorschlag und wird erst bei Bestätigung gespeichert.",
-    "Bei add_meal schätze alltagstauglich caloriesMin/caloriesMax, proteinMin/proteinMax, carbohydrateGrams und fatGrams. Stelle die Werte nicht als exakt dar.",
+    "Bei add_meal schätze alltagstauglich einen Durchschnittswert. Setze caloriesMin=caloriesMax und proteinMin=proteinMax. Schätze zusätzlich carbohydrateGrams und fatGrams. Stelle die Werte nicht als exakt dar.",
     "Wenn der Nutzer sagt 'Merke dir das als Standard', 'Füge ... als Standard hinzu' oder 'Standardfrühstück', liefere einen add_meal-Entwurf mit saveAsStandard=true. Der Client zeigt danach eine Standard-Speichern-Aktion.",
     "Bei unklarem Kontext: stelle maximal 1-2 gezielte Rückfragen.",
     "Erlaubte Sportarten: running, padel, swimming, squash, hiit, strength, cycling.",
@@ -1121,10 +1121,10 @@ function createFuelingLogSuggestion(message: string, date: IsoDate): CoachSugges
           role,
           name: mealName,
           description: message,
-          caloriesMin: Math.max(50, calories - 80),
-          caloriesMax: calories + 80,
-          proteinMin: Math.max(0, protein - 6),
-          proteinMax: protein + 6,
+          caloriesMin: calories,
+          caloriesMax: calories,
+          proteinMin: protein,
+          proteinMax: protein,
           carbohydrateGrams,
           fatGrams,
           tags: ["coach", "fueling", role],
@@ -1162,10 +1162,10 @@ function createRecipeSuggestion(date: IsoDate, hasRun: boolean, includePlanChang
           description: hasRun
             ? "Reis oder Kartoffeln, Hähnchen oder Tofu, Gemüse, Sauce; gute Carb-Basis für den Lauftag."
             : "Proteinquelle, Gemüse, Reis oder Kartoffeln; ruhig, sättigend und alltagstauglich.",
-          caloriesMin: hasRun ? 650 : 550,
-          caloriesMax: hasRun ? 850 : 750,
-          proteinMin: 35,
-          proteinMax: 55,
+          caloriesMin: hasRun ? 750 : 650,
+          caloriesMax: hasRun ? 750 : 650,
+          proteinMin: 45,
+          proteinMax: 45,
           carbohydrateGrams: hasRun ? 95 : 65,
           fatGrams: 22,
           tags: ["coach", "recipe", hasRun ? "run-fueling" : "protein"],
@@ -1510,7 +1510,8 @@ function inferMealCalories(lower: string): number {
 
   if (lower.includes("bowl") || lower.includes("reis") || lower.includes("nudel") || lower.includes("kartoffel")) return 650;
   if (lower.includes("skyr") || lower.includes("quark") || lower.includes("joghurt")) return 420;
-  if (lower.includes("banane") || lower.includes("riegel") || lower.includes("snack")) return 180;
+  if (lower.includes("banane")) return 105;
+  if (lower.includes("riegel") || lower.includes("snack")) return 180;
 
   return 500;
 }
