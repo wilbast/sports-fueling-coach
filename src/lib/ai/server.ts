@@ -127,31 +127,36 @@ export function getAiErrorDebug(error: unknown, client: Extract<AiJsonResult, { 
 }
 
 async function requestProviderJson(request: ProviderJsonRequest): Promise<string> {
+  const body: Record<string, unknown> = {
+    model: request.model,
+    messages: [
+      {
+        role: "system",
+        content: request.systemPrompt
+      },
+      {
+        role: "user",
+        content: JSON.stringify(request.userPayload)
+      }
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: request.schemaName,
+        strict: false,
+        schema: request.schema
+      }
+    }
+  };
+
+  if (supportsCustomTemperature(request.provider, request.model)) {
+    body.temperature = 0.2;
+  }
+
   const response = await fetch(request.endpoint, {
     method: "POST",
     headers: createHeaders(request.provider, request.apiKey),
-    body: JSON.stringify({
-      model: request.model,
-      messages: [
-        {
-          role: "system",
-          content: request.systemPrompt
-        },
-        {
-          role: "user",
-          content: JSON.stringify(request.userPayload)
-        }
-      ],
-      temperature: 0.2,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: request.schemaName,
-          strict: false,
-          schema: request.schema
-        }
-      }
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
@@ -220,6 +225,12 @@ function parseProviderError(detail: string): { code: string | null; message: str
       message: detail.slice(0, 500)
     };
   }
+}
+
+function supportsCustomTemperature(provider: AiProvider, model: string): boolean {
+  if (provider !== "openai") return true;
+
+  return !model.toLowerCase().startsWith("gpt-5");
 }
 
 function createHeaders(provider: AiProvider, apiKey: string): Record<string, string> {
