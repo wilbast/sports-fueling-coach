@@ -1,6 +1,6 @@
 "use client";
 
-import { BriefcaseBusiness, RotateCcw, ShieldCheck, UserRound, UsersRound } from "lucide-react";
+import { BriefcaseBusiness, Flame, RotateCcw, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { PerformanceStrategy, RaceGoal, WeightStrategy } from "@/domain/goals/types";
 import type { FamilyProfile, JobProfile } from "@/domain/profile/types";
@@ -10,9 +10,21 @@ import { StravaIntegrationPanel } from "@/features/integrations/strava-integrati
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export function SettingsView() {
-  const { state, updateProfile, updateGoals, updateRaceGoal, resetDemoState, resetBetaState } = useAppState();
+  const {
+    state,
+    setSelectedDate,
+    updateProfile,
+    updateGoals,
+    updateRaceGoal,
+    updateBaselineCaloriesWithoutActivity,
+    updateManualActivityForecastCalories,
+    resetDemoState,
+    resetBetaState
+  } = useAppState();
   const profile = state.profile;
   const goals = state.goals;
+  const energySettings = state.energySettings;
+  const selectedForecastCalories = energySettings.manualActivityForecastCaloriesByDate[state.selectedDate];
   const raceGoal = profile.raceGoal ?? createFallbackRaceGoal();
   const family = profile.family ?? createFallbackFamilyProfile();
   const job = profile.job ?? createFallbackJobProfile();
@@ -274,6 +286,64 @@ export function SettingsView() {
               </label>
             </div>
           </Panel>
+
+          <Panel>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+                <Flame className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-ink">Energieverbrauch</h2>
+                <p className="mt-1 text-sm text-muted">Basis und Forecast steuern Kalorien, Makros und Fueling-Hinweise.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Standardverbrauch ohne Aktivität
+                <input
+                  value={energySettings.baselineCaloriesWithoutActivity}
+                  onChange={(event) => updateBaselineCaloriesWithoutActivity(
+                    parseNumber(event.target.value, energySettings.baselineCaloriesWithoutActivity)
+                  )}
+                  inputMode="numeric"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Forecast-Datum
+                <input
+                  value={state.selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  type="date"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Aktivitäts-Forecast
+                <input
+                  value={selectedForecastCalories ?? ""}
+                  onChange={(event) => updateManualActivityForecastCalories(
+                    state.selectedDate,
+                    parseOptionalNumber(event.target.value)
+                  )}
+                  placeholder="z. B. 650"
+                  inputMode="numeric"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                />
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => updateManualActivityForecastCalories(state.selectedDate)}
+                  disabled={!selectedForecastCalories}
+                  className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Forecast entfernen
+                </button>
+              </div>
+            </div>
+          </Panel>
         </div>
 
         <div className="grid gap-6 content-start">
@@ -421,4 +491,12 @@ function parseNumber(value: string, fallback: number): number {
   const parsed = Number.parseFloat(value.replace(",", "."));
 
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseOptionalNumber(value: string): number | undefined {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return undefined;
+
+  const parsed = Number.parseFloat(trimmedValue.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : undefined;
 }

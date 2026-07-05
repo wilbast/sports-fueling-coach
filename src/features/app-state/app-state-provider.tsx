@@ -8,7 +8,7 @@ import { demoUserGoals, demoUserProfile } from "@/data/mock/profile";
 import { demoStandards } from "@/data/mock/standards";
 import type { CoachMealDraft, CoachPlanChange, CoachWorkoutDraft } from "@/domain/coach/types";
 import type { RaceGoal, UserGoals } from "@/domain/goals/types";
-import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
+import type { EnergySettings, MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { addWeeks, createEmptyWeekPlan, createPlanningContextBlock, startOfWeek } from "@/domain/planning/calendar";
 import type { DayBlock, DayContext, DayPlan, WeekPlan } from "@/domain/planning/types";
 import type { UserProfile } from "@/domain/profile/types";
@@ -37,12 +37,14 @@ const STORAGE_KEY = "sports-fueling-coach:demo-state:v3";
 export type AppState = {
   schemaVersion: number;
   appMode: "demo" | "beta";
+  updatedAt?: string;
   profile: UserProfile;
   goals: UserGoals;
   weekPlan: WeekPlan;
   weekPlans: WeekPlan[];
   mealTemplates: MealTemplate[];
   standards: AppStandards;
+  energySettings: EnergySettings;
   selectedDate: string;
 };
 
@@ -103,6 +105,8 @@ type AppStateContextValue = {
   removeWeekStandard: (templateId: string) => void;
   applyWeekStandard: (templateId: string) => void;
   applyCoachPlanChanges: (changes: CoachPlanChange[]) => void;
+  updateBaselineCaloriesWithoutActivity: (calories: number) => void;
+  updateManualActivityForecastCalories: (date: string, calories?: number) => void;
   updateProfile: (profile: UserProfile) => void;
   updateGoals: (goals: UserGoals) => void;
   updateRaceGoal: (raceGoal: RaceGoal) => void;
@@ -126,9 +130,9 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     let active = true;
 
     async function hydrateState() {
-      if (!isSupabaseConfigured()) {
-        const storedState = loadStoredState();
+      const storedState = loadStoredState();
 
+      if (!isSupabaseConfigured()) {
         if (active && storedState) {
           setState(storedState);
         }
@@ -154,6 +158,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       setSupabaseUserId(user.id);
       setSupabaseUserEmail(user.email);
 
+      const localBetaState = storedState?.appMode === "beta" ? storedState : null;
       const { data, error } = await supabase
         .from("app_states")
         .select("state")
@@ -163,9 +168,20 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       if (!active) return;
 
       if (data?.state) {
-        setState(normalizeAppState(data.state as Partial<AppState>));
+        const remoteState = normalizeAppState(data.state as Partial<AppState>);
+        const selectedState = selectNewestState(remoteState, localBetaState);
+        setState(selectedState);
+
+        if (selectedState === localBetaState) {
+          await supabase
+            .from("app_states")
+            .upsert({
+              user_id: user.id,
+              state: markUpdated(selectedState)
+            }, { onConflict: "user_id" });
+        }
       } else if (!error) {
-        const initialState = createBetaAppState({
+        const initialState = localBetaState ?? createBetaAppState({
           userId: user.id,
           email: user.email,
           firstName: getUserMetadataName(user.user_metadata)
@@ -176,7 +192,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
           .from("app_states")
           .upsert({
             user_id: user.id,
-            state: initialState
+            state: markUpdated(initialState)
           }, { onConflict: "user_id" });
       } else {
         console.warn("Supabase app state could not be loaded.", error.message);
@@ -197,8 +213,10 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
   useEffect(() => {
     if (!hasHydrated) return;
 
+    const stateToPersist = markUpdated(state);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist));
+
     if (!isSupabaseConfigured()) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       return;
     }
 
@@ -210,7 +228,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         .from("app_states")
         .upsert({
           user_id: supabaseUserId,
-          state
+          state: stateToPersist
         }, { onConflict: "user_id" });
 
       if (error) {
@@ -511,6 +529,35 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
 
       setState((current) => changes.reduce(applyCoachPlanChange, current));
     },
+    updateBaselineCaloriesWithoutActivity: (calories) => {
+      setState((current) => ({
+        ...current,
+        energySettings: {
+          ...current.energySettings,
+          baselineCaloriesWithoutActivity: normalizeCalories(calories, current.energySettings.baselineCaloriesWithoutActivity)
+        }
+      }));
+    },
+    updateManualActivityForecastCalories: (date, calories) => {
+      setState((current) => {
+        const forecastByDate = { ...current.energySettings.manualActivityForecastCaloriesByDate };
+        const normalizedCalories = typeof calories === "number" ? normalizeCalories(calories, 0) : 0;
+
+        if (normalizedCalories > 0) {
+          forecastByDate[asIsoDate(date)] = normalizedCalories;
+        } else {
+          delete forecastByDate[asIsoDate(date)];
+        }
+
+        return {
+          ...current,
+          energySettings: {
+            ...current.energySettings,
+            manualActivityForecastCaloriesByDate: forecastByDate
+          }
+        };
+      });
+    },
     updateProfile: (profile) => {
       setState((current) => ({ ...current, profile }));
     },
@@ -548,7 +595,8 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
             job: current.profile.job,
             raceGoal: current.profile.raceGoal
           },
-          goals: current.goals
+          goals: current.goals,
+          energySettings: current.energySettings
         };
       });
     }
@@ -585,6 +633,7 @@ function createInitialAppState(): AppState {
     weekPlans: [clone(demoWeekPlan)],
     mealTemplates: clone(demoMealTemplates),
     standards: clone(demoStandards),
+    energySettings: createDefaultEnergySettings(),
     selectedDate: demoWeekPlan.days[0].date
   };
 }
@@ -609,14 +658,79 @@ function normalizeAppState(parsed: Partial<AppState>): AppState {
   return selectDate({
     schemaVersion: parsed.schemaVersion ?? fallback.schemaVersion,
     appMode: parsed.appMode ?? fallback.appMode,
+    updatedAt: parsed.updatedAt,
     profile: normalizeProfile(parsed.profile, fallback.profile),
     goals: parsed.goals ?? fallback.goals,
     weekPlan,
     weekPlans,
     mealTemplates: parsed.mealTemplates ?? fallback.mealTemplates,
-    standards: parsed.standards ?? fallback.standards,
+    standards: normalizeStandards(parsed.standards, fallback.standards),
+    energySettings: normalizeEnergySettings(parsed.energySettings, fallback.energySettings),
     selectedDate: parsed.selectedDate ?? fallback.selectedDate
   }, parsed.selectedDate ?? fallback.selectedDate);
+}
+
+function createDefaultEnergySettings(): EnergySettings {
+  return {
+    baselineCaloriesWithoutActivity: 2700,
+    manualActivityForecastCaloriesByDate: {}
+  };
+}
+
+function normalizeEnergySettings(
+  settings: Partial<EnergySettings> | undefined,
+  fallback: EnergySettings
+): EnergySettings {
+  return {
+    baselineCaloriesWithoutActivity: normalizeCalories(
+      settings?.baselineCaloriesWithoutActivity,
+      fallback.baselineCaloriesWithoutActivity
+    ),
+    manualActivityForecastCaloriesByDate: Object.fromEntries(
+      Object.entries(settings?.manualActivityForecastCaloriesByDate ?? {})
+        .map(([date, calories]) => [asIsoDate(date), normalizeCalories(calories, 0)] as const)
+        .filter(([, calories]) => calories > 0)
+    )
+  };
+}
+
+function normalizeStandards(
+  standards: Partial<AppStandards> | undefined,
+  fallback: AppStandards
+): AppStandards {
+  return {
+    planning: standards?.planning ?? fallback.planning,
+    workouts: standards?.workouts ?? fallback.workouts,
+    weeks: standards?.weeks ?? fallback.weeks
+  };
+}
+
+function selectNewestState(remoteState: AppState, localState: AppState | null): AppState {
+  if (!localState) return remoteState;
+
+  const remoteTime = Date.parse(remoteState.updatedAt ?? "");
+  const localTime = Date.parse(localState.updatedAt ?? "");
+
+  if (Number.isFinite(localTime) && (!Number.isFinite(remoteTime) || localTime > remoteTime)) {
+    return localState;
+  }
+
+  return remoteState;
+}
+
+function markUpdated(state: AppState): AppState {
+  return {
+    ...state,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function normalizeCalories(value: unknown, fallback: number): number {
+  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? "").replace(",", "."));
+
+  if (!Number.isFinite(parsed)) return fallback;
+
+  return Math.max(0, Math.round(parsed));
 }
 
 function updateDay(state: AppState, date: string, updater: (day: DayPlan) => DayPlan): AppState {

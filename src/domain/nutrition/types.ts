@@ -10,6 +10,11 @@ export type NutritionTarget = {
   rationale: string[];
 };
 
+export type EnergySettings = {
+  baselineCaloriesWithoutActivity: number;
+  manualActivityForecastCaloriesByDate: Record<string, number>;
+};
+
 export type NutritionMetric = {
   label: string;
   value: string;

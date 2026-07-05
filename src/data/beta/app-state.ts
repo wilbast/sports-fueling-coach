@@ -1,5 +1,5 @@
 import type { UserGoals } from "@/domain/goals/types";
-import type { MealTemplate } from "@/domain/nutrition/types";
+import type { EnergySettings, MealTemplate } from "@/domain/nutrition/types";
 import { createEmptyWeekPlan, toIsoDate } from "@/domain/planning/calendar";
 import type { WeekPlan } from "@/domain/planning/types";
 import type { UserProfile } from "@/domain/profile/types";
@@ -22,6 +22,7 @@ export type BetaAppState = {
   weekPlans: WeekPlan[];
   mealTemplates: MealTemplate[];
   standards: AppStandards;
+  energySettings: EnergySettings;
   selectedDate: string;
 };
 
@@ -67,7 +68,15 @@ export function createBetaAppState(input: CreateBetaAppStateInput = {}): BetaApp
     weekPlans: [weekPlan],
     mealTemplates: createBaseMealTemplates(),
     standards: createBaseStandards(),
+    energySettings: createBaseEnergySettings(),
     selectedDate: today
+  };
+}
+
+function createBaseEnergySettings(): EnergySettings {
+  return {
+    baselineCaloriesWithoutActivity: 2700,
+    manualActivityForecastCaloriesByDate: {}
   };
 }
 

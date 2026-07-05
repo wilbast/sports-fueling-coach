@@ -1,6 +1,6 @@
 import type { DisplayTone } from "@/domain/shared";
 import type { UserGoals } from "@/domain/goals/types";
-import type { MealRecommendation, MealTemplate, NutritionMetric, NutritionTarget } from "@/domain/nutrition/types";
+import type { EnergySettings, MealRecommendation, MealTemplate, NutritionMetric, NutritionTarget } from "@/domain/nutrition/types";
 import type { DayPlan } from "@/domain/planning/types";
 import type { UserProfile } from "@/domain/profile/types";
 import type { WorkoutPlan } from "@/domain/training/types";
@@ -11,6 +11,7 @@ export type DailyBriefingInput = {
   dayPlan: DayPlan;
   mealTemplates: MealTemplate[];
   actualActivities?: ActualActivityForBriefing[];
+  energySettings?: EnergySettings;
 };
 
 export type ActualActivityForBriefing = {

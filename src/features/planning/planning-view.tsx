@@ -7,6 +7,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   Dumbbell,
+  Flame,
   HeartHandshake,
   Home,
   Layers3,
@@ -104,7 +105,8 @@ export function PlanningView() {
     updateWorkoutStatus,
     removeWorkout,
     saveCurrentWeekAsStandard,
-    applyWeekStandard
+    applyWeekStandard,
+    updateManualActivityForecastCalories
   } = useAppState();
   const selectedDay = getDayPlanByDate(state.weekPlan, state.selectedDate);
   const selectedContext = getPlanningContext(selectedDay);
@@ -133,6 +135,7 @@ export function PlanningView() {
     error: activitiesError
   } = useExternalActivities(weekStart, weekEnd);
   const selectedActivities = useMemo(() => activitiesByDate[selectedDay.date] ?? [], [activitiesByDate, selectedDay.date]);
+  const selectedForecastCalories = state.energySettings.manualActivityForecastCaloriesByDate[selectedDay.date];
 
   useEffect(() => {
     if (!selectedWorkoutStandardId && state.standards.workouts[0]) {
@@ -203,8 +206,9 @@ export function PlanningView() {
     goals: state.goals,
     dayPlan: selectedDay,
     mealTemplates: state.mealTemplates,
-    actualActivities: selectedActivities
-  }), [selectedActivities, selectedDay, state.goals, state.mealTemplates, state.profile]);
+    actualActivities: selectedActivities,
+    energySettings: state.energySettings
+  }), [selectedActivities, selectedDay, state.energySettings, state.goals, state.mealTemplates, state.profile]);
 
   return (
     <div>
@@ -659,6 +663,37 @@ export function PlanningView() {
               error={activitiesError}
               emptyText="Keine importierte Strava-Aktivität an diesem Tag."
             />
+
+            <div className="mt-4 rounded-xl bg-canvas p-3">
+              <div className="mb-3 flex items-center gap-2">
+                <Flame className="h-4 w-4 text-amber-600" aria-hidden="true" />
+                <h3 className="text-sm font-semibold text-ink">KCAL Forecast</h3>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  value={selectedForecastCalories ?? ""}
+                  onChange={(event) => updateManualActivityForecastCalories(
+                    selectedDay.date,
+                    parseOptionalNumber(event.target.value)
+                  )}
+                  placeholder="z. B. 650"
+                  inputMode="numeric"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                  aria-label="Manueller KCAL Forecast"
+                />
+                <button
+                  type="button"
+                  onClick={() => updateManualActivityForecastCalories(selectedDay.date)}
+                  disabled={!selectedForecastCalories}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Entfernen
+                </button>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted">
+                Wird nur genutzt, solange keine importierte Aktivität für diesen Tag vorliegt.
+              </p>
+            </div>
           </Panel>
         </div>
 
