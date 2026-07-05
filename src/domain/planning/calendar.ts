@@ -41,6 +41,16 @@ export function createPlanningContextBlock(context: PlanningContext): DayBlock {
       label: "Büroarbeit",
       impact: "Training und Verpflegung brauchen mehr Vorplanung"
     },
+    free: {
+      type: "free",
+      label: "Frei",
+      impact: "mehr Spielraum, aber Alltag und Erholung bewusst strukturieren"
+    },
+    vacation: {
+      type: "free",
+      label: "Urlaub",
+      impact: "Training flexibel halten und Fueling pragmatisch an Tagesrhythmus anpassen"
+    },
     travel: {
       type: "travel",
       label: "Reisetag",

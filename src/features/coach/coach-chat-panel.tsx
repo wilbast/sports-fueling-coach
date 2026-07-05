@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { CheckCircle2, Lightbulb, Loader2, MessageCircle, SendHorizontal, Sparkles } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
-import type { CoachChatMessage, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
+import type { CoachChatMessage, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import { describeWorkoutType } from "@/domain/training/catalog";
 import { useAppState } from "@/features/app-state/app-state-provider";
 
@@ -65,6 +65,7 @@ export function CoachChatPanel({
         ...current,
         {
           ...createMessage("assistant", result.assistantMessage),
+          outcomes: result.outcomes,
           changes: result.changes,
           suggestions: result.suggestions,
           questions: result.questions
@@ -170,6 +171,7 @@ function ChatBubble({
 
       {message.changes && message.changes.length > 0 ? (
         <div className="mt-3 grid gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Planänderung</p>
           {message.changes.map((change, index) => (
             <div key={`${change.type}-${index}`} className="flex items-start gap-2 rounded-lg bg-white px-3 py-2 text-xs leading-5 text-muted">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-coach-700" aria-hidden="true" />
@@ -185,6 +187,14 @@ function ChatBubble({
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
             {appliedIds.includes(directChangeId) ? "Übernommen" : "Änderungen übernehmen"}
           </button>
+        </div>
+      ) : null}
+
+      {message.outcomes && message.outcomes.length > 0 ? (
+        <div className="mt-3 grid gap-2">
+          {message.outcomes.map((outcome, index) => (
+            <OutcomeRow key={`${outcome.type}-${index}`} outcome={outcome} />
+          ))}
         </div>
       ) : null}
 
@@ -211,6 +221,15 @@ function ChatBubble({
         </div>
       ) : null}
     </article>
+  );
+}
+
+function OutcomeRow({ outcome }: { outcome: CoachOutcome }) {
+  return (
+    <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-muted">
+      <span className="font-semibold text-ink">{outcomeLabel(outcome.type)}:</span>{" "}
+      {outcome.summary}
+    </div>
   );
 }
 
@@ -269,7 +288,9 @@ function describeChange(change: CoachPlanChange): string {
     const labels = {
       homeoffice: "Home-Office",
       office: "Büroarbeit",
-      travel: "Reisetag"
+      travel: "Reisetag",
+      free: "Frei",
+      vacation: "Urlaub"
     };
 
     return `${formatDate(change.date)} als ${labels[change.context]} gesetzt`;
@@ -283,7 +304,22 @@ function describeChange(change: CoachPlanChange): string {
     return `${formatDate(change.date)}: ${change.workout.title} (${describeWorkoutType(change.workout)}) ergänzt`;
   }
 
+  if (change.type === "move_workout") {
+    return `${formatDate(change.fromDate)} → ${formatDate(change.toDate)}: Training verschoben`;
+  }
+
   return `${formatDate(change.date)}: ${change.meal.name} um ${change.meal.time} ergänzt`;
+}
+
+function outcomeLabel(type: CoachOutcome["type"]): string {
+  const labels: Record<CoachOutcome["type"], string> = {
+    recommendation: "Empfehlung",
+    clarification_question: "Rückfrage",
+    plan_change: "Planänderung",
+    no_change_note: "Keine Änderung"
+  };
+
+  return labels[type];
 }
 
 function kindLabel(kind: CoachSuggestion["kind"]): string {

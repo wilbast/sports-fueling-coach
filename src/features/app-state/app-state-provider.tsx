@@ -79,14 +79,20 @@ type AppStateContextValue = {
   addDayExtraInfo: (date: string, info: Omit<PlanningExtraInfo, "id">) => void;
   removeDayExtraInfo: (date: string, infoId: string) => void;
   addPlanningStandard: (standard: Omit<PlanningStandard, "id">) => void;
+  removePlanningStandard: (standardId: string) => void;
   applyPlanningStandard: (date: string, standardId: string) => void;
   addWorkout: (date: string, workout: WorkoutDraft, options?: { saveAsStandard?: boolean }) => void;
+  addWorkoutStandard: (template: Omit<WorkoutTemplate, "id">) => void;
+  saveWorkoutAsStandard: (date: string, workoutId: string) => void;
+  removeWorkoutStandard: (templateId: string) => void;
   applyWorkoutStandard: (date: string, templateId: string) => void;
   updateWorkoutStatus: (date: string, workoutId: string, status: WorkoutStatus) => void;
   removeWorkout: (date: string, workoutId: string) => void;
   addMealSlot: (date: string, slot: MealPlanSlot) => void;
   removeMealSlot: (date: string, slotIndex: number) => void;
   addMealTemplate: (template: MealTemplateDraft) => void;
+  saveMealTemplateAsStandard: (mealTemplateId: string) => void;
+  removeMealStandard: (mealTemplateId: string) => void;
   addMealEntry: (
     date: string,
     template: MealTemplateDraft,
@@ -94,6 +100,7 @@ type AppStateContextValue = {
     options?: { saveAsStandard?: boolean }
   ) => void;
   saveCurrentWeekAsStandard: (name: string, description?: string) => void;
+  removeWeekStandard: (templateId: string) => void;
   applyWeekStandard: (templateId: string) => void;
   applyCoachPlanChanges: (changes: CoachPlanChange[]) => void;
   updateProfile: (profile: UserProfile) => void;
@@ -231,7 +238,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         ...day,
         context: [context, ...day.context.filter((item) => !isPlanningContext(item))],
         blocks: [
-          ...day.blocks.filter((block) => block.type !== "work" && block.type !== "travel"),
+          ...day.blocks.filter((block) => block.type !== "work" && block.type !== "travel" && block.type !== "free"),
           createPlanningContextBlock(context)
         ]
       })));
@@ -270,6 +277,15 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
               ...standard
             }
           ]
+        }
+      }));
+    },
+    removePlanningStandard: (standardId) => {
+      setState((current) => ({
+        ...current,
+        standards: {
+          ...current.standards,
+          planning: current.standards.planning.filter((standard) => standard.id !== standardId)
         }
       }));
     },
@@ -313,6 +329,21 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         };
       });
     },
+    addWorkoutStandard: (template) => {
+      setState((current) => ({
+        ...current,
+        standards: {
+          ...current.standards,
+          workouts: [
+            ...current.standards.workouts,
+            {
+              id: createId("workout-standard"),
+              ...template
+            }
+          ]
+        }
+      }));
+    },
     applyWorkoutStandard: (date, templateId) => {
       setState((current) => {
         const template = current.standards.workouts.find((item) => item.id === templateId);
@@ -326,6 +357,41 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
           blocks: [...day.blocks, createWorkoutBlock(workout)]
         }));
       });
+    },
+    saveWorkoutAsStandard: (date, workoutId) => {
+      setState((current) => {
+        const stateForDate = selectDate(current, date);
+        const day = stateForDate.weekPlan.days.find((item) => item.date === date);
+        const workout = day?.workouts.find((item) => item.id === workoutId);
+        if (!workout) return current;
+        const alreadySaved = stateForDate.standards.workouts.some((template) => (
+          template.sport === workout.sport &&
+          template.title === workout.title &&
+          template.startTime === workout.startTime &&
+          template.intensity === workout.intensity
+        ));
+        if (alreadySaved) return stateForDate;
+
+        return {
+          ...stateForDate,
+          standards: {
+            ...stateForDate.standards,
+            workouts: [
+              ...stateForDate.standards.workouts,
+              workoutToTemplate(workout)
+            ]
+          }
+        };
+      });
+    },
+    removeWorkoutStandard: (templateId) => {
+      setState((current) => ({
+        ...current,
+        standards: {
+          ...current.standards,
+          workouts: current.standards.workouts.filter((template) => template.id !== templateId)
+        }
+      }));
     },
     updateWorkoutStatus: (date, workoutId, status) => {
       setState((current) => updateDay(current, date, (day) => ({
@@ -360,6 +426,22 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         ]
       }));
     },
+    saveMealTemplateAsStandard: (mealTemplateId) => {
+      setState((current) => ({
+        ...current,
+        mealTemplates: current.mealTemplates.map((meal) => meal.id === mealTemplateId
+          ? { ...meal, isStandard: true }
+          : meal)
+      }));
+    },
+    removeMealStandard: (mealTemplateId) => {
+      setState((current) => ({
+        ...current,
+        mealTemplates: current.mealTemplates.map((meal) => meal.id === mealTemplateId
+          ? { ...meal, isStandard: false }
+          : meal)
+      }));
+    },
     addMealEntry: (date, template, slot, options) => {
       setState((current) => {
         const meal = createMealTemplate(template, options?.saveAsStandard ?? false);
@@ -392,6 +474,15 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
             ...current.standards.weeks,
             weekPlanToTemplate(current.weekPlan, trimmedName, description)
           ]
+        }
+      }));
+    },
+    removeWeekStandard: (templateId) => {
+      setState((current) => ({
+        ...current,
+        standards: {
+          ...current.standards,
+          weeks: current.standards.weeks.filter((template) => template.id !== templateId)
         }
       }));
     },
@@ -453,6 +544,8 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
             bodyMetrics: current.profile.bodyMetrics,
             primarySports: current.profile.primarySports,
             coachingStyle: current.profile.coachingStyle,
+            family: current.profile.family,
+            job: current.profile.job,
             raceGoal: current.profile.raceGoal
           },
           goals: current.goals
@@ -516,7 +609,7 @@ function normalizeAppState(parsed: Partial<AppState>): AppState {
   return selectDate({
     schemaVersion: parsed.schemaVersion ?? fallback.schemaVersion,
     appMode: parsed.appMode ?? fallback.appMode,
-    profile: parsed.profile ?? fallback.profile,
+    profile: normalizeProfile(parsed.profile, fallback.profile),
     goals: parsed.goals ?? fallback.goals,
     weekPlan,
     weekPlans,
@@ -565,7 +658,45 @@ function upsertWeekPlan(weekPlans: WeekPlan[], weekPlan: WeekPlan): WeekPlan[] {
   return nextWeekPlans.sort((left, right) => left.startsOn.localeCompare(right.startsOn));
 }
 
+function normalizeProfile(profile: AppState["profile"] | undefined, fallback: AppState["profile"]): AppState["profile"] {
+  const fallbackFamily = fallback.family ?? {
+    situation: "with_children" as const,
+    childrenCount: 2,
+    careResponsibility: "medium" as const,
+    notes: ""
+  };
+  const fallbackJob = fallback.job ?? {
+    title: "Wissensarbeit",
+    workPattern: "hybrid" as const,
+    workload: "variable" as const,
+    commuteMinutes: 30,
+    notes: ""
+  };
+
+  return {
+    ...fallback,
+    ...profile,
+    bodyMetrics: {
+      ...fallback.bodyMetrics,
+      ...profile?.bodyMetrics
+    },
+    primarySports: profile?.primarySports ?? fallback.primarySports,
+    family: {
+      ...fallbackFamily,
+      ...profile?.family
+    },
+    job: {
+      ...fallbackJob,
+      ...profile?.job
+    }
+  };
+}
+
 function applyCoachPlanChange(state: AppState, change: CoachPlanChange): AppState {
+  if (change.type === "move_workout") {
+    return moveWorkout(state, change);
+  }
+
   const stateForDate = selectDate(state, change.date);
 
   if (change.type === "set_day_context") {
@@ -573,7 +704,7 @@ function applyCoachPlanChange(state: AppState, change: CoachPlanChange): AppStat
       ...day,
       context: [change.context, ...day.context.filter((item) => !isPlanningContext(item))],
       blocks: [
-        ...day.blocks.filter((block) => block.type !== "work" && block.type !== "travel"),
+        ...day.blocks.filter((block) => block.type !== "work" && block.type !== "travel" && block.type !== "free"),
         createPlanningContextBlock(change.context)
       ]
     }));
@@ -621,6 +752,33 @@ function applyCoachPlanChange(state: AppState, change: CoachPlanChange): AppStat
   }
 
   return stateForDate;
+}
+
+function moveWorkout(state: AppState, change: Extract<CoachPlanChange, { type: "move_workout" }>): AppState {
+  const sourceState = selectDate(state, change.fromDate);
+  const sourceDay = sourceState.weekPlan.days.find((day) => day.date === change.fromDate);
+  const workout = sourceDay?.workouts.find((item) => (
+    change.workoutId ? item.id === change.workoutId : change.sport ? item.sport === change.sport : true
+  ));
+
+  if (!workout) return sourceState;
+
+  const movedWorkout = {
+    ...workout,
+    id: createId(workout.sport),
+    date: change.toDate
+  };
+  const removedState = updateDay(sourceState, change.fromDate, (day) => ({
+    ...day,
+    workouts: day.workouts.filter((item) => item.id !== workout.id),
+    blocks: day.blocks.filter((block) => block.label !== workout.title)
+  }));
+
+  return updateDay(removedState, change.toDate, (day) => ({
+    ...day,
+    workouts: [...day.workouts, movedWorkout],
+    blocks: [...day.blocks, createWorkoutBlock(movedWorkout)]
+  }));
 }
 
 function normalizeCoachWorkout(workout: CoachWorkoutDraft): WorkoutDraft {
@@ -676,7 +834,11 @@ function applyCoachMealChange(state: AppState, date: IsoDate, mealDraft: CoachMe
 }
 
 function isPlanningContext(context: DayContext): context is PlanningContext {
-  return context === "homeoffice" || context === "office" || context === "travel";
+  return context === "homeoffice" ||
+    context === "office" ||
+    context === "travel" ||
+    context === "free" ||
+    context === "vacation";
 }
 
 function planningExtraInfoToBlock(info: PlanningExtraInfo): DayBlock {
@@ -844,6 +1006,8 @@ function standardWeekDayToPlan(date: IsoDate, standardDay: StandardWeekDay): Day
 }
 
 function getPlanningContext(day: DayPlan): PlanningContext {
+  if (day.context.includes("vacation")) return "vacation";
+  if (day.context.includes("free")) return "free";
   if (day.context.includes("travel")) return "travel";
   if (day.context.includes("office")) return "office";
 

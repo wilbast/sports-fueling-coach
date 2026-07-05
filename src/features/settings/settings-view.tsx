@@ -1,8 +1,9 @@
 "use client";
 
-import { RotateCcw, ShieldCheck, UserRound } from "lucide-react";
+import { BriefcaseBusiness, RotateCcw, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { PerformanceStrategy, RaceGoal, WeightStrategy } from "@/domain/goals/types";
+import type { FamilyProfile, JobProfile } from "@/domain/profile/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -12,6 +13,8 @@ export function SettingsView() {
   const profile = state.profile;
   const goals = state.goals;
   const raceGoal = profile.raceGoal ?? createFallbackRaceGoal();
+  const family = profile.family ?? createFallbackFamilyProfile();
+  const job = profile.job ?? createFallbackJobProfile();
   const onlineMode = isSupabaseConfigured();
 
   return (
@@ -82,6 +85,140 @@ export function SettingsView() {
                     }
                   })}
                   inputMode="decimal"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                />
+              </label>
+            </div>
+          </Panel>
+
+          <Panel>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-coach-50 text-coach-700">
+                <UsersRound className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-ink">Familie</h2>
+                <p className="mt-1 text-sm text-muted">Wichtig für Zeitfenster, Erholung und realistische Empfehlungen.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Familiensituation
+                <select
+                  value={family.situation}
+                  onChange={(event) => updateProfile({ ...profile, family: { ...family, situation: event.target.value as FamilyProfile["situation"] } })}
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                >
+                  <option value="single">allein lebend</option>
+                  <option value="partner">Partnerschaft</option>
+                  <option value="with_children">mit Kindern</option>
+                  <option value="single_parent">alleinerziehend</option>
+                  <option value="shared_parenting">Wechselmodell / geteilte Betreuung</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Kinder
+                <input
+                  value={family.childrenCount}
+                  onChange={(event) => updateProfile({
+                    ...profile,
+                    family: { ...family, childrenCount: parseNumber(event.target.value, family.childrenCount) }
+                  })}
+                  inputMode="numeric"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Betreuungsaufwand
+                <select
+                  value={family.careResponsibility}
+                  onChange={(event) => updateProfile({ ...profile, family: { ...family, careResponsibility: event.target.value as FamilyProfile["careResponsibility"] } })}
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                >
+                  <option value="low">niedrig</option>
+                  <option value="medium">mittel</option>
+                  <option value="high">hoch</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink sm:col-span-2">
+                Familiennotiz
+                <input
+                  value={family.notes ?? ""}
+                  onChange={(event) => updateProfile({ ...profile, family: { ...family, notes: event.target.value } })}
+                  placeholder="z. B. Abends oft Familienzeit, Wochenende unregelmäßig"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                />
+              </label>
+            </div>
+          </Panel>
+
+          <Panel>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-coach-50 text-coach-700">
+                <BriefcaseBusiness className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-ink">Job & Alltag</h2>
+                <p className="mt-1 text-sm text-muted">Hilft dem Coach, Büro-, Reise- und Belastungstage besser einzuordnen.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Job
+                <input
+                  value={job.title}
+                  onChange={(event) => updateProfile({ ...profile, job: { ...job, title: event.target.value } })}
+                  placeholder="z. B. Produktmanagement, Vertrieb, Schichtdienst"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Arbeitsmuster
+                <select
+                  value={job.workPattern}
+                  onChange={(event) => updateProfile({ ...profile, job: { ...job, workPattern: event.target.value as JobProfile["workPattern"] } })}
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                >
+                  <option value="homeoffice">viel Home-Office</option>
+                  <option value="office">viel Büro</option>
+                  <option value="hybrid">hybrid</option>
+                  <option value="travel_heavy">viele Reisen</option>
+                  <option value="shift">Schichtdienst</option>
+                  <option value="flexible">flexibel</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Belastung
+                <select
+                  value={job.workload}
+                  onChange={(event) => updateProfile({ ...profile, job: { ...job, workload: event.target.value as JobProfile["workload"] } })}
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                >
+                  <option value="regular">regelmäßig</option>
+                  <option value="high">hoch</option>
+                  <option value="variable">wechselhaft</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Pendelzeit Minuten
+                <input
+                  value={job.commuteMinutes ?? ""}
+                  onChange={(event) => updateProfile({
+                    ...profile,
+                    job: { ...job, commuteMinutes: parseNumber(event.target.value, job.commuteMinutes ?? 0) }
+                  })}
+                  inputMode="numeric"
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink sm:col-span-2">
+                Jobnotiz
+                <input
+                  value={job.notes ?? ""}
+                  onChange={(event) => updateProfile({ ...profile, job: { ...job, notes: event.target.value } })}
+                  placeholder="z. B. Di/Do Büro, Kundentermine, lange Calls"
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                 />
               </label>
@@ -244,6 +381,25 @@ function createFallbackRaceGoal(): RaceGoal {
     distanceKm: 10,
     targetTime: "0:50:00",
     priority: "A"
+  };
+}
+
+function createFallbackFamilyProfile(): FamilyProfile {
+  return {
+    situation: "with_children",
+    childrenCount: 2,
+    careResponsibility: "medium",
+    notes: ""
+  };
+}
+
+function createFallbackJobProfile(): JobProfile {
+  return {
+    title: "Wissensarbeit",
+    workPattern: "hybrid",
+    workload: "variable",
+    commuteMinutes: 30,
+    notes: ""
   };
 }
 

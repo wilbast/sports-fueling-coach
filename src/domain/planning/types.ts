@@ -5,6 +5,8 @@ import type { WorkoutPlan } from "@/domain/training/types";
 export type DayContext =
   | "homeoffice"
   | "office"
+  | "free"
+  | "vacation"
   | "restaurant"
   | "travel"
   | "family"
@@ -17,6 +19,7 @@ export type DayBlockType =
   | "nutrition"
   | "restaurant"
   | "family"
+  | "free"
   | "recovery"
   | "travel"
   | "planning";

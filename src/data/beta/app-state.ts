@@ -43,7 +43,20 @@ export function createBetaAppState(input: CreateBetaAppStateInput = {}): BetaApp
         targetWeightKg: 82
       },
       primarySports: ["Laufen", "Krafttraining", "Padel"],
-      coachingStyle: "active"
+      coachingStyle: "active",
+      family: {
+        situation: "with_children",
+        childrenCount: 2,
+        careResponsibility: "medium",
+        notes: ""
+      },
+      job: {
+        title: "Wissensarbeit",
+        workPattern: "hybrid",
+        workload: "variable",
+        commuteMinutes: 30,
+        notes: ""
+      }
     },
     goals: {
       weightStrategy: "reduce",
@@ -113,6 +126,20 @@ function createBaseStandards(): AppStandards {
         context: "travel",
         extraInfos: [],
         note: "Einfach halten, Energie und Protein pragmatisch sichern."
+      },
+      {
+        id: "base-planning-free",
+        name: "Frei",
+        context: "free",
+        extraInfos: [],
+        note: "Mehr Spielraum nutzen, aber Erholung und Mahlzeiten nicht ausfransen lassen."
+      },
+      {
+        id: "base-planning-vacation",
+        name: "Urlaub",
+        context: "vacation",
+        extraInfos: [],
+        note: "Training flexibel halten, grobe Protein- und Energieanker setzen."
       }
     ],
     workouts: [],

@@ -15,6 +15,7 @@ export type CoachChatMessage = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  outcomes?: CoachOutcome[];
   changes?: CoachPlanChange[];
   suggestions?: CoachSuggestion[];
   questions?: string[];
@@ -70,11 +71,27 @@ export type CoachPlanChange =
     reason?: string;
   }
   | {
+    type: "move_workout";
+    fromDate: IsoDate;
+    toDate: IsoDate;
+    workoutId?: string;
+    sport?: SportType;
+    reason?: string;
+  }
+  | {
     type: "add_meal";
     date: IsoDate;
     meal: CoachMealDraft;
     reason?: string;
   };
+
+export type CoachOutcome = {
+  type: "recommendation" | "clarification_question" | "plan_change" | "no_change_note";
+  domain: "training" | "fueling" | "nutrition" | "planning" | "recovery" | "general";
+  day?: string;
+  summary: string;
+  planChange: CoachPlanChange | null;
+};
 
 export type CoachSuggestion = {
   id: string;
@@ -88,6 +105,7 @@ export type CoachSuggestion = {
 
 export type CoachPlanResponse = {
   assistantMessage: string;
+  outcomes: CoachOutcome[];
   questions: string[];
   changes: CoachPlanChange[];
   suggestions: CoachSuggestion[];

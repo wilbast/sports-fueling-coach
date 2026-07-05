@@ -162,7 +162,7 @@ const weekDays: DayPlan[] = [
   },
   {
     date: "2026-07-11",
-    context: ["homeoffice"],
+    context: ["free"],
     focus: "Langer Lauf",
     workouts: [
       {
@@ -182,6 +182,7 @@ const weekDays: DayPlan[] = [
     ],
     mealPlan: [standardBreakfast, preRunSnack, recoveryDinner],
     blocks: [
+      block("free-sa", "free", "Frei", "mehr Spielraum für langen Lauf und Familienzeit"),
       block("long-run-sa", "training", "Langer Lauf", "höchster Fueling-Fokus der Woche"),
       block("nutrition-sa", "nutrition", "Carb-Fokus", "vorher und nachher bewusst essen")
     ],
@@ -189,7 +190,7 @@ const weekDays: DayPlan[] = [
   },
   {
     date: "2026-07-12",
-    context: ["recovery"],
+    context: ["recovery", "free", "family"],
     focus: "Reset und Planung",
     workouts: [
       {
@@ -205,6 +206,7 @@ const weekDays: DayPlan[] = [
     ],
     mealPlan: [standardBreakfast, chickenLunch, recoveryDinner],
     blocks: [
+      block("family-so", "family", "Familienzeit", "Training kurz und flexibel halten"),
       block("reset-so", "recovery", "Reset", "Erholung und Schlaf priorisieren"),
       block("planning-so", "planning", "Woche planen", "Standards für die nächste Woche vorbereiten")
     ],

@@ -52,6 +52,13 @@ export const demoPlanningExtraInfos: PlanningExtraInfo[] = [
     impact: "Abend flexibel halten, Training und Hauptmahlzeit vorher sauber platzieren",
     type: "family",
     context: "family"
+  },
+  {
+    id: "extra-family-time",
+    label: "Familienzeit",
+    impact: "Training kurz und realistisch platzieren, Abendessen nicht zu spät lösen",
+    type: "family",
+    context: "family"
   }
 ];
 
@@ -83,6 +90,20 @@ export const demoPlanningStandards: PlanningStandard[] = [
     context: "travel",
     extraInfos: [],
     note: "Training optional halten, Fueling nicht verkomplizieren."
+  },
+  {
+    id: "planning-free-family",
+    name: "Frei + Familie",
+    context: "free",
+    extraInfos: [demoPlanningExtraInfos[3]],
+    note: "Training früh oder bewusst kurz halten, Familienzeit schützen."
+  },
+  {
+    id: "planning-vacation-flexible",
+    name: "Urlaub flexibel",
+    context: "vacation",
+    extraInfos: [],
+    note: "Grobe Energieanker statt starrem Plan, Bewegung flexibel nutzen."
   }
 ];
 

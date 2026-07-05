@@ -81,7 +81,7 @@ export function AppShell({ children }: AppShellProps) {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-soft backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-xl grid-cols-6 gap-1">
+        <div className="mx-auto grid max-w-xl grid-cols-4 gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;

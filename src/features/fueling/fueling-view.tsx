@@ -11,7 +11,7 @@ import { useAppState } from "@/features/app-state/app-state-provider";
 const mealIcons = [Salad, Beef, Soup, Wheat];
 
 export function FuelingView() {
-  const { state, addMealTemplate, addMealEntry, addMealSlot, removeMealSlot } = useAppState();
+  const { state, addMealTemplate, addMealEntry, addMealSlot, removeMealSlot, saveMealTemplateAsStandard } = useAppState();
   const selectedDay = getDayPlanByDate(state.weekPlan, state.selectedDate);
   const standardMealTemplates = state.mealTemplates.filter((meal) => meal.isStandard !== false);
   const [name, setName] = useState("");
@@ -255,14 +255,26 @@ export function FuelingView() {
                       <p className="font-semibold text-ink">{meal?.name ?? "Flexible Mahlzeit"}</p>
                       <p className="mt-1 text-sm text-muted">{slot.time} · {roleLabel(slot.role)}</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeMealSlot(selectedDay.date, index)}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-canvas hover:text-ink"
-                      aria-label="Mahlzeit entfernen"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                    <div className="flex shrink-0 gap-1">
+                      {meal && meal.isStandard === false ? (
+                        <button
+                          type="button"
+                          onClick={() => saveMealTemplateAsStandard(meal.id)}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition hover:bg-canvas hover:text-coach-700"
+                          aria-label="Als Fuelingstandard speichern"
+                        >
+                          <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => removeMealSlot(selectedDay.date, index)}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition hover:bg-canvas hover:text-ink"
+                        aria-label="Mahlzeit entfernen"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

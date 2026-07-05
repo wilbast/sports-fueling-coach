@@ -31,7 +31,15 @@ const statusLabels: Record<WorkoutStatus, string> = {
 };
 
 export function TrainingView() {
-  const { state, setSelectedDate, addWorkout, applyWorkoutStandard, updateWorkoutStatus, removeWorkout } = useAppState();
+  const {
+    state,
+    setSelectedDate,
+    addWorkout,
+    applyWorkoutStandard,
+    saveWorkoutAsStandard,
+    updateWorkoutStatus,
+    removeWorkout
+  } = useAppState();
   const selectedDay = getDayPlanByDate(state.weekPlan, state.selectedDate);
   const [title, setTitle] = useState("");
   const [sport, setSport] = useState<SportType>("running");
@@ -132,6 +140,7 @@ export function TrainingView() {
                     key={workout.id}
                     workout={workout}
                     onStatus={(status) => updateWorkoutStatus(day.date, workout.id, status)}
+                    onSaveAsStandard={() => saveWorkoutAsStandard(day.date, workout.id)}
                     onRemove={() => removeWorkout(day.date, workout.id)}
                   />
                 ))}
@@ -303,10 +312,11 @@ export function TrainingView() {
 type WorkoutRowProps = {
   workout: WorkoutPlan;
   onStatus: (status: WorkoutStatus) => void;
+  onSaveAsStandard: () => void;
   onRemove: () => void;
 };
 
-function WorkoutRow({ workout, onStatus, onRemove }: WorkoutRowProps) {
+function WorkoutRow({ workout, onStatus, onSaveAsStandard, onRemove }: WorkoutRowProps) {
   const Icon = iconForSport(workout.sport);
 
   return (
@@ -339,6 +349,14 @@ function WorkoutRow({ workout, onStatus, onRemove }: WorkoutRowProps) {
             {statusLabels[status]}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={onSaveAsStandard}
+          className="flex min-h-9 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-muted transition hover:border-coach-100 hover:text-coach-700"
+        >
+          <BookmarkPlus className="h-3.5 w-3.5" aria-hidden="true" />
+          Als Standard
+        </button>
         <button
           type="button"
           onClick={onRemove}

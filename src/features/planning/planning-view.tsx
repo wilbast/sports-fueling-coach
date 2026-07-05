@@ -7,6 +7,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   Dumbbell,
+  HeartHandshake,
   Home,
   Layers3,
   Plane,
@@ -14,6 +15,7 @@ import {
   Sparkles,
   Tags,
   Trash2,
+  Umbrella,
   X
 } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
@@ -60,6 +62,18 @@ const planningContexts: Array<{
     icon: BriefcaseBusiness
   },
   {
+    value: "free",
+    label: "Frei",
+    detail: "Wochenende, Erholung, flexible Struktur",
+    icon: HeartHandshake
+  },
+  {
+    value: "vacation",
+    label: "Urlaub",
+    detail: "lockerer Rhythmus, grob coachen",
+    icon: Umbrella
+  },
+  {
     value: "travel",
     label: "Reisetag",
     detail: "einfach halten",
@@ -84,6 +98,7 @@ export function PlanningView() {
     addPlanningStandard,
     applyPlanningStandard,
     addWorkout,
+    saveWorkoutAsStandard: saveExistingWorkoutAsStandard,
     applyWorkoutStandard,
     updateWorkoutStatus,
     removeWorkout,
@@ -338,7 +353,7 @@ export function PlanningView() {
               </button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {planningContexts.map((context) => {
                 const Icon = context.icon;
                 const selected = context.value === selectedContext;
@@ -500,6 +515,14 @@ export function PlanningView() {
                         {statusLabels[status]}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => saveExistingWorkoutAsStandard(selectedDay.date, workout.id)}
+                      className="flex min-h-9 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-muted transition hover:border-coach-100 hover:text-coach-700"
+                    >
+                      <BookmarkPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                      Als Standard
+                    </button>
                     <button
                       type="button"
                       onClick={() => removeWorkout(selectedDay.date, workout.id)}
@@ -702,6 +725,8 @@ function formatLongDate(date: string): string {
 }
 
 function getPlanningContext(day: DayPlan): PlanningContext {
+  if (day.context.includes("vacation")) return "vacation";
+  if (day.context.includes("free")) return "free";
   if (day.context.includes("travel")) return "travel";
   if (day.context.includes("office")) return "office";
 
@@ -712,7 +737,9 @@ function contextLabel(context: PlanningContext): string {
   const labels: Record<PlanningContext, string> = {
     homeoffice: "Home-Office",
     office: "Büroarbeit",
-    travel: "Reisetag"
+    travel: "Reisetag",
+    free: "Frei",
+    vacation: "Urlaub"
   };
 
   return labels[context];
@@ -749,7 +776,11 @@ function blockToExtraInfo(block: DayBlock): PlanningExtraInfo {
 function createExtraInfoDraft(label: string): Omit<PlanningExtraInfo, "id"> {
   const normalized = label.toLowerCase();
   const isRestaurant = normalized.includes("restaurant") || normalized.includes("biergarten") || normalized.includes("essen");
-  const isSocial = normalized.includes("freund") || normalized.includes("treffen") || normalized.includes("familie");
+  const isSocial = normalized.includes("freund") ||
+    normalized.includes("treffen") ||
+    normalized.includes("familie") ||
+    normalized.includes("kind") ||
+    normalized.includes("betreuung");
   const type: DayBlockType = isRestaurant ? "restaurant" : isSocial ? "family" : "planning";
   const context: DayContext | undefined = isRestaurant ? "restaurant" : isSocial ? "family" : undefined;
 

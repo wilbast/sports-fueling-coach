@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
+import type { CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import type { UserGoals } from "@/domain/goals/types";
 import type { MealTemplate } from "@/domain/nutrition/types";
 import type { DayBlockType, DayContext, DayPlan, WeekPlan } from "@/domain/planning/types";
@@ -32,6 +32,11 @@ const sportValues: SportType[] = ["running", "padel", "swimming", "squash", "hii
 const runningTypeValues: RunningWorkoutType[] = ["easy_run", "tempo_run", "fartlek", "intervals"];
 const runningFocusValues: RunningFocus[] = ["base", "recovery", "threshold", "vo2max"];
 const intensityValues: WorkoutIntensity[] = ["easy", "moderate", "hard", "optional"];
+
+type CoachIntent = {
+  type: "info" | "recommendation" | "plan_change" | "advice";
+  domain: CoachOutcome["domain"];
+};
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as CoachRequestBody | null;
@@ -75,16 +80,22 @@ export async function POST(request: NextRequest) {
 function createSystemPrompt(): string {
   return [
     "Du bist ein deutschsprachiger Sports & Fueling Coach für genau einen ambitionierten Freizeitsportler.",
-    "Du bist zuerst Berater, nicht nur Formularausfüller. Antworte konkret, coachig, knapp und mit klarer Empfehlung.",
+    "Du bist zuerst Berater, nicht Formularausfüller. Antworte konkret, coachig, knapp und alltagstauglich.",
     "Nutze alle übergebenen Informationen: Profil, Ziele, Wettkampfziel, aktuelle Woche, Training, Fueling, Standards und vorhandene Mahlzeiten.",
-    "Gib konkrete Vorschläge für Training, Fueling, Regeneration oder Rezepte. Vorschläge dürfen Änderungen enthalten, die der Nutzer später übernehmen kann.",
-    "Nutze changes nur für sehr eindeutige direkt gewünschte Änderungen. Nutze suggestions für Empfehlungen, Rezepte und Optionen.",
+    "Erkenne zuerst den Intent: Info/Wunsch/Stimmung, konkrete Empfehlung, konkrete Planänderung oder Beratung/Unsicherheit.",
+    "Empfehlungen sind immer erlaubt. Blockiere hilfreiche Antworten nicht, nur weil keine eindeutige Planänderung vorliegt.",
+    "Trenne Empfehlungen und Planänderungen klar. Nutze outcomes für recommendation, clarification_question, plan_change oder no_change_note.",
+    "Nutze changes nur, wenn Tag, Bereich und konkrete Änderung klar sind und der Nutzer eindeutig eine Änderung will.",
+    "Bei Info/Wunsch/Stimmung, z. B. Alkohol, Restaurant, Müdigkeit: keine automatische Planänderung. Gib kurze Einordnung und optionales Angebot.",
+    "Bei Empfehlungsfragen: gib konkrete Mengen, Timing, Mahlzeiten, Snacks, Flüssigkeit oder Regenerationstipps ohne changes zu erzwingen.",
+    "Bei unklarem Kontext: stelle maximal 1-2 gezielte Rückfragen.",
     "Erlaubte Sportarten: running, padel, swimming, squash, hiit, strength, cycling.",
     "Bei running nutze runningType: easy_run, tempo_run, fartlek oder intervals.",
     "Bei running nutze runningFocus: base, recovery, threshold oder vo2max.",
+    "Erlaubte Tageskontexte: homeoffice, office, travel, free, vacation.",
+    "Berücksichtige Familie, Job, Pendelzeit und Betreuungsaufwand, wenn du Zeitfenster, Intensität oder Fueling empfiehlst.",
     "Nutze nur Datumswerte aus der übergebenen Woche. Wenn der Nutzer einen Wochentag nennt, ordne ihn dieser Woche zu.",
-    "Für Rezeptvorschläge nutze add_meal Changes mit groben Kalorien, Protein und Tags.",
-    "Wenn etwas wesentlich fehlt, stelle gezielte Rückfragen.",
+    "Für Rezeptvorschläge nur dann add_meal Changes nutzen, wenn der Nutzer Übernahme oder Planung klar wünscht. Sonst Empfehlung ohne Planänderung.",
     "Keine medizinischen Diagnosen. Keine erfundenen externen Daten. Antworte ausschließlich als JSON im geforderten Schema."
   ].join("\n");
 }
@@ -98,6 +109,8 @@ function createCoachContext(message: string, state: NonNullable<CoachRequestBody
       bodyMetrics: state.profile.bodyMetrics,
       primarySports: state.profile.primarySports,
       coachingStyle: state.profile.coachingStyle,
+      family: state.profile.family,
+      job: state.profile.job,
       raceGoal: state.profile.raceGoal
     },
     goals: state.goals,
@@ -151,9 +164,35 @@ function createCoachResponseSchema() {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["assistantMessage", "questions", "changes", "suggestions", "confidence"],
+    required: ["assistantMessage", "outcomes", "questions", "changes", "suggestions", "confidence"],
     properties: {
       assistantMessage: { type: "string" },
+      outcomes: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: true,
+          required: ["type", "domain", "summary", "planChange"],
+          properties: {
+            type: {
+              type: "string",
+              enum: ["recommendation", "clarification_question", "plan_change", "no_change_note"]
+            },
+            domain: {
+              type: "string",
+              enum: ["training", "fueling", "nutrition", "planning", "recovery", "general"]
+            },
+            day: { type: "string" },
+            summary: { type: "string" },
+            planChange: {
+              anyOf: [
+                { type: "null" },
+                { type: "object", additionalProperties: true }
+              ]
+            }
+          }
+        }
+      },
       questions: {
         type: "array",
         items: { type: "string" }
@@ -170,7 +209,7 @@ function createCoachResponseSchema() {
           properties: {
             type: {
               type: "string",
-              enum: ["set_day_context", "add_extra_info", "add_workout", "add_meal"]
+              enum: ["set_day_context", "add_extra_info", "add_workout", "move_workout", "add_meal"]
             },
             date: { type: "string" }
           }
@@ -217,6 +256,12 @@ function normalizeCoachResponse(
   if (!parsed) {
     return {
       assistantMessage: "Ich konnte die Antwort nicht sicher lesen. Sag mir bitte Tag, Training und groben Zweck noch einmal.",
+      outcomes: [{
+        type: "clarification_question",
+        domain: "general",
+        summary: "Mir fehlen Tag, Bereich oder Ziel für eine sichere Empfehlung.",
+        planChange: null
+      }],
       questions: ["Für welchen Tag soll ich das einplanen?"],
       changes: [],
       suggestions: [],
@@ -224,17 +269,27 @@ function normalizeCoachResponse(
     };
   }
 
-  const changes = Array.isArray(parsed.changes)
+  const intent = inferCoachIntent(originalMessage.toLowerCase());
+  const allowPlanChanges = intent.type === "plan_change";
+  const normalizedChanges = Array.isArray(parsed.changes)
     ? parsed.changes.map((change) => normalizeCoachPlanChange(change, days)).filter((change): change is CoachPlanChange => Boolean(change))
     : [];
-  const suggestions = Array.isArray(parsed.suggestions)
+  const changes = allowPlanChanges ? normalizedChanges : [];
+  const normalizedSuggestions = Array.isArray(parsed.suggestions)
     ? parsed.suggestions.map((suggestion) => normalizeCoachSuggestion(suggestion, days)).filter((suggestion): suggestion is CoachSuggestion => Boolean(suggestion))
     : [];
+  const suggestions = allowPlanChanges
+    ? normalizedSuggestions
+    : normalizedSuggestions.map((suggestion) => ({ ...suggestion, changes: [] }));
+  const outcomes = Array.isArray(parsed.outcomes)
+    ? parsed.outcomes.map((outcome) => normalizeCoachOutcome(outcome, days, allowPlanChanges)).filter((outcome): outcome is CoachOutcome => Boolean(outcome))
+    : createOutcomesFromResponse(changes, suggestions, parsed.questions);
 
   return {
     assistantMessage: typeof parsed.assistantMessage === "string" && parsed.assistantMessage.trim()
       ? parsed.assistantMessage.trim()
       : createAssistantSummary(changes, suggestions, originalMessage),
+    outcomes,
     questions: Array.isArray(parsed.questions)
       ? parsed.questions.filter((question): question is string => typeof question === "string" && question.trim().length > 0).slice(0, 3)
       : [],
@@ -244,6 +299,65 @@ function normalizeCoachResponse(
       ? parsed.confidence
       : changes.length > 0 || suggestions.length > 0 ? "medium" : "low"
   };
+}
+
+function normalizeCoachOutcome(outcome: unknown, days: DayPlan[], allowPlanChanges: boolean): CoachOutcome | null {
+  if (!isRecord(outcome)) return null;
+  if (!isOutcomeType(outcome.type) || !isOutcomeDomain(outcome.domain)) return null;
+  if (typeof outcome.summary !== "string" || !outcome.summary.trim()) return null;
+
+  const planChange = allowPlanChanges && isRecord(outcome.planChange)
+    ? normalizeCoachPlanChange(outcome.planChange, days)
+    : null;
+
+  return {
+    type: allowPlanChanges ? outcome.type : outcome.type === "plan_change" ? "recommendation" : outcome.type,
+    domain: outcome.domain,
+    day: typeof outcome.day === "string" ? outcome.day : undefined,
+    summary: outcome.summary.trim(),
+    planChange
+  };
+}
+
+function createOutcomesFromResponse(
+  changes: CoachPlanChange[],
+  suggestions: CoachSuggestion[],
+  questions: unknown
+): CoachOutcome[] {
+  if (changes.length > 0) {
+    return changes.map((change) => ({
+      type: "plan_change",
+      domain: domainFromChange(change),
+      day: "date" in change ? change.date : change.fromDate,
+      summary: summaryFromChange(change),
+      planChange: change
+    }));
+  }
+
+  if (suggestions.length > 0) {
+    return suggestions.map((suggestion) => ({
+      type: "recommendation",
+      domain: domainFromSuggestionKind(suggestion.kind),
+      summary: suggestion.summary,
+      planChange: null
+    }));
+  }
+
+  if (Array.isArray(questions) && questions.length > 0) {
+    return [{
+      type: "clarification_question",
+      domain: "general",
+      summary: String(questions[0]),
+      planChange: null
+    }];
+  }
+
+  return [{
+    type: "no_change_note",
+    domain: "general",
+    summary: "Ich habe nichts am Plan geändert.",
+    planChange: null
+  }];
 }
 
 function normalizeCoachPlanChange(change: unknown, days: DayPlan[]): CoachPlanChange | null {
@@ -289,6 +403,27 @@ function normalizeCoachPlanChange(change: unknown, days: DayPlan[]): CoachPlanCh
         runningFocus: workout.sport === "running" && isRunningFocus(workout.runningFocus) ? workout.runningFocus : undefined,
         description: typeof workout.description === "string" ? workout.description : undefined
       }
+    };
+  }
+
+  if (change.type === "move_workout") {
+    const fromDate = typeof change.fromDate === "string" && days.some((day) => day.date === change.fromDate)
+      ? change.fromDate as IsoDate
+      : typeof change.date === "string" && days.some((day) => day.date === change.date)
+        ? change.date as IsoDate
+        : null;
+    const toDate = typeof change.toDate === "string" && days.some((day) => day.date === change.toDate)
+      ? change.toDate as IsoDate
+      : null;
+
+    if (!fromDate || !toDate || fromDate === toDate) return null;
+
+    return {
+      type: "move_workout",
+      fromDate,
+      toDate,
+      workoutId: typeof change.workoutId === "string" ? change.workoutId : undefined,
+      sport: isSportType(change.sport) ? change.sport : undefined
     };
   }
 
@@ -354,70 +489,286 @@ function createFallbackCoachResponse(
   state: NonNullable<CoachRequestBody["state"]>
 ): CoachPlanResponse {
   const lower = message.toLowerCase();
+  const intent = inferCoachIntent(lower);
   const date = resolveDate(lower, state.selectedDate, state.weekPlan.days);
+  const day = state.weekPlan.days.find((item) => item.date === date);
   const changes: CoachPlanChange[] = [];
-  const context = inferPlanningContext(lower);
-  const extraInfo = inferExtraInfo(message);
-  const workout = inferWorkout(message);
-  const suggestions = createFallbackSuggestions(message, state, date, workout);
+  const shouldCreatePlanChange = intent.type === "plan_change";
+  const context = shouldCreatePlanChange ? inferPlanningContext(lower) : null;
+  const extraInfo = shouldCreatePlanChange ? inferExtraInfo(message) : null;
+  const workout = shouldCreatePlanChange ? inferWorkout(message) : null;
   const questions: string[] = [];
 
-  if (context) {
-    changes.push({ type: "set_day_context", date, context });
-  }
+  const moveChange = shouldCreatePlanChange ? inferMoveWorkoutChange(lower, state, date) : null;
 
-  if (extraInfo) {
-    changes.push({
-      type: "add_extra_info",
-      date,
-      label: extraInfo.label,
-      impact: extraInfo.impact,
-      blockType: extraInfo.blockType,
-      context: extraInfo.context
-    });
-  }
-
-  if (workout) {
-    changes.push({
-      type: "add_workout",
-      date,
-      workout
-    });
-
-    if (workout.sport === "running" && !workout.distanceKm && !workout.durationMinutes) {
-      questions.push("Wie lang soll der Lauf ungefähr werden?");
+  if (moveChange) {
+    changes.push(moveChange);
+  } else if (shouldCreatePlanChange) {
+    if (context) {
+      changes.push({ type: "set_day_context", date, context });
     }
 
-    if (workout.sport === "running" && !workout.runningFocus) {
-      questions.push("Ist der Fokus eher Basis, Regeneration, Schwelle oder VO2Max?");
+    if (extraInfo) {
+      changes.push({
+        type: "add_extra_info",
+        date,
+        label: extraInfo.label,
+        impact: extraInfo.impact,
+        blockType: extraInfo.blockType,
+        context: extraInfo.context
+      });
+    }
+
+    if (workout) {
+      changes.push({
+        type: "add_workout",
+        date,
+        workout
+      });
+
+      if (workout.sport === "running" && !workout.distanceKm && !workout.durationMinutes) {
+        questions.push("Wie lang soll der Lauf ungefähr werden?");
+      }
+
+      if (workout.sport === "running" && !workout.runningFocus) {
+        questions.push("Ist der Fokus eher Basis, Regeneration, Schwelle oder VO2Max?");
+      }
     }
   }
 
-  if (changes.length === 0 && suggestions.length === 0) {
-    questions.push("Soll ich daraus eher Training, Fueling oder Regeneration konkret planen?");
+  if (shouldCreatePlanChange && changes.length === 0) {
+    questions.push("Was genau soll ich ändern: Training, Alltag oder Fueling?");
   }
+
+  const suggestions = createFallbackSuggestions(message, state, date, shouldCreatePlanChange ? workout : inferWorkout(message), changes.length > 0);
+  const outcomes = createFallbackOutcomes(intent, message, date, day, suggestions, changes, questions);
 
   return {
-    assistantMessage: createAssistantSummary(changes, suggestions, message),
+    assistantMessage: createFallbackAssistantMessage(intent, message, day, suggestions, changes, questions),
+    outcomes,
     questions,
     changes,
     suggestions,
-    confidence: changes.length > 0 || suggestions.length > 0 ? "medium" : "low"
+    confidence: changes.length > 0 || suggestions.length > 0 || outcomes.length > 0 ? "medium" : "low"
   };
+}
+
+function inferCoachIntent(lower: string): CoachIntent {
+  const domain = inferIntentDomain(lower);
+
+  if (lower.includes("verschieb") ||
+    lower.includes("verlege") ||
+    lower.includes("trage") ||
+    lower.includes("trag ") ||
+    lower.includes("plane") ||
+    lower.includes("füge") ||
+    lower.includes("fuege") ||
+    lower.includes("setze") ||
+    lower.includes("änder") ||
+    lower.includes("aender") ||
+    lower.includes("lösche") ||
+    lower.includes("loesche") ||
+    lower.includes("übernimm") ||
+    lower.includes("uebernimm") ||
+    lower.includes("in den plan") ||
+    lower.includes("einplanen") ||
+    lower.includes("plan anpassen")) {
+    return { type: "plan_change", domain };
+  }
+
+  if (lower.includes("empfehl") ||
+    lower.includes("gib mir") ||
+    lower.includes("tipps") ||
+    lower.includes("was soll") ||
+    lower.includes("was mache") ||
+    lower.includes("wie soll") ||
+    lower.includes("fueling")) {
+    return { type: "recommendation", domain };
+  }
+
+  if (lower.includes("soll ich") ||
+    lower.includes("macht es sinn") ||
+    lower.includes("unsicher") ||
+    lower.includes("?")) {
+    return { type: "advice", domain };
+  }
+
+  return { type: "info", domain };
+}
+
+function inferIntentDomain(lower: string): CoachOutcome["domain"] {
+  if (lower.includes("fuel") || lower.includes("banane") || lower.includes("snack") || lower.includes("trinken")) return "fueling";
+  if (lower.includes("essen") || lower.includes("gegessen") || lower.includes("mahlzeit") || lower.includes("abend")) return "nutrition";
+  if (lower.includes("lauf") || lower.includes("training") || lower.includes("freeletics") || lower.includes("hiit")) return "training";
+  if (lower.includes("müde") || lower.includes("muede") || lower.includes("erholung") || lower.includes("schlaf")) return "recovery";
+  if (lower.includes("büro") || lower.includes("office") || lower.includes("urlaub") || lower.includes("frei") || lower.includes("reise")) return "planning";
+
+  return "general";
+}
+
+function createFallbackOutcomes(
+  intent: CoachIntent,
+  message: string,
+  date: IsoDate,
+  day: DayPlan | undefined,
+  suggestions: CoachSuggestion[],
+  changes: CoachPlanChange[],
+  questions: string[]
+): CoachOutcome[] {
+  if (changes.length > 0) {
+    return changes.map((change) => ({
+      type: "plan_change",
+      domain: domainFromChange(change),
+      day: "date" in change ? change.date : change.fromDate,
+      summary: summaryFromChange(change),
+      planChange: change
+    }));
+  }
+
+  if (questions.length > 0 && intent.type === "plan_change") {
+    return [{
+      type: "clarification_question",
+      domain: intent.domain,
+      day: date,
+      summary: questions[0],
+      planChange: null
+    }];
+  }
+
+  if (suggestions.length > 0 || intent.type === "recommendation" || intent.type === "advice") {
+    return [{
+      type: "recommendation",
+      domain: intent.domain === "general" ? "fueling" : intent.domain,
+      day: date,
+      summary: createOutcomeSummary(message, day),
+      planChange: null
+    }];
+  }
+
+  return [{
+    type: "no_change_note",
+    domain: intent.domain,
+    day: date,
+    summary: "Ich habe nichts am Plan geändert und ordne die Info nur für dich ein.",
+    planChange: null
+  }];
+}
+
+function createFallbackAssistantMessage(
+  intent: CoachIntent,
+  message: string,
+  day: DayPlan | undefined,
+  suggestions: CoachSuggestion[],
+  changes: CoachPlanChange[],
+  questions: string[]
+): string {
+  if (changes.length > 0) {
+    return `Planänderung vorbereitet: ${changes.map(summaryFromChange).join(" ")} Du kannst sie übernehmen.`;
+  }
+
+  if (questions.length > 0 && intent.type === "plan_change") {
+    return `Ich ändere noch nichts. ${questions.slice(0, 2).join(" ")}`;
+  }
+
+  const lower = message.toLowerCase();
+
+  if (mentionsAlcohol(lower)) {
+    return "Okay. Empfehlung: Iss heute etwas leichter, aber proteinreich, und trink pro Bier etwa ein Glas Wasser dazu. Wenn Training geplant ist, vorher nicht nüchtern bleiben. Ich habe nichts am Plan geändert.";
+  }
+
+  if (lower.includes("banane")) {
+    return "Ja, meistens sinnvoll: 1 Banane 20-45 Minuten vor Freeletics passt gut, besonders wenn die letzte Mahlzeit länger her ist. Dazu 300-500 ml Wasser. Ich ändere nichts am Plan.";
+  }
+
+  if (lower.includes("viel gegessen") || lower.includes("schon viel gegessen")) {
+    return "Für heute Abend: kein Crash-Ausgleich. Mach es leicht und proteinreich: z. B. Omelett, Skyr oder Fisch/Tofu mit Gemüse. Carbs klein halten, Wasser trinken, danach normal weitermachen.";
+  }
+
+  if (intent.type === "recommendation" || intent.type === "advice") {
+    return suggestions[0]?.summary
+      ? `Empfehlung: ${suggestions[0].summary} Ich habe nichts am Plan geändert.`
+      : "Empfehlung: Halte es heute einfach, proteinreich und passend zur Belastung. Ich habe nichts am Plan geändert.";
+  }
+
+  const workoutText = day?.workouts.length
+    ? ` Heute steht ${day.workouts.map((workout) => workout.title).join(" + ")} im Plan.`
+    : " Heute ist kein Training im Plan.";
+
+  return `Okay, ich merke mir die Info als Kontext.${workoutText} Wenn du möchtest, gebe ich dir daraus konkrete Empfehlungen oder passe den Plan an.`;
+}
+
+function createOutcomeSummary(message: string, day: DayPlan | undefined): string {
+  const lower = message.toLowerCase();
+
+  if (mentionsAlcohol(lower)) return "Empfehlungen für Essen, Trinken und Alkohol-Ausgleich heute.";
+  if (lower.includes("banane")) return "Snack-Timing vor Freeletics oder intensiver Einheit.";
+  if (lower.includes("viel gegessen")) return "Leichter Abend nach bereits hoher Tageszufuhr.";
+  if (day?.workouts.length) return `Empfehlung passend zu ${day.workouts.map((workout) => workout.title).join(" + ")}.`;
+
+  return "Alltagstaugliche Empfehlung ohne Planänderung.";
 }
 
 function createFallbackSuggestions(
   message: string,
   state: NonNullable<CoachRequestBody["state"]>,
   date: IsoDate,
-  workout: ReturnType<typeof inferWorkout>
+  workout: ReturnType<typeof inferWorkout>,
+  includePlanChanges = false
 ): CoachSuggestion[] {
   const lower = message.toLowerCase();
   const suggestions: CoachSuggestion[] = [];
   const day = state.weekPlan.days.find((item) => item.date === date);
   const hasRun = workout?.sport === "running" || day?.workouts.some((item) => item.sport === "running");
-  const asksFueling = lower.includes("fuel") || lower.includes("essen") || lower.includes("rezept") || lower.includes("snack") || lower.includes("mahlzeit");
+  const asksFueling = lower.includes("fuel") || lower.includes("essen") || lower.includes("rezept") || lower.includes("snack") || lower.includes("mahlzeit") || lower.includes("banane") || lower.includes("bier") || lower.includes("gegessen");
   const asksTraining = lower.includes("training") || lower.includes("lauf") || lower.includes("plan") || Boolean(workout);
+
+  if (mentionsAlcohol(lower)) {
+    suggestions.push({
+      id: "fueling-alcohol-balance",
+      title: "Bier heute sinnvoll ausgleichen",
+      kind: "fueling",
+      summary: "Bleib tagsüber leichter, aber nicht leer: Protein sichern, Fett nicht eskalieren, Wasser aktiv dazunehmen.",
+      rationale: "Alkohol verschlechtert Flüssigkeitshaushalt und Regeneration. Du musst nicht kompensieren, aber den Rahmen ruhig halten.",
+      tips: [
+        "Pro Bier etwa 300-500 ml Wasser einplanen.",
+        "Abends Protein + Gemüse zuerst, sehr fettige Extras kleiner halten.",
+        day?.workouts.length ? "Nach Training erst essen und trinken, dann Alkohol." : "Ohne Training reicht ein leichter, proteinreicher Abend."
+      ],
+      changes: []
+    });
+  }
+
+  if (lower.includes("banane")) {
+    suggestions.push({
+      id: "fueling-banana-before-hiit",
+      title: "Banane vor Freeletics",
+      kind: "fueling",
+      summary: "Eine Banane 20-45 Minuten vorher ist sinnvoll, wenn die letzte Mahlzeit länger her ist oder die Einheit intensiv wird.",
+      rationale: "Schnelle Kohlenhydrate helfen bei HIIT, ohne den Magen schwer zu machen.",
+      tips: [
+        "Bei Hunger: 1 Banane, optional etwas Salz/Wasser.",
+        "Wenn du gerade gegessen hast: halbe Banane oder weglassen.",
+        "Danach Protein in der nächsten Mahlzeit sichern."
+      ],
+      changes: []
+    });
+  }
+
+  if (lower.includes("viel gegessen") || lower.includes("schon viel gegessen")) {
+    suggestions.push({
+      id: "nutrition-light-evening",
+      title: "Leichter Abend ohne Crash-Ausgleich",
+      kind: "fueling",
+      summary: "Heute Abend leicht und proteinreich bleiben: Gemüse + Protein, wenig Fett, Carbs nur klein nach Hunger oder Training.",
+      rationale: "Ein harter Ausgleich am Abend führt oft zu Hunger oder schlechter Regeneration. Ruhig stabilisieren ist besser.",
+      tips: [
+        "Option: Skyr/Quark mit Beeren oder Omelett mit Gemüse.",
+        "Wenn Training war: kleine Carb-Portion dazu, z. B. Kartoffeln oder Brot.",
+        "Morgen normal weitermachen, nicht bestrafen."
+      ],
+      changes: []
+    });
+  }
 
   if (asksTraining) {
     const trainingChange = workout
@@ -441,12 +792,12 @@ function createFallbackSuggestions(
         "Bei Intervallen oder Tempo kein aggressives Defizit planen.",
         "Padel, Squash und HIIT als zusätzliche Belastung ernst nehmen."
       ],
-      changes: trainingChange
+      changes: includePlanChanges ? trainingChange : []
     });
   }
 
   if (asksFueling || hasRun) {
-    suggestions.push(createRecipeSuggestion(date, Boolean(hasRun)));
+    suggestions.push(createRecipeSuggestion(date, Boolean(hasRun), includePlanChanges));
   }
 
   if (suggestions.length === 0) {
@@ -468,7 +819,7 @@ function createFallbackSuggestions(
   return suggestions;
 }
 
-function createRecipeSuggestion(date: IsoDate, hasRun: boolean): CoachSuggestion {
+function createRecipeSuggestion(date: IsoDate, hasRun: boolean, includePlanChange = false): CoachSuggestion {
   return {
     id: hasRun ? "recipe-run-bowl" : "recipe-protein-bowl",
     title: hasRun ? "Fueling Bowl für den Lauftag" : "Proteinreiche Alltags-Bowl",
@@ -484,7 +835,7 @@ function createRecipeSuggestion(date: IsoDate, hasRun: boolean): CoachSuggestion
       "Proteinquelle zuerst festlegen.",
       hasRun ? "Carbs vor und nach dem Lauf nicht zu knapp halten." : "Carbs moderat halten, aber nicht streichen."
     ],
-    changes: [
+    changes: includePlanChange ? [
       {
         type: "add_meal",
         date,
@@ -503,8 +854,60 @@ function createRecipeSuggestion(date: IsoDate, hasRun: boolean): CoachSuggestion
           saveAsStandard: true
         }
       }
-    ]
+    ] : []
   };
+}
+
+function inferMoveWorkoutChange(
+  lower: string,
+  state: NonNullable<CoachRequestBody["state"]>,
+  fallbackDate: IsoDate
+): CoachPlanChange | null {
+  if (!lower.includes("verschieb") && !lower.includes("verlege")) return null;
+
+  const sport = inferSport(lower) ?? "running";
+  const fromDate = resolveMoveSourceDate(lower, state.selectedDate, state.weekPlan.days) ?? fallbackDate;
+  const toDate = resolveMoveTargetDate(lower, fromDate, state.weekPlan.days);
+  if (!toDate || fromDate === toDate) return null;
+
+  const sourceDay = state.weekPlan.days.find((day) => day.date === fromDate);
+  const workout = sourceDay?.workouts.find((item) => item.sport === sport) ?? sourceDay?.workouts[0];
+  if (!workout) return null;
+
+  return {
+    type: "move_workout",
+    fromDate,
+    toDate,
+    workoutId: workout.id,
+    sport: workout.sport
+  };
+}
+
+function resolveMoveSourceDate(lower: string, selectedDate: string, days: DayPlan[]): IsoDate | null {
+  const fromMatch = lower.match(/von\s+(heute|morgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|\d{4}-\d{2}-\d{2})/);
+  if (fromMatch) return resolveDate(fromMatch[1], selectedDate, days);
+  if (lower.includes("heute")) return resolveDate("heute", selectedDate, days);
+
+  return (days.find((day) => day.date === selectedDate)?.date ?? null) as IsoDate | null;
+}
+
+function resolveMoveTargetDate(lower: string, fromDate: IsoDate, days: DayPlan[]): IsoDate | null {
+  const targetMatch = lower.match(/(?:auf|nach|zu)\s+(morgen|heute|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|\d{4}-\d{2}-\d{2})/);
+  if (targetMatch) {
+    if (targetMatch[1] === "morgen") {
+      const sourceIndex = days.findIndex((day) => day.date === fromDate);
+      return (days[sourceIndex + 1]?.date ?? null) as IsoDate | null;
+    }
+
+    return resolveDate(targetMatch[1], fromDate, days);
+  }
+
+  if (lower.includes("morgen")) {
+    const sourceIndex = days.findIndex((day) => day.date === fromDate);
+    return (days[sourceIndex + 1]?.date ?? null) as IsoDate | null;
+  }
+
+  return null;
 }
 
 function inferWorkout(message: string) {
@@ -543,7 +946,7 @@ function inferSport(lower: string): SportType | null {
   if (lower.includes("padel")) return "padel";
   if (lower.includes("schwimm")) return "swimming";
   if (lower.includes("squash")) return "squash";
-  if (lower.includes("hiit")) return "hiit";
+  if (lower.includes("hiit") || lower.includes("freeletics")) return "hiit";
   if (lower.includes("kraft")) return "strength";
   if (lower.includes("rad") || lower.includes("bike") || lower.includes("cycling")) return "cycling";
   if (lower.includes("lauf") || lower.includes("laufen") || lower.includes("jog")) return "running";
@@ -730,7 +1133,7 @@ function parseStartTime(lower: string): string | undefined {
 
 function createAssistantSummary(changes: CoachPlanChange[], suggestions: CoachSuggestion[], message: string): string {
   if (changes.length === 0 && suggestions.length === 0) {
-    return `Ich habe noch nichts direkt geändert. Mir fehlt eine klare Coach-Frage aus: "${message}".`;
+    return `Ich habe nichts am Plan geändert. Sag mir kurz, ob du eine Empfehlung möchtest oder den Plan anpassen willst: "${message}".`;
   }
 
   const workoutCount = changes.filter((change) => change.type === "add_workout").length;
@@ -748,12 +1151,67 @@ function createAssistantSummary(changes: CoachPlanChange[], suggestions: CoachSu
   return `Meine Empfehlung: ${parts.join(", ")}. Du kannst passende Vorschläge direkt übernehmen.`;
 }
 
+function mentionsAlcohol(lower: string): boolean {
+  return lower.includes("bier") ||
+    lower.includes("wein") ||
+    lower.includes("alkohol") ||
+    lower.includes("drink") ||
+    lower.includes("trinken gehen");
+}
+
+function domainFromChange(change: CoachPlanChange): CoachOutcome["domain"] {
+  if (change.type === "add_workout" || change.type === "move_workout") return "training";
+  if (change.type === "add_meal") return "fueling";
+  if (change.type === "set_day_context" || change.type === "add_extra_info") return "planning";
+
+  return "general";
+}
+
+function domainFromSuggestionKind(kind: CoachSuggestion["kind"]): CoachOutcome["domain"] {
+  if (kind === "recipe") return "nutrition";
+  if (kind === "fueling") return "fueling";
+  if (kind === "training") return "training";
+  if (kind === "recovery") return "recovery";
+  if (kind === "planning") return "planning";
+
+  return "general";
+}
+
+function summaryFromChange(change: CoachPlanChange): string {
+  if (change.type === "move_workout") return `Training von ${change.fromDate} auf ${change.toDate} verschieben.`;
+  if (change.type === "add_workout") return `${change.workout.title} am ${change.date} ergänzen.`;
+  if (change.type === "add_meal") return `${change.meal.name} am ${change.date} ergänzen.`;
+  if (change.type === "set_day_context") return `Tageskontext am ${change.date} setzen.`;
+
+  return `${change.label} am ${change.date} ergänzen.`;
+}
+
+function isOutcomeType(value: unknown): value is CoachOutcome["type"] {
+  return value === "recommendation" ||
+    value === "clarification_question" ||
+    value === "plan_change" ||
+    value === "no_change_note";
+}
+
+function isOutcomeDomain(value: unknown): value is CoachOutcome["domain"] {
+  return value === "training" ||
+    value === "fueling" ||
+    value === "nutrition" ||
+    value === "planning" ||
+    value === "recovery" ||
+    value === "general";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isPlanningContext(value: unknown): value is "homeoffice" | "office" | "travel" {
-  return value === "homeoffice" || value === "office" || value === "travel";
+function isPlanningContext(value: unknown): value is "homeoffice" | "office" | "travel" | "free" | "vacation" {
+  return value === "homeoffice" ||
+    value === "office" ||
+    value === "travel" ||
+    value === "free" ||
+    value === "vacation";
 }
 
 function isDayBlockType(value: unknown): value is DayBlockType {
@@ -762,6 +1220,7 @@ function isDayBlockType(value: unknown): value is DayBlockType {
     value === "nutrition" ||
     value === "restaurant" ||
     value === "family" ||
+    value === "free" ||
     value === "recovery" ||
     value === "travel" ||
     value === "planning";
@@ -772,6 +1231,8 @@ function isDayContext(value: unknown): value is DayContext {
     value === "office" ||
     value === "restaurant" ||
     value === "travel" ||
+    value === "free" ||
+    value === "vacation" ||
     value === "family" ||
     value === "race" ||
     value === "recovery";

@@ -4,6 +4,7 @@ import {
   Dumbbell,
   Home,
   MessageCircle,
+  SlidersHorizontal,
   Salad,
   Settings,
   type LucideIcon
@@ -22,5 +23,6 @@ export const navItems: NavItem[] = [
   { label: "Training", href: "/training", icon: Dumbbell },
   { label: "Fueling", href: "/fueling", icon: Salad },
   { label: "Insights", href: "/insights", icon: BarChart3 },
+  { label: "Konfig", href: "/configuration", icon: SlidersHorizontal },
   { label: "Einstellungen", href: "/settings", icon: Settings }
 ];
