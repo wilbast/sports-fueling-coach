@@ -127,7 +127,25 @@ Umgesetzt:
 - Coach-Kontext lädt relevante externe Aktivitäten aus Supabase
 - Architektur für Garmin, Apple Health, Health Connect, Polar, Coros, Oura und Withings vorbereitet
 
-## Sprint 9: Regelqualität und Tests
+## Sprint 9: Today Nutrition Status und AI Fueling Evaluation
+
+Status: umgesetzt
+
+Ziel:
+
+Die Heute-Seite zeigt echte gegessene Mahlzeiten, Tagesbilanz und Makro-Fortschritt. Fueling kann grob per Chat erfasst und serverseitig geschätzt werden.
+
+Umgesetzt:
+
+- persistente `meal_logs` mit Supabase RLS
+- Tabellen für `standard_meals`, `recipes`, `recipe_ingredients` und `nutrition_estimates` vorbereitet
+- Today-Bereich „Heute gegessen“
+- Tagesbilanz mit kcal Input, kcal Ziel, Tagesverbrauch, Protein und Kohlenhydraten
+- Bereich „Was fehlt noch?“ mit konkreter Protein-/Carb-Lücke
+- serverseitige AI-/Fallback-Schätzung für Mahlzeiten
+- Coach-Kontext enthält heutige Nutrition Logs
+
+## Sprint 10: Regelqualität und Tests
 
 Ziel:
 

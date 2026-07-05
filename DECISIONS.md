@@ -229,3 +229,13 @@ Der Coach unterscheidet drei Modi: `coach`, `planning` und `change`. `coach` ist
 Begründung:
 
 Der Nutzer soll mit dem Coach frei diskutieren können, ohne Angst vor automatischen Datenänderungen zu haben. Ein persönlicher Trainer berät zuerst, macht dann einen Vorschlag und ändert erst nach Zustimmung den Plan. Deshalb werden Draft-Änderungen nur in Planning-Vorschlägen angezeigt und nicht gespeichert. Die tatsächliche Anwendung passiert ausschließlich clientseitig nach expliziter Bestätigung.
+
+## ADR-024: Geloggtes Fueling wird normalisiert gespeichert
+
+Entscheidung:
+
+Tages-Fueling wird für eingeloggte Nutzer nicht mehr nur aus dem JSONB-App-State abgeleitet. Persistente Meal Logs liegen in `meal_logs`; Standardmahlzeiten, Rezepte, Zutaten und KI-Schätzungen sind als eigene Tabellen `standard_meals`, `recipes`, `recipe_ingredients` und `nutrition_estimates` vorbereitet. Die Heute-Seite liest geloggte Mahlzeiten über `/api/nutrition/logs` und berechnet daraus Tagesbilanz, Protein-/Carb-Rest und Input-vs.-Output.
+
+Begründung:
+
+Fueling ist ein mehrfach täglicher Workflow und braucht andere Datenqualität als grobe Wochenplanung. Geplante Mahlzeiten bleiben als Planungs-/Demo-Konzept erhalten, aber echte gegessene Mahlzeiten müssen redeploy-sicher, RLS-geschützt und später analysierbar sein. KI darf Nährwerte alltagstauglich schätzen, aber die UI kennzeichnet Quelle und Confidence; manuell bestätigte Werte haben Vorrang.

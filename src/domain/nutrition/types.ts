@@ -36,6 +36,11 @@ export type MealTemplate = {
   description: string;
   estimatedCalories: Range;
   estimatedProteinGrams: Range;
+  estimatedCarbohydratesGrams?: Range;
+  estimatedFatGrams?: Range;
+  nutritionSource?: "standard" | "recipe" | "free_text" | "ai_estimate" | "manual";
+  nutritionConfidence?: "low" | "medium" | "high" | "manual";
+  nutritionRationale?: string;
   tags: string[];
   isStandard?: boolean;
 };

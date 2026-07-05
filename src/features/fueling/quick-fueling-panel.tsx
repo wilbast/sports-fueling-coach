@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Beef, Bot, CheckCircle2, Plus, Salad, SendHorizontal, Soup, Wheat } from "lucide-react";
+import { Beef, Bot, CheckCircle2, Loader2, Salad, SendHorizontal, Soup, Wheat } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
+import type { NutritionConfidence } from "@/domain/nutrition/logs";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
 const mealIcons = [Salad, Beef, Soup, Wheat];
 
@@ -21,10 +23,15 @@ type FuelingDraft = {
     caloriesMax: number;
     proteinMin: number;
     proteinMax: number;
+    carbsGrams: number;
+    fatGrams: number;
     tags: string[];
   };
   slot: Omit<MealPlanSlot, "mealTemplateId">;
   saveAsStandard: boolean;
+  confidence: NutritionConfidence;
+  rationale: string;
+  source: "ai_estimate" | "free_text";
 };
 
 type ChatMessage = {
@@ -35,28 +42,52 @@ type ChatMessage = {
 
 export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelProps) {
   const { state, addMealSlot, addMealEntry } = useAppState();
+  const { addLog } = useNutritionLogs(date);
   const standards = state.mealTemplates.filter((meal) => meal.isStandard !== false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState<FuelingDraft | null>(null);
+  const [isEstimating, setIsEstimating] = useState(false);
   const latestMessages = compact ? messages.slice(-3) : messages.slice(-5);
   const currentDayMealCount = useMemo(() => {
     const selectedWeek = state.weekPlans.find((week) => week.days.some((day) => day.date === date)) ?? state.weekPlan;
     return selectedWeek.days.find((day) => day.date === date)?.mealPlan.length ?? 0;
   }, [date, state.weekPlan, state.weekPlans]);
 
-  function addStandardToDay(meal: MealTemplate) {
-    addMealSlot(date, {
+  async function addStandardToDay(meal: MealTemplate) {
+    const slot = {
       time: inferNextMealTime(currentDayMealCount),
       role: inferMealRole(meal),
       mealTemplateId: meal.id
+    };
+    const savedLog = await addLog({
+      date,
+      time: slot.time,
+      name: meal.name,
+      description: meal.description,
+      source: "standard",
+      sourceId: meal.id,
+      values: {
+        calories: midpoint(meal.estimatedCalories.min, meal.estimatedCalories.max),
+        proteinGrams: midpoint(meal.estimatedProteinGrams.min, meal.estimatedProteinGrams.max),
+        carbohydrateGrams: midpoint(meal.estimatedCarbohydratesGrams?.min, meal.estimatedCarbohydratesGrams?.max),
+        fatGrams: midpoint(meal.estimatedFatGrams?.min, meal.estimatedFatGrams?.max)
+      },
+      confidence: meal.nutritionConfidence ?? "manual",
+      rationale: meal.nutritionRationale,
+      manuallyConfirmed: meal.nutritionSource === "manual" || meal.nutritionConfidence === "manual",
+      rawInput: meal.description
     });
+
+    if (!savedLog) {
+      addMealSlot(date, slot);
+    }
   }
 
-  function submitChat(event: FormEvent<HTMLFormElement>) {
+  async function submitChat(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = input.trim();
-    if (!message) return;
+    if (!message || isEstimating) return;
 
     setInput("");
     setMessages((current) => [...current, createChatMessage("user", message)]);
@@ -67,21 +98,89 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
         return;
       }
 
-      addMealEntry(date, draft.template, draft.slot, { saveAsStandard: draft.saveAsStandard });
+      const savedLog = await addLog({
+        date,
+        time: draft.slot.time,
+        name: draft.template.name,
+        description: draft.template.description,
+        source: draft.source,
+        values: {
+          calories: midpoint(draft.template.caloriesMin, draft.template.caloriesMax),
+          proteinGrams: midpoint(draft.template.proteinMin, draft.template.proteinMax),
+          carbohydrateGrams: draft.template.carbsGrams,
+          fatGrams: draft.template.fatGrams
+        },
+        confidence: draft.confidence,
+        rationale: draft.rationale,
+        manuallyConfirmed: false,
+        rawInput: draft.template.description
+      });
+
+      if (!savedLog) {
+        addMealEntry(date, draft.template, draft.slot, { saveAsStandard: draft.saveAsStandard });
+      }
       setMessages((current) => [...current, createChatMessage("assistant", `${draft.template.name} ist für heute gespeichert.`)]);
       setDraft(null);
       return;
     }
 
-    const nextDraft = createFuelingDraft(message, currentDayMealCount);
+    setIsEstimating(true);
+    const nextDraft = await createFuelingDraft(message, currentDayMealCount);
+    setIsEstimating(false);
     setDraft(nextDraft);
     setMessages((current) => [
       ...current,
       createChatMessage(
         "assistant",
-        `Ich würde das als "${nextDraft.template.name}" um ${nextDraft.slot.time} speichern: ${nextDraft.template.caloriesMin}-${nextDraft.template.caloriesMax} kcal, ${nextDraft.template.proteinMin}-${nextDraft.template.proteinMax} g Protein. Schreib "speichern", wenn das passt.`
+        `Ich würde das als ${nextDraft.template.name} um ${nextDraft.slot.time} speichern: ca. ${midpoint(nextDraft.template.caloriesMin, nextDraft.template.caloriesMax)} kcal, ${midpoint(nextDraft.template.proteinMin, nextDraft.template.proteinMax)} g Protein, ${nextDraft.template.carbsGrams} g Kohlenhydrate, ${nextDraft.template.fatGrams} g Fett. ${confidenceLabel(nextDraft.confidence)}. Schreib "speichern", wenn das passt.`
       )
     ]);
+  }
+
+  function updateDraftValue(field: "calories" | "protein" | "carbs" | "fat", value: string) {
+    const parsed = Number.parseFloat(value.replace(",", "."));
+    if (!Number.isFinite(parsed)) return;
+
+    setDraft((current) => {
+      if (!current) return current;
+      const rounded = Math.max(0, Math.round(parsed));
+
+      if (field === "calories") {
+        return {
+          ...current,
+          template: {
+            ...current.template,
+            caloriesMin: rounded,
+            caloriesMax: rounded
+          },
+          confidence: "manual",
+          source: "free_text"
+        };
+      }
+
+      if (field === "protein") {
+        return {
+          ...current,
+          template: {
+            ...current.template,
+            proteinMin: rounded,
+            proteinMax: rounded
+          },
+          confidence: "manual",
+          source: "free_text"
+        };
+      }
+
+      return {
+        ...current,
+        template: {
+          ...current.template,
+          [field === "carbs" ? "carbsGrams" : "fatGrams"]: rounded
+        },
+        confidence: "manual",
+        source: "free_text"
+      };
+    });
   }
 
   return (
@@ -145,8 +244,32 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
           </div>
 
           {draft ? (
-            <div className="mt-3 rounded-lg border border-coach-100 bg-white px-3 py-2 text-xs leading-5 text-muted">
-              <span className="font-semibold text-ink">Entwurf:</span> {draft.template.name} · {draft.slot.time} · {roleLabel(draft.slot.role)}
+            <div className="mt-3 rounded-lg border border-coach-100 bg-white px-3 py-3 text-xs leading-5 text-muted">
+              <div>
+                <span className="font-semibold text-ink">Entwurf:</span> {draft.template.name} · {draft.slot.time} · {roleLabel(draft.slot.role)}
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                <NutritionDraftInput
+                  label="kcal"
+                  value={midpoint(draft.template.caloriesMin, draft.template.caloriesMax)}
+                  onChange={(value) => updateDraftValue("calories", value)}
+                />
+                <NutritionDraftInput
+                  label="Protein"
+                  value={midpoint(draft.template.proteinMin, draft.template.proteinMax)}
+                  onChange={(value) => updateDraftValue("protein", value)}
+                />
+                <NutritionDraftInput
+                  label="Carbs"
+                  value={draft.template.carbsGrams}
+                  onChange={(value) => updateDraftValue("carbs", value)}
+                />
+                <NutritionDraftInput
+                  label="Fett"
+                  value={draft.template.fatGrams}
+                  onChange={(value) => updateDraftValue("fat", value)}
+                />
+              </div>
             </div>
           ) : null}
 
@@ -160,11 +283,15 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
             />
             <button
               type="submit"
-              disabled={!input.trim()}
+              disabled={!input.trim() || isEstimating}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500 disabled:cursor-not-allowed disabled:bg-muted"
             >
-              {draft && isSaveMessage(input) ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <SendHorizontal className="h-4 w-4" aria-hidden="true" />}
-              {draft && isSaveMessage(input) ? "Speichern" : "Senden"}
+              {isEstimating
+                ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                : draft && isSaveMessage(input)
+                  ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                  : <SendHorizontal className="h-4 w-4" aria-hidden="true" />}
+              {isEstimating ? "Schätzt" : draft && isSaveMessage(input) ? "Speichern" : "Senden"}
             </button>
           </form>
         </div>
@@ -173,27 +300,109 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
   );
 }
 
-function createFuelingDraft(message: string, mealCount: number): FuelingDraft {
+function NutritionDraftInput({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-1 text-[11px] font-semibold text-muted">
+      {label}
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        inputMode="numeric"
+        className="min-h-9 rounded-lg border border-line bg-white px-2 text-xs font-normal text-ink outline-none transition focus:border-coach-400"
+      />
+    </label>
+  );
+}
+
+async function createFuelingDraft(message: string, mealCount: number): Promise<FuelingDraft> {
+  const estimate = await estimateNutrition(message);
   const lower = message.toLowerCase();
-  const calories = parseCalories(lower) ?? inferCalories(lower);
-  const protein = parseProtein(lower) ?? inferProtein(lower);
+  const calories = estimate.calories;
+  const protein = estimate.proteinGrams;
   const role = inferRole(lower);
 
   return {
     template: {
-      name: inferMealName(message),
+      name: estimate.name,
       description: message,
       caloriesMin: Math.max(100, calories - 100),
       caloriesMax: calories + 100,
       proteinMin: Math.max(0, protein - 8),
       proteinMax: protein + 8,
+      carbsGrams: estimate.carbohydrateGrams,
+      fatGrams: estimate.fatGrams,
       tags: ["chat", "fueling", role]
     },
     slot: {
       time: inferTime(lower) ?? inferNextMealTime(mealCount),
       role
     },
-    saveAsStandard: false
+    saveAsStandard: false,
+    confidence: estimate.source === "fallback" ? "low" : estimate.confidence,
+    rationale: estimate.rationale,
+    source: estimate.source === "fallback" ? "free_text" : "ai_estimate"
+  };
+}
+
+async function estimateNutrition(input: string): Promise<{
+  name: string;
+  calories: number;
+  proteinGrams: number;
+  carbohydrateGrams: number;
+  fatGrams: number;
+  confidence: "low" | "medium" | "high";
+  rationale: string;
+  source: "ai_estimate" | "fallback";
+}> {
+  try {
+    const response = await fetch("/api/nutrition/estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input })
+    });
+    const result = await response.json() as {
+      estimate?: {
+        name: string;
+        calories: number;
+        proteinGrams: number;
+        carbohydrateGrams: number;
+        fatGrams: number;
+        confidence: "low" | "medium" | "high";
+        rationale: string;
+        source: "ai_estimate" | "fallback";
+      };
+    };
+
+    if (response.ok && result.estimate) {
+      return result.estimate;
+    }
+  } catch {
+    // Fallback below keeps logging usable without AI/network.
+  }
+
+  const lower = input.toLowerCase();
+  const calories = parseCalories(lower) ?? inferCalories(lower);
+  const protein = parseProtein(lower) ?? inferProtein(lower);
+  const carbs = Math.round(calories * 0.45 / 4);
+  const fat = Math.round(Math.max(3, (calories - protein * 4 - carbs * 4) / 9));
+
+  return {
+    name: inferMealName(input),
+    calories,
+    proteinGrams: protein,
+    carbohydrateGrams: carbs,
+    fatGrams: fat,
+    confidence: "low",
+    rationale: "Fallback-Schätzung ohne KI. Bitte bei Bedarf manuell korrigieren.",
+    source: "fallback"
   };
 }
 
@@ -278,6 +487,22 @@ function parseProtein(lower: string): number | undefined {
 
 function isSaveMessage(message: string): boolean {
   return /^(speichern|save|eintragen|übernehmen|uebernehmen|passt|ja|ok|okay)[\s.!]*$/i.test(message.trim());
+}
+
+function midpoint(min?: number, max?: number): number {
+  if (typeof min === "number" && typeof max === "number") return Math.round((min + max) / 2);
+  if (typeof min === "number") return Math.round(min);
+  if (typeof max === "number") return Math.round(max);
+
+  return 0;
+}
+
+function confidenceLabel(confidence: NutritionConfidence): string {
+  if (confidence === "manual") return "Manuell bestätigt";
+  if (confidence === "high") return "Hohe Sicherheit";
+  if (confidence === "medium") return "Mittlere Sicherheit";
+
+  return "Grobe KI-Schätzung";
 }
 
 function formatMealEstimate(meal: MealTemplate): string {

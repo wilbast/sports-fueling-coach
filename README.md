@@ -117,6 +117,17 @@ STRAVA_STREAM_SYNC_LIMIT=50
 
 Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, OAuth-State-Secret und Tokens dürfen nie im Client oder Repository landen.
 
+## Nutrition & Fueling
+
+- Geloggte Mahlzeiten werden für eingeloggte Nutzer in `meal_logs` gespeichert
+- Standardmahlzeiten, Rezepte, Zutaten und KI-Schätzungen sind mit `standard_meals`, `recipes`, `recipe_ingredients` und `nutrition_estimates` vorbereitet
+- Migration: `supabase/003_nutrition.sql`
+- API-Routen:
+  - `GET/POST /api/nutrition/logs`
+  - `POST /api/nutrition/estimate`
+- AI-Schätzungen laufen ausschließlich serverseitig über `AI_PROVIDER`, `AI_MODEL` und `AI_API_KEY`
+- Die UI kennzeichnet Werte als Standard, Rezept, Freitext, KI-Schätzung oder manuell bestätigt
+
 ## Architektur
 
 ```text

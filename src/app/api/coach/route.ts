@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildCoachContext, type CoachContextSource } from "@/domain/coach/context-builder";
 import type { CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
+import type { MealLog } from "@/domain/nutrition/logs";
 import type { DayBlockType, DayContext, DayPlan } from "@/domain/planning/types";
 import type { IsoDate } from "@/domain/shared";
 import type {
@@ -88,23 +89,60 @@ async function resolveCoachSourceState(requestState: CoachContextSource): Promis
     const storedState = data?.state;
 
     const externalActivities = await loadRecentExternalActivitiesForCoach(user.id);
+    const nutritionLogsToday = await loadNutritionLogsForCoach(user.id, requestState.selectedDate);
 
     if (isCoachContextSource(storedState)) {
       return {
         ...normalizeCoachSourceState(storedState, requestState),
-        externalActivities
+        externalActivities,
+        nutritionLogsToday
       };
     }
 
     return {
       ...requestState,
-      externalActivities
+      externalActivities,
+      nutritionLogsToday
     };
   } catch {
     return requestState;
   }
 
   return requestState;
+}
+
+async function loadNutritionLogsForCoach(userId: string, date: string): Promise<MealLog[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("meal_logs")
+    .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, created_at")
+    .eq("user_id", userId)
+    .eq("logged_date", date)
+    .order("time_label", { ascending: true, nullsFirst: false });
+
+  if (error) {
+    console.warn("[coach] nutrition logs not available", { message: error.message });
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    date: String(row.logged_date),
+    time: typeof row.time_label === "string" ? row.time_label : null,
+    name: String(row.name),
+    description: typeof row.description === "string" ? row.description : null,
+    source: row.source === "standard" || row.source === "recipe" || row.source === "free_text" || row.source === "ai_estimate" || row.source === "manual" ? row.source : "free_text",
+    confidence: row.confidence === "low" || row.confidence === "medium" || row.confidence === "high" || row.confidence === "manual" ? row.confidence : "medium",
+    values: {
+      calories: Number(row.calories ?? 0),
+      proteinGrams: Number(row.protein_grams ?? 0),
+      carbohydrateGrams: Number(row.carbohydrate_grams ?? 0),
+      fatGrams: row.fat_grams == null ? undefined : Number(row.fat_grams)
+    },
+    rationale: typeof row.estimate_rationale === "string" ? row.estimate_rationale : null,
+    manuallyConfirmed: Boolean(row.manually_confirmed),
+    createdAt: typeof row.created_at === "string" ? row.created_at : undefined
+  }));
 }
 
 function isCoachContextSource(value: unknown): value is CoachContextSource {

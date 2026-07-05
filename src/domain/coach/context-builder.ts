@@ -1,4 +1,5 @@
 import type { UserGoals } from "@/domain/goals/types";
+import type { MealLog } from "@/domain/nutrition/logs";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import type { DayPlan, WeekPlan } from "@/domain/planning/types";
 import type { UserProfile } from "@/domain/profile/types";
@@ -39,6 +40,7 @@ export type CoachContextSource = {
   mealTemplates?: MealTemplate[];
   standards?: AppStandards;
   externalActivities?: CoachExternalActivitySummary[];
+  nutritionLogsToday?: MealLog[];
 };
 
 type CoachIntent = {
@@ -59,11 +61,15 @@ export function buildCoachContext(message: string, source: CoachContextSource) {
   const last7Days = last14Days.slice(-7);
   const mealTemplates = source.mealTemplates ?? [];
   const todayMeals = selectedDay ? hydrateMeals(selectedDay.mealPlan, mealTemplates) : [];
+  const nutritionLogsToday = source.nutritionLogsToday ?? [];
   const todayMacroTarget = selectedDay
     ? createMacroTarget(source.profile, source.goals, selectedDay)
     : null;
   const todayMacroBalance = todayMacroTarget
     ? createMacroBalance(todayMacroTarget, todayMeals)
+    : null;
+  const loggedNutritionBalance = todayMacroTarget
+    ? createLoggedNutritionBalance(todayMacroTarget, nutritionLogsToday)
     : null;
 
   return {
@@ -94,13 +100,23 @@ export function buildCoachContext(message: string, source: CoachContextSource) {
     currentWeek: summarizeWeek(source.weekPlan, mealTemplates),
     plannedWorkouts: summarizeWorkouts(source.weekPlan.days.flatMap((day) => day.workouts)),
     loggedMealsToday: {
-      status: "not_modeled_separately",
-      note: "Die App unterscheidet aktuell noch nicht zwischen geloggten und geplanten Mahlzeiten; mealPlan wird als grobe Tagesplanung genutzt.",
-      meals: todayMeals
+      status: nutritionLogsToday.length > 0 ? "available_from_supabase" : "empty",
+      meals: nutritionLogsToday.map((log) => ({
+        time: log.time,
+        name: log.name,
+        source: log.source,
+        confidence: log.confidence,
+        manuallyConfirmed: log.manuallyConfirmed,
+        calories: log.values.calories,
+        proteinGrams: log.values.proteinGrams,
+        carbohydrateGrams: log.values.carbohydrateGrams,
+        fatGrams: log.values.fatGrams
+      }))
     },
     nutritionToday: {
       target: todayMacroTarget,
-      plannedBalance: todayMacroBalance
+      plannedBalance: todayMacroBalance,
+      loggedBalance: loggedNutritionBalance
     },
     recentTraining: summarizeTrainingWindow(last14Days),
     recentWeightTrend: summarizeWeightTrend(source.profile),
@@ -385,6 +401,37 @@ function createMacroBalance(
       unit: "g"
     },
     note: "Grobe Bilanz aus geplanten Mahlzeiten; kein grammgenaues Tracking."
+  };
+}
+
+function createLoggedNutritionBalance(
+  target: NonNullable<ReturnType<typeof createMacroTarget>>,
+  logs: MealLog[]
+) {
+  const totals = logs.reduce((sum, log) => ({
+    calories: sum.calories + log.values.calories,
+    protein: sum.protein + log.values.proteinGrams,
+    carbs: sum.carbs + log.values.carbohydrateGrams,
+    fat: sum.fat + (log.values.fatGrams ?? 0)
+  }), {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0
+  });
+
+  return {
+    loggedCalories: totals.calories,
+    loggedProteinGrams: totals.protein,
+    loggedCarbohydrateGrams: totals.carbs,
+    loggedFatGrams: totals.fat,
+    remainingProteinGrams: Math.max(0, target.protein.min - totals.protein),
+    remainingCarbohydrateGrams: Math.max(0, target.carbohydrates.min - totals.carbs),
+    caloriesVsTargetMin: totals.calories - target.calories.min,
+    caloriesVsTargetMax: totals.calories - target.calories.max,
+    note: logs.length > 0
+      ? "Bilanz aus persistenten Supabase Meal Logs."
+      : "Noch keine geloggten Mahlzeiten vorhanden."
   };
 }
 

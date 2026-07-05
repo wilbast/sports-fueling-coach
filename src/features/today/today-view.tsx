@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { PageHeader, Panel, Pill, StatCard } from "@/components/ui";
 import type { DailyBriefing } from "@/domain/briefing/types";
+import type { DailyNutritionSummary, MealLog } from "@/domain/nutrition/logs";
+import { sourceLabel } from "@/domain/nutrition/logs";
 import { ExternalActivityList, type ExternalActivitySummary } from "@/features/activities/external-activities";
 
 type TodayViewProps = {
@@ -19,6 +21,10 @@ type TodayViewProps = {
   externalActivities?: ExternalActivitySummary[];
   externalActivitiesLoading?: boolean;
   externalActivitiesError?: string | null;
+  nutritionLogs?: MealLog[];
+  nutritionSummary: DailyNutritionSummary;
+  nutritionLogsLoading?: boolean;
+  nutritionLogsError?: string | null;
   manualForecastCalories?: number;
   onManualForecastCaloriesChange?: (calories?: number) => void;
   fuelingQuickAdd?: React.ReactNode;
@@ -30,6 +36,10 @@ export function TodayView({
   externalActivities = [],
   externalActivitiesLoading = false,
   externalActivitiesError = null,
+  nutritionLogs = [],
+  nutritionSummary,
+  nutritionLogsLoading = false,
+  nutritionLogsError = null,
   manualForecastCalories,
   onManualForecastCaloriesChange,
   fuelingQuickAdd
@@ -104,6 +114,102 @@ export function TodayView({
           {fuelingQuickAdd}
         </div>
       ) : null}
+
+      <section className="mb-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <Panel>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-ink">Heute gegessen</h2>
+            <Pill tone={nutritionLogs.length > 0 ? "green" : "neutral"}>
+              {nutritionLogs.length} Einträge
+            </Pill>
+          </div>
+          {nutritionLogsError ? (
+            <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{nutritionLogsError}</p>
+          ) : nutritionLogsLoading ? (
+            <p className="rounded-xl bg-canvas px-3 py-2 text-sm text-muted">Mahlzeiten werden geladen...</p>
+          ) : nutritionLogs.length === 0 ? (
+            <p className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
+              Noch nichts geloggt. Nutze die Fueling-Kacheln oder den Chat, um Essen, Snacks oder Getränke für heute zu speichern.
+            </p>
+          ) : (
+            <div className="grid gap-2">
+              {nutritionLogs.map((log) => (
+                <article key={log.id} className="rounded-xl border border-line px-3 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-ink">{log.name}</p>
+                        <Pill tone={log.manuallyConfirmed ? "green" : log.source === "ai_estimate" ? "amber" : "blue"}>
+                          {sourceLabel(log.source, log.manuallyConfirmed)}
+                        </Pill>
+                      </div>
+                      <p className="mt-1 text-sm text-muted">
+                        {log.time ? `${log.time} · ` : ""}{log.description ?? "ohne Beschreibung"}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-ink">{formatNumber(log.values.calories)} kcal</p>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs text-muted sm:grid-cols-3">
+                    <span>{formatNumber(log.values.proteinGrams)} g Protein</span>
+                    <span>{formatNumber(log.values.carbohydrateGrams)} g Kohlenhydrate</span>
+                    <span>{formatNumber(log.values.fatGrams ?? 0)} g Fett</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        <Panel>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-ink">Tagesbilanz</h2>
+            <Pill tone="amber">Input vs. Output</Pill>
+          </div>
+          <div className="grid gap-3">
+            <BalanceRow
+              label="kcal aufgenommen"
+              value={`${formatNumber(nutritionSummary.intake.calories)} kcal`}
+              detail={`Ziel ${formatNumber(nutritionSummary.targets.caloriesMin)}-${formatNumber(nutritionSummary.targets.caloriesMax)} kcal`}
+              progress={nutritionSummary.progress.calories}
+            />
+            <BalanceRow
+              label="geschätzter Tagesverbrauch"
+              value={`${formatNumber(nutritionSummary.expenditureCalories)} kcal`}
+              detail={`Aufnahme vs. Verbrauch: ${formatSigned(nutritionSummary.deltas.caloriesVsExpenditure)} kcal`}
+              progress={Math.min(100, Math.round((nutritionSummary.intake.calories / Math.max(1, nutritionSummary.expenditureCalories)) * 100))}
+            />
+            <BalanceRow
+              label="Protein"
+              value={`${formatNumber(nutritionSummary.intake.proteinGrams)} / ${formatNumber(nutritionSummary.targets.proteinMin)} g`}
+              detail={`Rest ca. ${formatNumber(nutritionSummary.deltas.proteinRemaining)} g`}
+              progress={nutritionSummary.progress.protein}
+            />
+            <BalanceRow
+              label="Kohlenhydrate"
+              value={`${formatNumber(nutritionSummary.intake.carbohydrateGrams)} / ${formatNumber(nutritionSummary.targets.carbsMin)} g`}
+              detail={`Rest ca. ${formatNumber(nutritionSummary.deltas.carbsRemaining)} g`}
+              progress={nutritionSummary.progress.carbs}
+            />
+          </div>
+        </Panel>
+      </section>
+
+      <Panel className="mb-6 bg-coach-50">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-coach-700">
+            <Sparkles className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Was fehlt noch?</h2>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Heute fehlen noch ca. {formatNumber(nutritionSummary.deltas.proteinRemaining)} g Protein und {formatNumber(nutritionSummary.deltas.carbsRemaining)} g Kohlenhydrate.
+              {" "}{briefing.workouts.length > 0
+                ? "Da heute Training geplant oder berücksichtigt ist, sollten die fehlenden Kohlenhydrate nicht zu stark reduziert werden."
+                : "Ohne harte Einheit kannst du die Kohlenhydrate flexibler halten, Protein bleibt der wichtigste Anker."}
+            </p>
+          </div>
+        </div>
+      </Panel>
 
       <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <section>
@@ -282,4 +388,41 @@ function parseOptionalNumber(value: string): number | undefined {
 
   const parsed = Number.parseFloat(trimmedValue.replace(",", "."));
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function BalanceRow({
+  label,
+  value,
+  detail,
+  progress
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  progress: number;
+}) {
+  return (
+    <div className="rounded-xl bg-canvas px-3 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-sm font-semibold text-ink">{label}</p>
+        <p className="text-sm font-semibold text-ink">{value}</p>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
+        <div
+          className="h-full rounded-full bg-coach-600"
+          style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+        />
+      </div>
+      <p className="mt-2 text-xs leading-5 text-muted">{detail} · {Math.round(progress)}%</p>
+    </div>
+  );
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatSigned(value: number): string {
+  const formatted = formatNumber(Math.abs(value));
+  return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : formatted;
 }

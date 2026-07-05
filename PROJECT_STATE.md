@@ -91,6 +91,8 @@ Weitere Bereiche:
 - Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale und manuelle Synchronisation, providerneutrale Aktivitätstabellen
 - Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `equipment`, `sync_jobs`
 - Coach-Kontext: externe Aktivitäten werden serverseitig aus Supabase geladen und strukturiert zusammengefasst; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
+- Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros
+- AI-Fueling: `/api/nutrition/estimate` schätzt Nährwerte serverseitig mit AI oder transparentem Fallback; Werte werden als KI-Schätzung oder manuell bestätigt gekennzeichnet
 
 ## Bekannte Grenzen
 
@@ -98,6 +100,7 @@ Weitere Bereiche:
 - LocalStorage ist Demo-Persistenz, keine robuste Datenbank.
 - Bestehende Supabase-Zustände werden nicht automatisch überschrieben, sondern müssen bewusst zurückgesetzt werden.
 - JSONB-State ist für Planung/Fueling/Standards noch ein Übergangsmodell; externe Aktivitäten sind bereits normalisiert.
+- Standardmahlzeiten werden UI-seitig noch aus dem App-State angezeigt; die normalisierte `standard_meals`-Tabelle ist vorbereitet, aber noch nicht vollständig als Verwaltungsquelle angebunden.
 - Es gibt noch keine Validierung auf fachlich unmögliche Pläne.
 - Insights sind abgeleitet, aber noch nicht tief analysiert.
 - Es gibt noch keine automatisierten Unit-Tests.
@@ -106,4 +109,4 @@ Weitere Bereiche:
 
 ## Nächster sinnvoller Sprint
 
-Der nächste Sprint sollte Importdaten fachlich nutzbar machen: Aktivitätsanalysen, bessere Belastungstrends, Coach-Regeln mit realen Strava-Daten und automatisierte Sync-Jobs.
+Der nächste Sprint sollte Standardmahlzeiten und Rezepte vollständig auf die normalisierten Supabase-Tabellen migrieren und Bearbeiten/Korrigieren inklusive manueller Nährwertbestätigung ausbauen.

@@ -8,6 +8,8 @@ import { useAppState } from "@/features/app-state/app-state-provider";
 import { useExternalActivities } from "@/features/activities/external-activities";
 import { TodayView } from "@/features/today/today-view";
 import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
+import { createDailyNutritionSummary } from "@/domain/nutrition/logs";
+import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
 type TodayPageClientProps = {
   date?: string;
@@ -22,6 +24,11 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     isLoading: activitiesLoading,
     error: activitiesError
   } = useExternalActivities(activeDate, activeDate);
+  const {
+    logs: nutritionLogs,
+    isLoading: nutritionLogsLoading,
+    error: nutritionLogsError
+  } = useNutritionLogs(activeDate);
 
   useEffect(() => {
     if (date && date !== state.selectedDate) {
@@ -37,6 +44,10 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     actualActivities: activitiesByDate[activeDate] ?? [],
     energySettings: state.energySettings
   }), [activitiesByDate, activeDate, dayPlan, state.energySettings, state.goals, state.mealTemplates, state.profile]);
+  const nutritionSummary = useMemo(
+    () => createDailyNutritionSummary(nutritionLogs, briefing.nutritionTarget),
+    [briefing.nutritionTarget, nutritionLogs]
+  );
 
   return (
     <TodayView
@@ -45,6 +56,10 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
       externalActivities={activitiesByDate[activeDate] ?? []}
       externalActivitiesLoading={activitiesLoading}
       externalActivitiesError={activitiesError}
+      nutritionLogs={nutritionLogs}
+      nutritionSummary={nutritionSummary}
+      nutritionLogsLoading={nutritionLogsLoading}
+      nutritionLogsError={nutritionLogsError}
       manualForecastCalories={state.energySettings.manualDailyBurnForecastCaloriesByDate[activeDate]}
       onManualForecastCaloriesChange={(calories) => updateManualDailyBurnForecastCalories(activeDate, calories)}
       fuelingQuickAdd={<QuickFuelingPanel date={activeDate} compact />}
