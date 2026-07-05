@@ -1,0 +1,50 @@
+export type ActivitySourceProvider = "strava" | "garmin" | "apple_health" | "health_connect" | "polar" | "coros" | "oura" | "withings";
+
+export type ExternalActivity = {
+  id: string;
+  userId: string;
+  sourceProvider: ActivitySourceProvider;
+  sourceActivityId: string;
+  name: string;
+  description?: string;
+  sportType: string;
+  workoutType?: string;
+  startDate: string;
+  startDateLocal?: string;
+  timezone?: string;
+  utcOffset?: number;
+  elapsedTimeSeconds?: number;
+  movingTimeSeconds?: number;
+  distanceMeters?: number;
+  elevationGainMeters?: number;
+  calories?: number;
+  averageSpeedMps?: number;
+  maxSpeedMps?: number;
+  averagePaceSecondsPerKm?: number;
+  maxPaceSecondsPerKm?: number;
+  averageHeartrate?: number;
+  maxHeartrate?: number;
+  averageWatts?: number;
+  maxWatts?: number;
+  weightedAverageWatts?: number;
+  normalizedPower?: number;
+  averageCadence?: number;
+  maxCadence?: number;
+  relativeEffort?: number;
+  trainingLoad?: number;
+  temperatureCelsius?: number;
+  deviceName?: string;
+  gearId?: string;
+  gearName?: string;
+  isPrivate: boolean;
+  isCommute: boolean;
+  isIndoor: boolean;
+  isManual: boolean;
+};
+
+export type ExternalActivityStream = {
+  type: "time" | "distance" | "latlng" | "altitude" | "velocity_smooth" | "heartrate" | "cadence" | "watts" | "temp" | "moving" | "grade_smooth";
+  series: unknown[];
+  originalSize?: number;
+  resolution?: string;
+};

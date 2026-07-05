@@ -29,9 +29,10 @@ export function CoachChatPanel({
     profile: state.profile,
     goals: state.goals,
     weekPlan: state.weekPlan,
+    weekPlans: state.weekPlans,
     mealTemplates: state.mealTemplates,
     standards: state.standards
-  }), [state.goals, state.mealTemplates, state.profile, state.selectedDate, state.standards, state.weekPlan]);
+  }), [state.goals, state.mealTemplates, state.profile, state.selectedDate, state.standards, state.weekPlan, state.weekPlans]);
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

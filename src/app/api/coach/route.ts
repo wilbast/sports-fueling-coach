@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildCoachContext, type CoachContextSource } from "@/domain/coach/context-builder";
 import type { CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
-import type { UserGoals } from "@/domain/goals/types";
-import type { MealTemplate } from "@/domain/nutrition/types";
-import type { DayBlockType, DayContext, DayPlan, WeekPlan } from "@/domain/planning/types";
-import type { UserProfile } from "@/domain/profile/types";
+import type { DayBlockType, DayContext, DayPlan } from "@/domain/planning/types";
 import type { IsoDate } from "@/domain/shared";
-import type { AppStandards } from "@/domain/standards/types";
 import type {
   RunningFocus,
   RunningWorkoutType,
@@ -13,19 +10,14 @@ import type {
   WorkoutIntensity
 } from "@/domain/training/types";
 import { resolveAiJsonClient } from "@/lib/ai/server";
+import { loadRecentExternalActivitiesForCoach } from "@/lib/integrations/activity-sync";
+import { createClient as createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 type CoachRequestBody = {
   message?: string;
-  state?: {
-    selectedDate: string;
-    profile: UserProfile;
-    goals: UserGoals;
-    weekPlan: WeekPlan;
-    mealTemplates?: MealTemplate[];
-    standards?: AppStandards;
-  };
+  state?: CoachContextSource;
 };
 
 const sportValues: SportType[] = ["running", "padel", "swimming", "squash", "hiit", "strength", "cycling"];
@@ -47,14 +39,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nachricht oder App-Zustand fehlt." }, { status: 400 });
   }
 
+  const coachState = await resolveCoachSourceState(state);
   const aiClient = resolveAiJsonClient();
 
   if (aiClient.status === "disabled") {
-    return NextResponse.json(createFallbackCoachResponse(message, state));
+    return NextResponse.json(createFallbackCoachResponse(message, coachState));
   }
 
   if (aiClient.status === "invalid") {
-    const fallback = createFallbackCoachResponse(message, state);
+    const fallback = createFallbackCoachResponse(message, coachState);
 
     return NextResponse.json({
       ...fallback,
@@ -65,23 +58,81 @@ export async function POST(request: NextRequest) {
   try {
     const outputText = await aiClient.generateJson({
       systemPrompt: createSystemPrompt(),
-      userPayload: createCoachContext(message, state),
+      userPayload: buildCoachContext(message, coachState),
       schemaName: "sports_fueling_coach_plan_response",
       schema: createCoachResponseSchema()
     });
     const parsed = outputText ? JSON.parse(outputText) as Partial<CoachPlanResponse> : null;
 
-    return NextResponse.json(normalizeCoachResponse(parsed, state.weekPlan.days, message));
+    return NextResponse.json(normalizeCoachResponse(parsed, coachState.weekPlan.days, message));
   } catch {
-    return NextResponse.json(createFallbackCoachResponse(message, state));
+    return NextResponse.json(createFallbackCoachResponse(message, coachState));
   }
+}
+
+async function resolveCoachSourceState(requestState: CoachContextSource): Promise<CoachContextSource> {
+  if (!isSupabaseConfigured()) return requestState;
+
+  try {
+    const supabase = createSupabaseServerClient();
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    if (!user) return requestState;
+
+    const { data } = await supabase
+      .from("app_states")
+      .select("state")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const storedState = data?.state;
+
+    const externalActivities = await loadRecentExternalActivitiesForCoach(user.id);
+
+    if (isCoachContextSource(storedState)) {
+      return {
+        ...normalizeCoachSourceState(storedState, requestState),
+        externalActivities
+      };
+    }
+
+    return {
+      ...requestState,
+      externalActivities
+    };
+  } catch {
+    return requestState;
+  }
+
+  return requestState;
+}
+
+function isCoachContextSource(value: unknown): value is CoachContextSource {
+  if (!isRecord(value)) return false;
+
+  return typeof value.selectedDate === "string" &&
+    isRecord(value.profile) &&
+    isRecord(value.goals) &&
+    isRecord(value.weekPlan) &&
+    Array.isArray((value.weekPlan as { days?: unknown }).days);
+}
+
+function normalizeCoachSourceState(storedState: CoachContextSource, requestState: CoachContextSource): CoachContextSource {
+  return {
+    selectedDate: storedState.selectedDate ?? requestState.selectedDate,
+    profile: storedState.profile ?? requestState.profile,
+    goals: storedState.goals ?? requestState.goals,
+    weekPlan: storedState.weekPlan ?? requestState.weekPlan,
+    weekPlans: storedState.weekPlans?.length ? storedState.weekPlans : requestState.weekPlans,
+    mealTemplates: storedState.mealTemplates ?? requestState.mealTemplates,
+    standards: storedState.standards ?? requestState.standards
+  };
 }
 
 function createSystemPrompt(): string {
   return [
     "Du bist ein deutschsprachiger Sports & Fueling Coach für genau einen ambitionierten Freizeitsportler.",
     "Du bist zuerst Berater, nicht Formularausfüller. Antworte konkret, coachig, knapp und alltagstauglich.",
-    "Nutze alle übergebenen Informationen: Profil, Ziele, Wettkampfziel, aktuelle Woche, Training, Fueling, Standards und vorhandene Mahlzeiten.",
+    "Du erhältst einen serverseitig gebauten, strukturierten Coach-Kontext. Nutze nur diesen Kontext und fordere fehlende Details gezielt an.",
     "Erkenne zuerst den Intent: Info/Wunsch/Stimmung, konkrete Empfehlung, konkrete Planänderung oder Beratung/Unsicherheit.",
     "Empfehlungen sind immer erlaubt. Blockiere hilfreiche Antworten nicht, nur weil keine eindeutige Planänderung vorliegt.",
     "Trenne Empfehlungen und Planänderungen klar. Nutze outcomes für recommendation, clarification_question, plan_change oder no_change_note.",
@@ -98,66 +149,6 @@ function createSystemPrompt(): string {
     "Für Rezeptvorschläge nur dann add_meal Changes nutzen, wenn der Nutzer Übernahme oder Planung klar wünscht. Sonst Empfehlung ohne Planänderung.",
     "Keine medizinischen Diagnosen. Keine erfundenen externen Daten. Antworte ausschließlich als JSON im geforderten Schema."
   ].join("\n");
-}
-
-function createCoachContext(message: string, state: NonNullable<CoachRequestBody["state"]>) {
-  return {
-    userMessage: message,
-    selectedDate: state.selectedDate,
-    profile: {
-      firstName: state.profile.firstName,
-      bodyMetrics: state.profile.bodyMetrics,
-      primarySports: state.profile.primarySports,
-      coachingStyle: state.profile.coachingStyle,
-      family: state.profile.family,
-      job: state.profile.job,
-      raceGoal: state.profile.raceGoal
-    },
-    goals: state.goals,
-    week: state.weekPlan.days.map((day) => ({
-      date: day.date,
-      weekday: formatWeekday(day.date),
-      context: day.context,
-      workouts: day.workouts.map((workout) => ({
-        sport: workout.sport,
-        title: workout.title,
-        startTime: workout.startTime,
-        durationMinutes: workout.durationMinutes,
-        distanceKm: workout.distanceKm,
-        status: workout.status,
-        intensity: workout.intensity,
-        runningType: workout.runningType,
-        runningFocus: workout.runningFocus
-      })),
-      mealPlan: day.mealPlan,
-      note: day.note
-    })),
-    mealTemplates: state.mealTemplates?.map((meal) => ({
-      id: meal.id,
-      name: meal.name,
-      description: meal.description,
-      calories: meal.estimatedCalories,
-      protein: meal.estimatedProteinGrams,
-      tags: meal.tags
-    })) ?? [],
-    standards: {
-      planning: state.standards?.planning.map((standard) => ({
-        name: standard.name,
-        context: standard.context,
-        extraInfos: standard.extraInfos.map((info) => info.label)
-      })) ?? [],
-      workouts: state.standards?.workouts.map((workout) => ({
-        name: workout.name,
-        sport: workout.sport,
-        title: workout.title,
-        distanceKm: workout.distanceKm,
-        durationMinutes: workout.durationMinutes,
-        intensity: workout.intensity,
-        runningType: workout.runningType,
-        runningFocus: workout.runningFocus
-      })) ?? []
-    }
-  };
 }
 
 function createCoachResponseSchema() {
@@ -1277,11 +1268,6 @@ function toOptionalNumber(value: unknown): number | undefined {
   const parsed = Number.parseFloat(value.replace(",", "."));
 
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function formatWeekday(date: string): string {
-  return new Intl.DateTimeFormat("de-DE", { weekday: "long" })
-    .format(new Date(`${date}T12:00:00`));
 }
 
 function formatNumber(value: number): string {

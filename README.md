@@ -75,6 +75,7 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - unterstützte Änderungen: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten
 - Fueling- und Rezeptvorschläge sind Teil der Coach-Antwort
 - Laufen unterscheidet Laufart und Fokus
+- Coach-Kontext wird serverseitig gebaut und enthält importierte externe Aktivitäten nur als strukturierte Zusammenfassung
 
 Beispiel für Vercel:
 
@@ -83,6 +84,35 @@ AI_PROVIDER=openai
 AI_MODEL=gpt-5-mini
 AI_API_KEY=...
 ```
+
+## Strava-Integration
+
+- OAuth-Routen: `/api/integrations/strava/connect` und `/api/integrations/strava/callback`
+- Status-Route: `/api/integrations/strava/status`
+- manuelle Synchronisation: `/api/integrations/strava/sync`
+- Tokens werden ausschließlich serverseitig in `external_source_tokens` gespeichert
+- Aktivitäten werden in ein providerneutrales Domain-Modell unter `activities`, `activity_streams`, `equipment` und `sync_jobs` importiert
+- Strava ist nur der erste Adapter; das interne Modell ist für Garmin, Apple Health, Polar, Coros, Oura und ähnliche Quellen vorbereitet
+- Migration: `supabase/002_external_activity_sources.sql`
+
+Benötigte Env Vars:
+
+```text
+STRAVA_CLIENT_ID=...
+STRAVA_CLIENT_SECRET=...
+STRAVA_REDIRECT_URI=https://deine-domain.de/api/integrations/strava/callback
+STRAVA_OAUTH_STATE_SECRET=...
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+Optionale Sync-Limits:
+
+```text
+STRAVA_SYNC_MAX_PAGES=50
+STRAVA_STREAM_SYNC_LIMIT=50
+```
+
+Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, OAuth-State-Secret und Tokens dürfen nie im Client oder Repository landen.
 
 ## Architektur
 
@@ -93,8 +123,12 @@ src/
   config/       App-Konfiguration wie Navigation
   data/         Beta-Startzustand und austauschbare Demo-Daten
   domain/       fachliche Typen und Regeln ohne React
+    integrations/ providerneutrale Aktivitätsmodelle
   features/     produktnahe UI pro Bereich
     app-state/  App-Zustand und Persistenz
+    integrations/ externe Datenquellen im UI
+  lib/
+    integrations/ OAuth, Adapter und Synchronisation
 ```
 
 ## Lokal starten

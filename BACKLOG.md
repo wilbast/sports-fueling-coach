@@ -5,8 +5,9 @@
 - Erste Tests für die Briefing-Engine ergänzen.
 - Planvalidierung ergänzen: zu viele harte Einheiten, Reisetag plus harte Einheit, fehlende Erholung.
 - Coaching-Regeln für lange Läufe, Ruhetage, Restauranttage und harte Wochen verbessern.
-- Coach-Dialog für fortlaufende Essensanpassungen fachlich konzipieren.
 - UI-Smoke-Test als reproduzierbaren Script-Check ergänzen.
+- Strava-Import live mit echten Credentials und produktiver Supabase-Migration verifizieren.
+- Automatischen Sync-Job für externe Quellen entwerfen.
 
 ## P1
 
@@ -15,6 +16,9 @@
 - Trainingseinheiten stärker typisieren: Standard, Qualität, Long Run, Kraft, Spielsport.
 - Insights textlich besser erklären und nach Risiko priorisieren.
 - Lokale Datenexport-/Import-Option prüfen.
+- Aktivitätsanalysen aus realen Strava-Daten ableiten: Belastung, Umfang, Pace- und HF-Trends.
+- Equipment-Ansicht für Schuhe und Geräte ergänzen.
+- Weitere Provideradapter vorbereiten: Garmin, Apple Health, Health Connect.
 
 ## Erledigt
 
@@ -31,15 +35,17 @@
 - Profil, Ziele und Wettkampfziel lokal bearbeitbar gemacht.
 - Insights aus Trainings- und Zieldaten abgeleitet.
 - Browser-Smoke-Test für seitenübergreifende Persistenz durchgeführt.
+- Supabase Auth und RLS umgesetzt.
+- Coach-Chat mit serverseitiger AI-Schicht und Fallback umgesetzt.
+- Context Builder für strukturierte Coach-Kontexte umgesetzt.
+- Strava OAuth, Synchronisation und providerneutrales Aktivitätsmodell umgesetzt.
 
 ## P2
 
-- Supabase Auth und Datenbank.
-- Strava-Import.
 - OpenAI-Erklärungen für Coach-Hinweise.
 - Rezeptberechnung.
 - Foto- und Speisekartenanalyse.
-- Apple Health und Garmin.
+- Apple Health, Garmin, Polar, Coros, Oura und Withings anbinden.
 
 ## bewusst nicht jetzt
 

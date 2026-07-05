@@ -1,7 +1,7 @@
 # Project State
 
 **Datum:** 2026-07-05  
-**Status:** Beta-Übergang umgesetzt
+**Status:** Externe Datenbasis mit Strava-Integration aufgebaut
 
 ## Produktstand
 
@@ -26,6 +26,8 @@ Der aktuelle Sprint trennt Demo und Beta klarer: Online-Nutzer starten mit einem
 Der neueste Sprint erweitert den Coach von einer Planungseingabe zu einer eigenen Beratungsfläche unter `/coach`. Nachrichten werden über `/api/coach` verarbeitet, bei gesetztem `AI_PROVIDER` serverseitig über den konfigurierten Provider und sonst über einen lokalen Fallback-Parser. Der Coach nutzt Profil, Ziele, Training, Fueling, Standards und Wochenplanung, gibt konkrete Vorschläge und kann übernehmbare Änderungen für Training oder Fueling liefern.
 
 Die Trainingsplanung unterscheidet jetzt Laufen, Padel Tennis, Schwimmen, Squash, HIIT, Krafttraining und Radfahren. Laufen hat zusätzlich Laufart und Fokus: Lockerer Lauf, Tempodauerlauf, Fahrtspiel, Intervalltraining sowie Basis, Regeneration, Schwellentraining und VO2Max.
+
+Der aktuelle Sprint macht Strava zur ersten externen Datenquelle. Nutzer können Strava per OAuth verbinden, Aktivitäten initial und manuell synchronisieren und den Verbindungsstatus in den Einstellungen sehen. Intern werden die Aktivitäten nicht als isolierte Strava-Daten behandelt, sondern in ein providerneutrales Aktivitätsmodell gemappt. Damit ist die App auf weitere Quellen wie Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings vorbereitet.
 
 ## Verifikation
 
@@ -83,20 +85,22 @@ Weitere Bereiche:
 - Auth: Supabase SSR Clients, Middleware und Login-Seite
 - Persistenz online: JSONB-State in Supabase mit RLS pro `auth.uid()`
 - KI: providerunabhängige serverseitige AI-Schicht, aktueller Startprovider OpenAI, Fallback regelbasiert
-- Externe Sportintegrationen: keine
+- Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale und manuelle Synchronisation, providerneutrale Aktivitätstabellen
+- Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `equipment`, `sync_jobs`
+- Coach-Kontext: externe Aktivitäten werden serverseitig aus Supabase geladen und strukturiert zusammengefasst; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
 
 ## Bekannte Grenzen
 
-- Empfehlungen sind regelbasiert und grob.
+- Empfehlungen sind teilweise regelbasiert und fachlich noch grob.
 - LocalStorage ist Demo-Persistenz, keine robuste Datenbank.
 - Bestehende Supabase-Zustände werden nicht automatisch überschrieben, sondern müssen bewusst zurückgesetzt werden.
-- JSONB-State ist bewusst ein Übergangsmodell und noch kein normalisiertes Datenmodell.
+- JSONB-State ist für Planung/Fueling/Standards noch ein Übergangsmodell; externe Aktivitäten sind bereits normalisiert.
 - Es gibt noch keine Validierung auf fachlich unmögliche Pläne.
 - Insights sind abgeleitet, aber noch nicht tief analysiert.
 - Es gibt noch keine automatisierten Unit-Tests.
 - Der Coach bietet übernehmbare Vorschläge, hat aber noch keine Undo-Historie.
-- Es gibt noch keine Importfunktionen.
+- Strava-Synchronisation ist implementiert, aber ohne echte Strava-Credentials und produktive Supabase-Migration nicht live verifiziert.
 
 ## Nächster sinnvoller Sprint
 
-Der nächste Sprint sollte Testabdeckung und Regelqualität erhöhen: Briefing-Engine testen, Planvalidierung ergänzen und bessere Coaching-Regeln für harte Wochen, Ruhetage, Restauranttage und lange Läufe bauen.
+Der nächste Sprint sollte Importdaten fachlich nutzbar machen: Aktivitätsanalysen, bessere Belastungstrends, Coach-Regeln mit realen Strava-Daten und automatisierte Sync-Jobs.

@@ -88,7 +88,46 @@ Umgesetzt:
 - Wettkampfziel bearbeiten
 - Demo-Daten zurücksetzen
 
-## Sprint 7: Regelqualität und Tests
+## Sprint 7: Coach-Chat und Beta-Fundament
+
+Status: umgesetzt
+
+Ziel:
+
+Die App wird vom Demo-Mockup zur privaten Beta mit Login, persistentem App-State und einem beratenden Coach.
+
+Umgesetzt:
+
+- Supabase Auth und RLS
+- privater Online-Betrieb
+- leerer Beta-Zustand statt Demo-Daten
+- providerunabhängige AI-Schicht
+- Coach-Bereich mit Empfehlungen und übernehmbaren Vorschlägen
+- Trainingsarten und Laufdetails geschärft
+- serverseitiger Coach Context Builder
+
+## Sprint 8: Strava als erste externe Datenquelle
+
+Status: umgesetzt
+
+Ziel:
+
+Externe Trainingsdaten fließen dauerhaft in Supabase und werden Teil der persönlichen Wissensbasis.
+
+Umgesetzt:
+
+- Strava OAuth mit serverseitiger Token-Speicherung
+- automatischer Token-Refresh
+- initiale Synchronisation nach Connect
+- manuelle Synchronisation in den Einstellungen
+- de-duplizierende Upserts nach Provider und Activity-ID
+- providerneutrales Aktivitätsmodell
+- optionale Streams für spätere Tiefenanalysen
+- Sync-Jobs mit Status, Zählern und Fehlermeldungen
+- Coach-Kontext lädt relevante externe Aktivitäten aus Supabase
+- Architektur für Garmin, Apple Health, Health Connect, Polar, Coros, Oura und Withings vorbereitet
+
+## Sprint 9: Regelqualität und Tests
 
 Ziel:
 

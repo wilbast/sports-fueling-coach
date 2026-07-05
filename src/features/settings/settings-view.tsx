@@ -6,6 +6,7 @@ import type { PerformanceStrategy, RaceGoal, WeightStrategy } from "@/domain/goa
 import type { FamilyProfile, JobProfile } from "@/domain/profile/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { SignOutButton } from "@/features/auth/sign-out-button";
+import { StravaIntegrationPanel } from "@/features/integrations/strava-integration-panel";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export function SettingsView() {
@@ -343,7 +344,7 @@ export function SettingsView() {
               <div>
                 <h2 className="text-lg font-semibold text-ink">Integrationen</h2>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Pill tone="neutral">Strava später</Pill>
+                  <Pill tone="green">Strava bereit</Pill>
                   <Pill tone="blue">AI serverseitig</Pill>
                   <Pill tone={onlineMode ? "green" : "neutral"}>
                     {onlineMode ? "Supabase aktiv" : "Supabase lokal aus"}
@@ -352,6 +353,8 @@ export function SettingsView() {
               </div>
             </div>
           </Panel>
+
+          <StravaIntegrationPanel />
 
           <Panel>
             <h2 className="text-lg font-semibold text-ink">Datenzustand</h2>

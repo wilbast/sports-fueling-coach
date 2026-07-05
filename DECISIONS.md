@@ -189,3 +189,33 @@ KI-Aufrufe laufen ausschließlich über `src/lib/ai` und werden per `AI_PROVIDER
 Begründung:
 
 Die App soll fachlich nicht an einen einzelnen KI-Anbieter gekoppelt sein. Eine serverseitige Provider-Schicht hält API-Keys aus dem Client heraus, macht Vercel-Konfiguration explizit und erlaubt später Providerwechsel ohne Änderungen an Planning- oder Coach-UI. Der Key-Name bleibt bewusst generisch, damit ein Providerwechsel keine neue Secret-Nomenklatur im Produkt erzwingt.
+
+## ADR-020: KI-Coach erhält nur gebauten Coach-Kontext
+
+Entscheidung:
+
+Die Coach-API sendet keine Rohdatenbank und keinen vollständigen App-State an den AI-Provider. Stattdessen erstellt `src/domain/coach/context-builder.ts` serverseitig einen strukturierten, relevanten Coach-Kontext. Falls Supabase aktiv ist, lädt die API den gespeicherten App-State serverseitig und nutzt den Client-State nur als Fallback. OpenAI erhält ausschließlich das Ergebnis des Context Builders und keinen Supabase-Zugriff.
+
+Begründung:
+
+Der Coach braucht ausreichend Kontext, aber nicht maximale Rohdaten. Der Builder bündelt Standardkontext wie Profil, Ziele, heutigen Plan, aktuelle Woche, geplante Sporteinheiten, Tages-Fueling, grobe Makro-/Kalorienbilanz, 7-14 Tage Training und Ernährung, Gewichtstrend-Status, Strava-Status und bei Fueling/Alkohol auch den morgigen Plan. Deep Context wie frühere Wochen, Wettkampftrend oder wiederkehrende Muster wird nur bei passenden Anfragen ergänzt. So bleibt die KI hilfreicher, ohne unnötig viele private oder irrelevante Daten an den Provider zu senden.
+
+## ADR-021: Externe Gesundheitsdaten werden providerneutral importiert
+
+Entscheidung:
+
+Strava wird als erster Adapter implementiert, aber nicht als isoliertes Produktmodell. OAuth-Verbindungen liegen in `external_connections`, Secrets und Refresh Tokens in `external_source_tokens`, Aktivitäten in `activities`, optionale Zeitreihen in `activity_streams`, Ausrüstung in `equipment` und Synchronisationsläufe in `sync_jobs`. Die App mappt Strava-Daten beim Import auf ein gemeinsames Aktivitätsmodell mit `source_provider` und `source_activity_id`.
+
+Begründung:
+
+Sports & Fueling Coach soll langfristig eine persönliche Gesundheitsplattform werden. Dafür darf die Fachlogik nicht wissen müssen, ob eine Aktivität von Strava, Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings kommt. Provideradapter sind nur Ingestion-Schichten. Coach, Insights und spätere Trainingsanalysen lesen ausschließlich aus Supabase und arbeiten mit normalisierten Aktivitätsdaten. Tokens bleiben serverseitig, RLS schützt nutzerbezogene Daten, und die Token-Tabelle ist nicht für normale authentifizierte Clients freigegeben.
+
+## ADR-022: Strava-Synchronisation startet manuell und de-duplizierend
+
+Entscheidung:
+
+Nach dem OAuth-Callback startet die App eine initiale Synchronisation. Weitere Synchronisationen können in den Einstellungen manuell ausgelöst werden. Inkrementelle Läufe verwenden die zuletzt gespeicherte Aktivität als Zeitanker und speichern über eindeutige Provider-/Activity-IDs ohne Duplikate. Sync-Läufe schreiben Status, Zähler und Fehlermeldungen nach `sync_jobs`.
+
+Begründung:
+
+Ein manueller Sync ist für die Beta transparenter und einfacher zu debuggen als ein sofortiger Hintergrundjob. Die Tabellen- und Adapterstruktur ist trotzdem so gewählt, dass später ein geplanter Vercel Cron oder Supabase Edge Job denselben Sync-Service verwenden kann.
