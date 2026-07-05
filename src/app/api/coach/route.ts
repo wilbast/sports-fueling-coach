@@ -10,6 +10,7 @@ import type {
   SportType,
   WorkoutIntensity
 } from "@/domain/training/types";
+import { resolveAiJsonClient } from "@/lib/ai/server";
 
 export const runtime = "nodejs";
 
@@ -37,60 +38,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nachricht oder App-Zustand fehlt." }, { status: 400 });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  const aiClient = resolveAiJsonClient();
+
+  if (aiClient.status === "disabled") {
     return NextResponse.json(createFallbackCoachResponse(message, state));
   }
 
-  try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL ?? "gpt-5-mini",
-        input: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text: createSystemPrompt()
-              }
-            ]
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: JSON.stringify(createCoachContext(message, state))
-              }
-            ]
-          }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "sports_fueling_coach_plan_response",
-            strict: false,
-            schema: createCoachResponseSchema()
-          }
-        }
-      })
+  if (aiClient.status === "invalid") {
+    const fallback = createFallbackCoachResponse(message, state);
+
+    return NextResponse.json({
+      ...fallback,
+      assistantMessage: `${fallback.assistantMessage} ${aiClient.message} Ich nutze deshalb den regelbasierten Fallback.`
     });
+  }
 
-    if (!response.ok) {
-      const fallback = createFallbackCoachResponse(message, state);
-      return NextResponse.json({
-        ...fallback,
-        assistantMessage: `${fallback.assistantMessage} OpenAI war gerade nicht erreichbar, daher habe ich die Nachricht regelbasiert verarbeitet.`
-      });
-    }
-
-    const data = await response.json() as { output_text?: string; output?: unknown };
-    const outputText = data.output_text ?? extractOutputText(data.output);
+  try {
+    const outputText = await aiClient.generateJson({
+      systemPrompt: createSystemPrompt(),
+      userPayload: createCoachContext(message, state),
+      schemaName: "sports_fueling_coach_plan_response",
+      schema: createCoachResponseSchema()
+    });
     const parsed = outputText ? JSON.parse(outputText) as Partial<CoachPlanResponse> : null;
 
     return NextResponse.json(normalizeCoachResponse(parsed, state.weekPlan.days, message));
@@ -609,14 +578,4 @@ function formatWeekday(date: string): string {
 
 function formatNumber(value: number): string {
   return value.toLocaleString("de-DE", { maximumFractionDigits: 1 });
-}
-
-function extractOutputText(output: unknown): string | undefined {
-  if (!Array.isArray(output)) return undefined;
-
-  return output
-    .flatMap((item) => isRecord(item) && Array.isArray(item.content) ? item.content : [])
-    .map((content) => isRecord(content) && typeof content.text === "string" ? content.text : "")
-    .join("")
-    .trim() || undefined;
 }

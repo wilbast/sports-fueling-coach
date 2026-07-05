@@ -207,7 +207,7 @@ export function SettingsView() {
                 <h2 className="text-lg font-semibold text-ink">Integrationen</h2>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Pill tone="neutral">Strava später</Pill>
-                  <Pill tone="neutral">OpenAI später</Pill>
+                  <Pill tone="blue">AI serverseitig</Pill>
                   <Pill tone={onlineMode ? "green" : "neutral"}>
                     {onlineMode ? "Supabase aktiv" : "Supabase lokal aus"}
                   </Pill>

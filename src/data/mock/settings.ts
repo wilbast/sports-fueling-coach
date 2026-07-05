@@ -9,6 +9,6 @@ export const settingsGroups = [
   },
   {
     title: "Integrationen",
-    items: ["Strava später", "OpenAI später", "Datenschutz"]
+    items: ["Strava später", "AI-Provider serverseitig", "Datenschutz"]
   }
 ];

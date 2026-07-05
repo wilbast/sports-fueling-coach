@@ -179,3 +179,13 @@ Die Trainingsdomäne unterscheidet explizit Laufen, Padel Tennis, Schwimmen, Squ
 Begründung:
 
 Fueling, Belastungssteuerung und Coach-Fragen hängen stark davon ab, ob eine Einheit locker, schwellenorientiert, VO2Max-lastig oder spiel-/kraftbasiert ist. Ein einzelnes Feld `sport` reicht dafür nicht mehr.
+
+## ADR-019: AI-Provider werden serverseitig abstrahiert
+
+Entscheidung:
+
+KI-Aufrufe laufen ausschließlich über `src/lib/ai` und werden per `AI_PROVIDER` und `AI_MODEL` konfiguriert. Groq ist der erste aktive Provider. OpenAI und OpenRouter sind als providerkompatible Slots vorbereitet. Fehlt die AI-Konfiguration vollständig, nutzt die App den regelbasierten Fallback.
+
+Begründung:
+
+Die App soll fachlich nicht an einen einzelnen KI-Anbieter gekoppelt sein. Eine serverseitige Provider-Schicht hält API-Keys aus dem Client heraus, macht Vercel-Konfiguration explizit und erlaubt später Providerwechsel ohne Änderungen an Planning- oder Coach-UI.

@@ -64,11 +64,20 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 ## Coach-Chat
 
 - API-Route: `/api/coach`
-- serverseitiger OpenAI-Key über `OPENAI_API_KEY`
-- optionales Modell über `OPENAI_MODEL`
-- ohne Key nutzt die App einen regelbasierten lokalen Parser
+- Provider-Auswahl über `AI_PROVIDER`
+- Modell-Auswahl über `AI_MODEL`
+- Startprovider: `groq` mit `GROQ_API_KEY`
+- ohne AI-Env nutzt die App einen regelbasierten lokalen Parser
 - unterstützte Planänderungen: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten
 - Laufen unterscheidet Laufart und Fokus
+
+Beispiel für Vercel:
+
+```text
+AI_PROVIDER=groq
+AI_MODEL=llama-3.3-70b-versatile
+GROQ_API_KEY=...
+```
 
 ## Architektur
 
