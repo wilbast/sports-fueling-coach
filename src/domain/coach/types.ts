@@ -46,6 +46,8 @@ export type CoachMealDraft = {
   caloriesMax?: number;
   proteinMin?: number;
   proteinMax?: number;
+  carbohydrateGrams?: number;
+  fatGrams?: number;
   tags?: string[];
   saveAsStandard?: boolean;
 };

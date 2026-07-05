@@ -68,6 +68,11 @@ type MealTemplateDraft = {
   caloriesMax: number;
   proteinMin: number;
   proteinMax: number;
+  carbsGrams?: number;
+  fatGrams?: number;
+  nutritionSource?: MealTemplate["nutritionSource"];
+  nutritionConfidence?: MealTemplate["nutritionConfidence"];
+  nutritionRationale?: string;
   tags: string[];
 };
 
@@ -931,6 +936,11 @@ function applyCoachMealChange(state: AppState, date: IsoDate, mealDraft: CoachMe
     caloriesMax: mealDraft.caloriesMax ?? 650,
     proteinMin: mealDraft.proteinMin ?? 25,
     proteinMax: mealDraft.proteinMax ?? 45,
+    carbsGrams: mealDraft.carbohydrateGrams,
+    fatGrams: mealDraft.fatGrams,
+    nutritionSource: "ai_estimate",
+    nutritionConfidence: "medium",
+    nutritionRationale: "Aus Coach-Vorschlag übernommen.",
     tags: mealDraft.tags ?? ["coach"]
   }, mealDraft.saveAsStandard ?? false);
   const nextState = {
@@ -1093,6 +1103,15 @@ function createMealTemplate(template: MealTemplateDraft, isStandard: boolean): M
     description: template.description,
     estimatedCalories: { min: template.caloriesMin, max: template.caloriesMax, unit: "kcal" },
     estimatedProteinGrams: { min: template.proteinMin, max: template.proteinMax, unit: "g" },
+    estimatedCarbohydratesGrams: typeof template.carbsGrams === "number"
+      ? { min: template.carbsGrams, max: template.carbsGrams, unit: "g" }
+      : undefined,
+    estimatedFatGrams: typeof template.fatGrams === "number"
+      ? { min: template.fatGrams, max: template.fatGrams, unit: "g" }
+      : undefined,
+    nutritionSource: template.nutritionSource,
+    nutritionConfidence: template.nutritionConfidence,
+    nutritionRationale: template.nutritionRationale,
     tags: template.tags,
     isStandard
   };

@@ -339,7 +339,8 @@ function createSystemPrompt(): string {
     "Bei Beratungsfragen: analysiere, vergleiche Varianten, nenne Vor- und Nachteile und gib eine klare Empfehlung mit Begründung.",
     "Bei Info/Wunsch/Stimmung, z. B. Alkohol, Restaurant, Müdigkeit: keine automatische Planänderung. Gib kurze Einordnung und optionales Angebot.",
     "Bei Empfehlungsfragen: gib konkrete Mengen, Timing, Mahlzeiten, Snacks, Flüssigkeit oder Regenerationstipps ohne changes zu erzwingen.",
-    "Ausnahme für Fueling/Nutrition: Wenn der Nutzer eine konkrete Mahlzeit, ein Rezept oder ein Fueling zum Speichern beschreibt, darfst du einen speicherbaren Entwurf in suggestion.changes mit type=add_meal liefern. Das ist nur ein Vorschlag und wird erst bei Bestätigung gespeichert.",
+    "Ausnahme für Fueling/Nutrition: Wenn der Nutzer eine konkrete Mahlzeit, ein Rezept oder ein Fueling beschreibt, darfst du einen speicherbaren Entwurf in suggestion.changes mit type=add_meal liefern. Das ist nur ein Vorschlag und wird erst bei Bestätigung gespeichert.",
+    "Bei add_meal schätze alltagstauglich caloriesMin/caloriesMax, proteinMin/proteinMax, carbohydrateGrams und fatGrams. Stelle die Werte nicht als exakt dar.",
     "Bei unklarem Kontext: stelle maximal 1-2 gezielte Rückfragen.",
     "Erlaubte Sportarten: running, padel, swimming, squash, hiit, strength, cycling.",
     "Bei running nutze runningType: easy_run, tempo_run, fartlek oder intervals.",
@@ -667,6 +668,8 @@ function normalizeCoachPlanChange(change: unknown, days: DayPlan[]): CoachPlanCh
         caloriesMax: toOptionalNumber(meal.caloriesMax),
         proteinMin: toOptionalNumber(meal.proteinMin),
         proteinMax: toOptionalNumber(meal.proteinMax),
+        carbohydrateGrams: toOptionalNumber(meal.carbohydrateGrams),
+        fatGrams: toOptionalNumber(meal.fatGrams),
         tags: Array.isArray(meal.tags) ? meal.tags.filter((tag): tag is string => typeof tag === "string") : ["coach"],
         saveAsStandard: typeof meal.saveAsStandard === "boolean" ? meal.saveAsStandard : undefined
       }
@@ -846,7 +849,15 @@ function inferCoachMode(lower: string): CoachMode {
 
 function inferIntentDomain(lower: string): CoachOutcome["domain"] {
   if (lower.includes("fuel") || lower.includes("banane") || lower.includes("snack") || lower.includes("trinken")) return "fueling";
-  if (lower.includes("essen") || lower.includes("gegessen") || lower.includes("mahlzeit") || lower.includes("abend")) return "nutrition";
+  if (lower.includes("essen") ||
+    lower.includes("gegessen") ||
+    lower.includes("mahlzeit") ||
+    lower.includes("abend") ||
+    lower.includes("skyr") ||
+    lower.includes("quark") ||
+    lower.includes("joghurt") ||
+    lower.includes("bowl") ||
+    lower.includes("rezept")) return "nutrition";
   if (lower.includes("lauf") || lower.includes("training") || lower.includes("freeletics") || lower.includes("hiit")) return "training";
   if (lower.includes("müde") || lower.includes("muede") || lower.includes("erholung") || lower.includes("schlaf")) return "recovery";
   if (lower.includes("büro") || lower.includes("office") || lower.includes("urlaub") || lower.includes("frei") || lower.includes("reise")) return "planning";
@@ -979,6 +990,10 @@ function createFallbackSuggestions(
   const asksFueling = lower.includes("fuel") || lower.includes("essen") || lower.includes("rezept") || lower.includes("snack") || lower.includes("mahlzeit") || lower.includes("banane") || lower.includes("bier") || lower.includes("gegessen");
   const asksTraining = lower.includes("training") || lower.includes("lauf") || lower.includes("plan") || Boolean(workout);
 
+  if (includePlanChanges && mentionsConcreteFuelingDraft(lower)) {
+    suggestions.push(createFuelingLogSuggestion(message, date));
+  }
+
   if (mentionsAlcohol(lower)) {
     suggestions.push({
       id: "fueling-alcohol-balance",
@@ -1076,6 +1091,48 @@ function createFallbackSuggestions(
   return suggestions;
 }
 
+function createFuelingLogSuggestion(message: string, date: IsoDate): CoachSuggestion {
+  const lower = message.toLowerCase();
+  const calories = inferMealCalories(lower);
+  const protein = inferMealProtein(lower, calories);
+  const carbohydrateGrams = inferMealCarbs(lower, calories);
+  const fatGrams = Math.round(Math.max(3, (calories - protein * 4 - carbohydrateGrams * 4) / 9));
+  const mealName = createFallbackMealName(message);
+  const role = inferMealRoleFromText(lower);
+
+  return {
+    id: `fueling-log-${date}`,
+    title: `${mealName} hinzufügen`,
+    kind: "fueling",
+    summary: `Als groben Tages-Eintrag speichern: ca. ${calories} kcal, ${protein} g Protein, ${carbohydrateGrams} g Kohlenhydrate, ${fatGrams} g Fett.`,
+    rationale: "Das ist eine alltagstaugliche Schätzung aus deiner Beschreibung. Du kannst sie später genauer korrigieren.",
+    tips: [
+      "Zum Tagesstatus hinzufügen, wenn du es gegessen hast.",
+      "Als Standard speichern, wenn du diese Mahlzeit öfter nutzt."
+    ],
+    changes: [
+      {
+        type: "add_meal",
+        date,
+        meal: {
+          time: inferMealTimeFromText(lower),
+          role,
+          name: mealName,
+          description: message,
+          caloriesMin: Math.max(50, calories - 80),
+          caloriesMax: calories + 80,
+          proteinMin: Math.max(0, protein - 6),
+          proteinMax: protein + 6,
+          carbohydrateGrams,
+          fatGrams,
+          tags: ["coach", "fueling", role],
+          saveAsStandard: false
+        }
+      }
+    ]
+  };
+}
+
 function createRecipeSuggestion(date: IsoDate, hasRun: boolean, includePlanChange = false): CoachSuggestion {
   return {
     id: hasRun ? "recipe-run-bowl" : "recipe-protein-bowl",
@@ -1107,6 +1164,8 @@ function createRecipeSuggestion(date: IsoDate, hasRun: boolean, includePlanChang
           caloriesMax: hasRun ? 850 : 750,
           proteinMin: 35,
           proteinMax: 55,
+          carbohydrateGrams: hasRun ? 95 : 65,
+          fatGrams: 22,
           tags: ["coach", "recipe", hasRun ? "run-fueling" : "protein"],
           saveAsStandard: true
         }
@@ -1428,6 +1487,73 @@ function mentionsConcreteFuelingDraft(lower: string): boolean {
     lower.includes("skyr") ||
     lower.includes("quark") ||
     lower.includes("snack");
+}
+
+function createFallbackMealName(message: string): string {
+  const cleaned = message
+    .replace(/\b(ich habe|habe|gegessen|getrunken|bitte|heute|speichern|eintragen|hinzufügen|hinzufuegen)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return "Fueling-Eintrag";
+
+  return cleaned.length > 44 ? `${cleaned.slice(0, 41).trim()}...` : cleaned;
+}
+
+function inferMealCalories(lower: string): number {
+  const kcalMatch = lower.match(/(\d{2,4})\s*(kcal|kalorien)/);
+  if (kcalMatch) return clampNumber(Number.parseInt(kcalMatch[1], 10), 50, 2000);
+
+  if (lower.includes("bowl") || lower.includes("reis") || lower.includes("nudel") || lower.includes("kartoffel")) return 650;
+  if (lower.includes("skyr") || lower.includes("quark") || lower.includes("joghurt")) return 420;
+  if (lower.includes("banane") || lower.includes("riegel") || lower.includes("snack")) return 180;
+
+  return 500;
+}
+
+function inferMealProtein(lower: string, calories: number): number {
+  const proteinMatch = lower.match(/(\d{1,3})\s*(g\s*)?(protein|eiweiß|eiweiss)/);
+  if (proteinMatch) return clampNumber(Number.parseInt(proteinMatch[1], 10), 0, 140);
+
+  if (lower.includes("skyr") || lower.includes("quark") || lower.includes("protein")) return 35;
+  if (lower.includes("hähnchen") || lower.includes("haehnchen") || lower.includes("tofu") || lower.includes("ei")) return 40;
+
+  return calories >= 500 ? 25 : 6;
+}
+
+function inferMealCarbs(lower: string, calories: number): number {
+  if (lower.includes("banane") || lower.includes("müsli") || lower.includes("muesli") || lower.includes("reis") || lower.includes("nudel") || lower.includes("kartoffel")) {
+    return Math.round(calories * 0.55 / 4);
+  }
+
+  return Math.round(calories * 0.35 / 4);
+}
+
+function inferMealRoleFromText(lower: string): "breakfast" | "lunch" | "pre_workout" | "post_workout" | "dinner" {
+  if (lower.includes("frühstück") || lower.includes("fruehstueck") || lower.includes("morgens")) return "breakfast";
+  if (lower.includes("pre") || lower.includes("vor dem") || lower.includes("vor training") || lower.includes("vor lauf")) return "pre_workout";
+  if (lower.includes("post") || lower.includes("nach dem") || lower.includes("nach training") || lower.includes("nach lauf")) return "post_workout";
+  if (lower.includes("abend") || lower.includes("dinner")) return "dinner";
+
+  return "lunch";
+}
+
+function inferMealTimeFromText(lower: string): string {
+  const clockMatch = lower.match(/(?:um\s*)?(\d{1,2})[:.](\d{2})/);
+  if (clockMatch) return `${clockMatch[1].padStart(2, "0")}:${clockMatch[2]}`;
+
+  if (lower.includes("frühstück") || lower.includes("fruehstueck") || lower.includes("morgens")) return "08:00";
+  if (lower.includes("mittag")) return "12:30";
+  if (lower.includes("abend")) return "19:00";
+  if (lower.includes("snack") || lower.includes("banane")) return "16:30";
+
+  return "12:30";
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+
+  return Math.max(min, Math.min(max, value));
 }
 
 function mentionsTrainingWeekDiscussion(lower: string): boolean {

@@ -3,9 +3,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Lightbulb, Loader2, MessageCircle, SendHorizontal, Sparkles } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
-import type { CoachChatMessage, CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
+import type { CoachChatMessage, CoachMealDraft, CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import { describeWorkoutType } from "@/domain/training/catalog";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
 type CoachChatPanelProps = {
   title?: string;
@@ -18,7 +19,8 @@ export function CoachChatPanel({
   intro = "Frag nach Training, Fueling, Rezepten, Regeneration oder Tagesstrategie.",
   compact = false
 }: CoachChatPanelProps) {
-  const { state, applyCoachPlanChanges } = useAppState();
+  const { state, addMealEntry, addMealTemplate, applyCoachPlanChanges } = useAppState();
+  const { addLog } = useNutritionLogs(state.selectedDate);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<CoachChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -93,7 +95,7 @@ export function CoachChatPanel({
     setMessages((current) => [...current, userMessage]);
 
     if (isConfirmationMessage(message) && pendingPlan?.changes.length) {
-      applyCoachPlanChanges(pendingPlan.changes);
+      await applyConfirmedChanges(pendingPlan.changes);
       setAppliedIds((current) => [...current, pendingPlan.id]);
       setPendingPlan(null);
       const assistantMessage = createMessage("assistant", "Passt, ich habe den bestätigten Vorschlag in deinen Wochenplan übernommen.", "change");
@@ -161,13 +163,22 @@ export function CoachChatPanel({
     }
   }
 
-  function applyChanges(changes: CoachPlanChange[], id: string) {
+  async function applyChanges(changes: CoachPlanChange[], id: string, options?: { saveMealAsStandard?: boolean }) {
     if (changes.length === 0 || appliedIds.includes(id)) return;
 
-    applyCoachPlanChanges(changes);
+    await applyConfirmedChanges(changes, options);
     setAppliedIds((current) => [...current, id]);
     setPendingPlan(null);
-    const assistantMessage = createMessage("assistant", "Übernommen. Ich habe den bestätigten Vorschlag in deinen Wochenplan eingetragen.", "change");
+    const hasMealChanges = changes.some((change) => change.type === "add_meal");
+    const assistantMessage = createMessage(
+      "assistant",
+      hasMealChanges
+        ? options?.saveMealAsStandard
+          ? "Gespeichert. Ich habe das Fueling heute hinzugefügt und als Standard abgelegt."
+          : "Gespeichert. Ich habe das Fueling dem Tag hinzugefügt."
+        : "Übernommen. Ich habe den bestätigten Vorschlag in deinen Wochenplan eingetragen.",
+      "change"
+    );
     void persistLocalMessages([
       { role: "assistant", content: assistantMessage.content, mode: assistantMessage.mode }
     ]);
@@ -186,6 +197,43 @@ export function CoachChatPanel({
         questions: []
       }
     ]);
+  }
+
+  async function applyConfirmedChanges(changes: CoachPlanChange[], options?: { saveMealAsStandard?: boolean }) {
+    const planChanges = changes.filter((change) => change.type !== "add_meal");
+    const mealChanges = changes.filter((change): change is Extract<CoachPlanChange, { type: "add_meal" }> => change.type === "add_meal");
+
+    if (planChanges.length > 0) {
+      applyCoachPlanChanges(planChanges);
+    }
+
+    for (const change of mealChanges) {
+      const saveAsStandard = options?.saveMealAsStandard ?? change.meal.saveAsStandard ?? false;
+      const template = coachMealToTemplate(change.meal);
+      const savedLog = await addLog({
+        date: change.date,
+        time: change.meal.time,
+        name: change.meal.name,
+        description: change.meal.description,
+        source: "ai_estimate",
+        values: coachMealToNutritionValues(change.meal),
+        confidence: "medium",
+        rationale: "Aus dem Coach-Chat übernommen. Grobe Schätzung, nicht grammgenau.",
+        manuallyConfirmed: false,
+        rawInput: change.meal.description
+      });
+
+      if (savedLog && saveAsStandard) {
+        addMealTemplate(template);
+      }
+
+      if (!savedLog) {
+        addMealEntry(change.date, template, {
+          time: change.meal.time,
+          role: change.meal.role
+        }, { saveAsStandard });
+      }
+    }
   }
 
   return (
@@ -304,7 +352,7 @@ function ChatBubble({
 }: {
   message: CoachChatMessage;
   appliedIds: string[];
-  onApply: (changes: CoachPlanChange[], id: string) => void;
+  onApply: (changes: CoachPlanChange[], id: string, options?: { saveMealAsStandard?: boolean }) => void;
 }) {
   const isAssistant = message.role === "assistant";
   const directChangeId = `${message.id}-changes`;
@@ -360,7 +408,7 @@ function ChatBubble({
               key={suggestion.id}
               suggestion={suggestion}
               applied={appliedIds.includes(suggestion.id)}
-              onApply={() => onApply(suggestion.changes, suggestion.id)}
+              onApply={(options) => onApply(suggestion.changes, suggestion.id, options)}
             />
           ))}
         </div>
@@ -410,8 +458,11 @@ function SuggestionCard({
 }: {
   suggestion: CoachSuggestion;
   applied: boolean;
-  onApply: () => void;
+  onApply: (options?: { saveMealAsStandard?: boolean }) => void;
 }) {
+  const mealChanges = suggestion.changes.filter((change) => change.type === "add_meal");
+  const hasOnlyMealChanges = mealChanges.length > 0 && mealChanges.length === suggestion.changes.length;
+
   return (
     <article className="rounded-xl border border-line bg-white px-3 py-3">
       <div className="flex items-start gap-2">
@@ -439,18 +490,73 @@ function SuggestionCard({
       ) : null}
 
       {suggestion.changes.length > 0 ? (
-        <button
-          type="button"
-          onClick={onApply}
-          disabled={applied}
-          className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-coach-600 px-3 text-xs font-semibold text-white transition hover:bg-coach-500 disabled:cursor-not-allowed disabled:bg-muted"
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-          {applied ? "Übernommen" : "In Planung übernehmen"}
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onApply()}
+            disabled={applied}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-coach-600 px-3 text-xs font-semibold text-white transition hover:bg-coach-500 disabled:cursor-not-allowed disabled:bg-muted"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+            {applied ? "Übernommen" : hasOnlyMealChanges ? "Zum Tag hinzufügen" : "In Planung übernehmen"}
+          </button>
+          {hasOnlyMealChanges ? (
+            <button
+              type="button"
+              onClick={() => onApply({ saveMealAsStandard: true })}
+              disabled={applied}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-coach-200 bg-white px-3 text-xs font-semibold text-coach-800 transition hover:bg-coach-50 disabled:cursor-not-allowed disabled:text-muted"
+            >
+              {applied ? "Standard gespeichert" : "Zum Tag + Standard"}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </article>
   );
+}
+
+function coachMealToTemplate(meal: CoachMealDraft) {
+  return {
+    name: meal.name,
+    description: meal.description,
+    caloriesMin: meal.caloriesMin ?? meal.caloriesMax ?? 350,
+    caloriesMax: meal.caloriesMax ?? meal.caloriesMin ?? 650,
+    proteinMin: meal.proteinMin ?? meal.proteinMax ?? 20,
+    proteinMax: meal.proteinMax ?? meal.proteinMin ?? 35,
+    carbsGrams: meal.carbohydrateGrams,
+    fatGrams: meal.fatGrams,
+    nutritionSource: "ai_estimate" as const,
+    nutritionConfidence: "medium" as const,
+    nutritionRationale: "Aus dem Coach-Chat übernommen.",
+    tags: meal.tags ?? ["coach", "fueling"]
+  };
+}
+
+function coachMealToNutritionValues(meal: CoachMealDraft) {
+  const calories = midpoint(meal.caloriesMin, meal.caloriesMax, 500);
+  const proteinGrams = midpoint(meal.proteinMin, meal.proteinMax, 25);
+  const carbohydrateGrams = typeof meal.carbohydrateGrams === "number"
+    ? meal.carbohydrateGrams
+    : Math.round(calories * 0.45 / 4);
+  const fatGrams = typeof meal.fatGrams === "number"
+    ? meal.fatGrams
+    : Math.round(Math.max(3, (calories - proteinGrams * 4 - carbohydrateGrams * 4) / 9));
+
+  return {
+    calories,
+    proteinGrams,
+    carbohydrateGrams,
+    fatGrams
+  };
+}
+
+function midpoint(min: number | undefined, max: number | undefined, fallback: number): number {
+  if (typeof min === "number" && typeof max === "number") return Math.round((min + max) / 2);
+  if (typeof min === "number") return Math.round(min);
+  if (typeof max === "number") return Math.round(max);
+
+  return fallback;
 }
 
 function describeChange(change: CoachPlanChange): string {
