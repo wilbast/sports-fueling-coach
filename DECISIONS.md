@@ -219,3 +219,13 @@ Nach dem OAuth-Callback startet die App eine initiale Synchronisation. Weitere S
 Begründung:
 
 Ein manueller Sync ist für die Beta transparenter und einfacher zu debuggen als ein sofortiger Hintergrundjob. Die Tabellen- und Adapterstruktur ist trotzdem so gewählt, dass später ein geplanter Vercel Cron oder Supabase Edge Job denselben Sync-Service verwenden kann.
+
+## ADR-023: Coach Mode ist der Standard
+
+Entscheidung:
+
+Der Coach unterscheidet drei Modi: `coach`, `planning` und `change`. `coach` ist der Default für Beratung, Einschätzung, Varianten, Motivation und Erklärung. `planning` entsteht nur, wenn der Nutzer ausdrücklich einen konkreten Plan oder konkrete Einheiten erstellen will. `change` entsteht erst durch Bestätigung, z. B. per Übernahme-Button oder klare Bestätigungsnachricht.
+
+Begründung:
+
+Der Nutzer soll mit dem Coach frei diskutieren können, ohne Angst vor automatischen Datenänderungen zu haben. Ein persönlicher Trainer berät zuerst, macht dann einen Vorschlag und ändert erst nach Zustimmung den Plan. Deshalb werden Draft-Änderungen nur in Planning-Vorschlägen angezeigt und nicht gespeichert. Die tatsächliche Anwendung passiert ausschließlich clientseitig nach expliziter Bestätigung.

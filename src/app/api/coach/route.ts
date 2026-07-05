@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildCoachContext, type CoachContextSource } from "@/domain/coach/context-builder";
-import type { CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
+import type { CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import type { DayBlockType, DayContext, DayPlan } from "@/domain/planning/types";
 import type { IsoDate } from "@/domain/shared";
 import type {
@@ -26,7 +26,8 @@ const runningFocusValues: RunningFocus[] = ["base", "recovery", "threshold", "vo
 const intensityValues: WorkoutIntensity[] = ["easy", "moderate", "hard", "optional"];
 
 type CoachIntent = {
-  type: "info" | "recommendation" | "plan_change" | "advice";
+  type: "info" | "recommendation" | "advice";
+  mode: CoachMode;
   domain: CoachOutcome["domain"];
 };
 
@@ -131,12 +132,18 @@ function normalizeCoachSourceState(storedState: CoachContextSource, requestState
 function createSystemPrompt(): string {
   return [
     "Du bist ein deutschsprachiger Sports & Fueling Coach für genau einen ambitionierten Freizeitsportler.",
-    "Du bist zuerst Berater, nicht Formularausfüller. Antworte konkret, coachig, knapp und alltagstauglich.",
+    "Du bist zuerst persönlicher Coach, nicht Formularausfüller. Antworte ruhig, ehrlich, kompetent, pragmatisch und alltagstauglich.",
     "Du erhältst einen serverseitig gebauten, strukturierten Coach-Kontext. Nutze nur diesen Kontext und fordere fehlende Details gezielt an.",
-    "Erkenne zuerst den Intent: Info/Wunsch/Stimmung, konkrete Empfehlung, konkrete Planänderung oder Beratung/Unsicherheit.",
+    "Es gibt drei Modi: coach, planning, change.",
+    "Coach Mode ist der Standard und soll 80-90 Prozent der Gespräche abdecken: Beratung, Einschätzung, Alternativen, Motivation, Erklärung, Diskussion.",
+    "Im Zweifel IMMER mode=coach. Im Coach Mode dürfen changes und suggestion.changes leer sein. Keine Datenänderungen vorbereiten.",
+    "Planning Mode nur, wenn der Nutzer ausdrücklich einen konkreten Plan oder konkrete Einheiten erstellt haben will.",
+    "Im Planning Mode darfst du Vorschläge mit suggestion.changes als Draft liefern. Diese werden NICHT gespeichert, sondern nur zur Bestätigung angezeigt.",
+    "Change Mode nur bei ausdrücklicher Bestätigung wie übernehmen, speichern, passt oder ja. Ohne vorhandenen bestätigten Draft sollst du kurz nachfragen.",
+    "Niemals so antworten, als hättest du Daten geändert. Formuliere vor Bestätigung als Vorschlag.",
     "Empfehlungen sind immer erlaubt. Blockiere hilfreiche Antworten nicht, nur weil keine eindeutige Planänderung vorliegt.",
-    "Trenne Empfehlungen und Planänderungen klar. Nutze outcomes für recommendation, clarification_question, plan_change oder no_change_note.",
-    "Nutze changes nur, wenn Tag, Bereich und konkrete Änderung klar sind und der Nutzer eindeutig eine Änderung will.",
+    "Trenne Beratung, Vorschlag und Änderung klar. Nutze outcomes für recommendation, clarification_question, plan_change oder no_change_note.",
+    "Bei Beratungsfragen: analysiere, vergleiche Varianten, nenne Vor- und Nachteile und gib eine klare Empfehlung mit Begründung.",
     "Bei Info/Wunsch/Stimmung, z. B. Alkohol, Restaurant, Müdigkeit: keine automatische Planänderung. Gib kurze Einordnung und optionales Angebot.",
     "Bei Empfehlungsfragen: gib konkrete Mengen, Timing, Mahlzeiten, Snacks, Flüssigkeit oder Regenerationstipps ohne changes zu erzwingen.",
     "Bei unklarem Kontext: stelle maximal 1-2 gezielte Rückfragen.",
@@ -146,7 +153,7 @@ function createSystemPrompt(): string {
     "Erlaubte Tageskontexte: homeoffice, office, travel, free, vacation.",
     "Berücksichtige Familie, Job, Pendelzeit und Betreuungsaufwand, wenn du Zeitfenster, Intensität oder Fueling empfiehlst.",
     "Nutze nur Datumswerte aus der übergebenen Woche. Wenn der Nutzer einen Wochentag nennt, ordne ihn dieser Woche zu.",
-    "Für Rezeptvorschläge nur dann add_meal Changes nutzen, wenn der Nutzer Übernahme oder Planung klar wünscht. Sonst Empfehlung ohne Planänderung.",
+    "Für Rezeptvorschläge nur dann suggestion.changes nutzen, wenn mode=planning. Sonst Empfehlung ohne Planänderung.",
     "Keine medizinischen Diagnosen. Keine erfundenen externen Daten. Antworte ausschließlich als JSON im geforderten Schema."
   ].join("\n");
 }
@@ -155,8 +162,12 @@ function createCoachResponseSchema() {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["assistantMessage", "outcomes", "questions", "changes", "suggestions", "confidence"],
+    required: ["mode", "assistantMessage", "outcomes", "questions", "changes", "suggestions", "confidence"],
     properties: {
+      mode: {
+        type: "string",
+        enum: ["coach", "planning", "change"]
+      },
       assistantMessage: { type: "string" },
       outcomes: {
         type: "array",
@@ -246,6 +257,7 @@ function normalizeCoachResponse(
 ): CoachPlanResponse {
   if (!parsed) {
     return {
+      mode: "coach",
       assistantMessage: "Ich konnte die Antwort nicht sicher lesen. Sag mir bitte Tag, Training und groben Zweck noch einmal.",
       outcomes: [{
         type: "clarification_question",
@@ -261,24 +273,27 @@ function normalizeCoachResponse(
   }
 
   const intent = inferCoachIntent(originalMessage.toLowerCase());
-  const allowPlanChanges = intent.type === "plan_change";
+  const mode = normalizeResponseMode(parsed.mode, intent.mode);
+  const allowDraftChanges = mode === "planning";
+  const allowDirectChanges = false;
   const normalizedChanges = Array.isArray(parsed.changes)
     ? parsed.changes.map((change) => normalizeCoachPlanChange(change, days)).filter((change): change is CoachPlanChange => Boolean(change))
     : [];
-  const changes = allowPlanChanges ? normalizedChanges : [];
+  const changes = allowDirectChanges ? normalizedChanges : [];
   const normalizedSuggestions = Array.isArray(parsed.suggestions)
     ? parsed.suggestions.map((suggestion) => normalizeCoachSuggestion(suggestion, days)).filter((suggestion): suggestion is CoachSuggestion => Boolean(suggestion))
     : [];
-  const suggestions = allowPlanChanges
+  const suggestions = allowDraftChanges
     ? normalizedSuggestions
     : normalizedSuggestions.map((suggestion) => ({ ...suggestion, changes: [] }));
   const outcomes = Array.isArray(parsed.outcomes)
-    ? parsed.outcomes.map((outcome) => normalizeCoachOutcome(outcome, days, allowPlanChanges)).filter((outcome): outcome is CoachOutcome => Boolean(outcome))
+    ? parsed.outcomes.map((outcome) => normalizeCoachOutcome(outcome, days, allowDirectChanges)).filter((outcome): outcome is CoachOutcome => Boolean(outcome))
     : createOutcomesFromResponse(changes, suggestions, parsed.questions);
 
   return {
+    mode,
     assistantMessage: typeof parsed.assistantMessage === "string" && parsed.assistantMessage.trim()
-      ? parsed.assistantMessage.trim()
+      ? enforceModeBoundary(parsed.assistantMessage.trim(), mode)
       : createAssistantSummary(changes, suggestions, originalMessage),
     outcomes,
     questions: Array.isArray(parsed.questions)
@@ -290,6 +305,26 @@ function normalizeCoachResponse(
       ? parsed.confidence
       : changes.length > 0 || suggestions.length > 0 ? "medium" : "low"
   };
+}
+
+function normalizeResponseMode(value: unknown, fallback: CoachMode): CoachMode {
+  if (fallback === "coach") return "coach";
+  if (fallback === "planning") return "planning";
+  if (fallback === "change") return "change";
+
+  return fallback;
+}
+
+function enforceModeBoundary(message: string, mode: CoachMode): string {
+  if (mode === "coach" && !mentionsNoChange(message)) {
+    return `${message} Ich habe nichts am Plan geändert.`;
+  }
+
+  if (mode === "planning" && !mentionsProposal(message)) {
+    return `${message} Wenn dir der Vorschlag gefällt, kannst du ihn anschließend übernehmen.`;
+  }
+
+  return message;
 }
 
 function normalizeCoachOutcome(outcome: unknown, days: DayPlan[], allowPlanChanges: boolean): CoachOutcome | null {
@@ -483,24 +518,24 @@ function createFallbackCoachResponse(
   const intent = inferCoachIntent(lower);
   const date = resolveDate(lower, state.selectedDate, state.weekPlan.days);
   const day = state.weekPlan.days.find((item) => item.date === date);
-  const changes: CoachPlanChange[] = [];
-  const shouldCreatePlanChange = intent.type === "plan_change";
-  const context = shouldCreatePlanChange ? inferPlanningContext(lower) : null;
-  const extraInfo = shouldCreatePlanChange ? inferExtraInfo(message) : null;
-  const workout = shouldCreatePlanChange ? inferWorkout(message) : null;
+  const draftChanges: CoachPlanChange[] = [];
+  const shouldCreateDraft = intent.mode === "planning";
+  const context = shouldCreateDraft ? inferPlanningContext(lower) : null;
+  const extraInfo = shouldCreateDraft ? inferExtraInfo(message) : null;
+  const workout = shouldCreateDraft ? inferWorkout(message) : null;
   const questions: string[] = [];
 
-  const moveChange = shouldCreatePlanChange ? inferMoveWorkoutChange(lower, state, date) : null;
+  const moveChange = shouldCreateDraft ? inferMoveWorkoutChange(lower, state, date) : null;
 
   if (moveChange) {
-    changes.push(moveChange);
-  } else if (shouldCreatePlanChange) {
+    draftChanges.push(moveChange);
+  } else if (shouldCreateDraft) {
     if (context) {
-      changes.push({ type: "set_day_context", date, context });
+      draftChanges.push({ type: "set_day_context", date, context });
     }
 
     if (extraInfo) {
-      changes.push({
+      draftChanges.push({
         type: "add_extra_info",
         date,
         label: extraInfo.label,
@@ -511,7 +546,7 @@ function createFallbackCoachResponse(
     }
 
     if (workout) {
-      changes.push({
+      draftChanges.push({
         type: "add_workout",
         date,
         workout
@@ -527,45 +562,29 @@ function createFallbackCoachResponse(
     }
   }
 
-  if (shouldCreatePlanChange && changes.length === 0) {
-    questions.push("Was genau soll ich ändern: Training, Alltag oder Fueling?");
+  if (intent.mode === "change") {
+    questions.push("Was genau soll ich übernehmen? Nutze den Button am Vorschlag oder sag mir kurz, welchen Vorschlag du meinst.");
+  } else if (shouldCreateDraft && draftChanges.length === 0) {
+    questions.push("Soll ich daraus einen konkreten Wochenvorschlag machen oder erst Varianten vergleichen?");
   }
 
-  const suggestions = createFallbackSuggestions(message, state, date, shouldCreatePlanChange ? workout : inferWorkout(message), changes.length > 0);
-  const outcomes = createFallbackOutcomes(intent, message, date, day, suggestions, changes, questions);
+  const suggestions = createFallbackSuggestions(message, state, date, shouldCreateDraft ? workout : inferWorkout(message), shouldCreateDraft && draftChanges.length > 0);
+  const outcomes = createFallbackOutcomes(intent, message, date, day, suggestions, [], questions);
 
   return {
-    assistantMessage: createFallbackAssistantMessage(intent, message, day, suggestions, changes, questions),
+    mode: intent.mode,
+    assistantMessage: createFallbackAssistantMessage(intent, message, day, suggestions, draftChanges, questions),
     outcomes,
     questions,
-    changes,
+    changes: [],
     suggestions,
-    confidence: changes.length > 0 || suggestions.length > 0 || outcomes.length > 0 ? "medium" : "low"
+    confidence: draftChanges.length > 0 || suggestions.length > 0 || outcomes.length > 0 ? "medium" : "low"
   };
 }
 
 function inferCoachIntent(lower: string): CoachIntent {
   const domain = inferIntentDomain(lower);
-
-  if (lower.includes("verschieb") ||
-    lower.includes("verlege") ||
-    lower.includes("trage") ||
-    lower.includes("trag ") ||
-    lower.includes("plane") ||
-    lower.includes("füge") ||
-    lower.includes("fuege") ||
-    lower.includes("setze") ||
-    lower.includes("änder") ||
-    lower.includes("aender") ||
-    lower.includes("lösche") ||
-    lower.includes("loesche") ||
-    lower.includes("übernimm") ||
-    lower.includes("uebernimm") ||
-    lower.includes("in den plan") ||
-    lower.includes("einplanen") ||
-    lower.includes("plan anpassen")) {
-    return { type: "plan_change", domain };
-  }
+  const mode = inferCoachMode(lower);
 
   if (lower.includes("empfehl") ||
     lower.includes("gib mir") ||
@@ -574,17 +593,54 @@ function inferCoachIntent(lower: string): CoachIntent {
     lower.includes("was mache") ||
     lower.includes("wie soll") ||
     lower.includes("fueling")) {
-    return { type: "recommendation", domain };
+    return { type: "recommendation", mode, domain };
   }
 
   if (lower.includes("soll ich") ||
     lower.includes("macht es sinn") ||
     lower.includes("unsicher") ||
     lower.includes("?")) {
-    return { type: "advice", domain };
+    return { type: "advice", mode, domain };
   }
 
-  return { type: "info", domain };
+  return { type: "info", mode, domain };
+}
+
+function inferCoachMode(lower: string): CoachMode {
+  const confirmationPattern = /^(ja|jep|yes|ok|okay|passt|genau|klingt gut|übernehmen|uebernehmen|speichern|eintragen|mach das|so machen|nimm variante [abc])[\s.!]*$/;
+  const asksForAdvice = lower.includes("was empfiehlst du") ||
+    lower.includes("was würdest du") ||
+    lower.includes("was wuerdest du") ||
+    lower.includes("soll ich") ||
+    lower.includes("macht es sinn") ||
+    lower.includes("deine einschätzung") ||
+    lower.includes("deine einschaetzung") ||
+    lower.includes("alternativen") ||
+    lower.includes("variante") && lower.includes("?");
+  const explicitPlanning = lower.includes("erstelle mir") ||
+    lower.includes("erstell mir") ||
+    lower.includes("plane meine woche") ||
+    lower.includes("plan meine woche") ||
+    lower.includes("mach daraus") ||
+    lower.includes("trainingsplan erstellen") ||
+    lower.includes("wochenplan erstellen") ||
+    lower.includes("konkrete einheiten") ||
+    lower.includes("konkreten plan") ||
+    lower.includes("verschieb") ||
+    lower.includes("verlege") ||
+    lower.includes("füge") ||
+    lower.includes("fuege") ||
+    lower.includes("in den plan");
+
+  if (confirmationPattern.test(lower) || lower.includes("übernimm den vorschlag") || lower.includes("uebernimm den vorschlag")) {
+    return "change";
+  }
+
+  if (explicitPlanning && !asksForAdvice) {
+    return "planning";
+  }
+
+  return "coach";
 }
 
 function inferIntentDomain(lower: string): CoachOutcome["domain"] {
@@ -616,7 +672,7 @@ function createFallbackOutcomes(
     }));
   }
 
-  if (questions.length > 0 && intent.type === "plan_change") {
+  if (questions.length > 0 && (intent.mode === "planning" || intent.mode === "change")) {
     return [{
       type: "clarification_question",
       domain: intent.domain,
@@ -654,14 +710,23 @@ function createFallbackAssistantMessage(
   questions: string[]
 ): string {
   if (changes.length > 0) {
-    return `Planänderung vorbereitet: ${changes.map(summaryFromChange).join(" ")} Du kannst sie übernehmen.`;
+    return `Ich habe daraus einen Vorschlag gebaut: ${changes.map(summaryFromChange).join(" ")} Ich habe noch nichts gespeichert. Wenn er passt, kannst du ihn übernehmen.`;
   }
 
-  if (questions.length > 0 && intent.type === "plan_change") {
+  if (questions.length > 0 && (intent.mode === "planning" || intent.mode === "change")) {
     return `Ich ändere noch nichts. ${questions.slice(0, 2).join(" ")}`;
   }
 
   const lower = message.toLowerCase();
+
+  if (mentionsTrainingWeekDiscussion(lower) && intent.mode === "coach") {
+    return [
+      "Ich würde das zuerst als Belastungswoche betrachten, nicht als reine Terminfrage.",
+      "Variante A: Dienstag Intervalle, Freitag Freeletics, Samstag langer GA1-Lauf. Vorteil: Sonntag bleibt frei für Erholung und Familie; Nachteil: Freitag/Samstag ist ein enger Belastungsblock.",
+      "Variante B: Dienstag Intervalle, Samstag langer Lauf, Sonntag Freeletics sehr moderat. Vorteil: mehr Abstand vor dem langen Lauf; Nachteil: Sonntag ist dann nicht wirklich frei.",
+      "Meine Empfehlung wäre Variante A, aber Freeletics am Freitag bewusst nicht maximal hart. So bleiben die Intervalle hochwertig, der lange Lauf bekommt gutes Fueling, und Sonntag kann echte Regeneration sein. Ich habe nichts am Plan geändert. Wenn dir Variante A gefällt, kann ich daraus einen konkreten Wochenvorschlag machen."
+    ].join(" ");
+  }
 
   if (mentionsAlcohol(lower)) {
     return "Okay. Empfehlung: Iss heute etwas leichter, aber proteinreich, und trink pro Bier etwa ein Glas Wasser dazu. Wenn Training geplant ist, vorher nicht nüchtern bleiben. Ich habe nichts am Plan geändert.";
@@ -1148,6 +1213,33 @@ function mentionsAlcohol(lower: string): boolean {
     lower.includes("alkohol") ||
     lower.includes("drink") ||
     lower.includes("trinken gehen");
+}
+
+function mentionsTrainingWeekDiscussion(lower: string): boolean {
+  return (lower.includes("woche") || lower.includes("wochenplanung") || lower.includes("nächste woche") || lower.includes("naechste woche")) &&
+    (lower.includes("intervall") || lower.includes("langer lauf") || lower.includes("freeletics") || lower.includes("training")) &&
+    (lower.includes("empfiehl") || lower.includes("was würdest") || lower.includes("was wuerdest") || lower.includes("variante") || lower.includes("?"));
+}
+
+function mentionsNoChange(message: string): boolean {
+  const lower = message.toLowerCase();
+
+  return lower.includes("nichts am plan geändert") ||
+    lower.includes("nichts gespeichert") ||
+    lower.includes("keine änderung") ||
+    lower.includes("keine aenderung") ||
+    lower.includes("ich ändere nichts") ||
+    lower.includes("ich aendere nichts");
+}
+
+function mentionsProposal(message: string): boolean {
+  const lower = message.toLowerCase();
+
+  return lower.includes("vorschlag") ||
+    lower.includes("übernehmen") ||
+    lower.includes("uebernehmen") ||
+    lower.includes("nichts gespeichert") ||
+    lower.includes("noch nicht gespeichert");
 }
 
 function domainFromChange(change: CoachPlanChange): CoachOutcome["domain"] {

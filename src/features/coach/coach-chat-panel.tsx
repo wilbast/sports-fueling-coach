@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { CheckCircle2, Lightbulb, Loader2, MessageCircle, SendHorizontal, Sparkles } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
-import type { CoachChatMessage, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
+import type { CoachChatMessage, CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import { describeWorkoutType } from "@/domain/training/catalog";
 import { useAppState } from "@/features/app-state/app-state-provider";
 
@@ -24,6 +24,7 @@ export function CoachChatPanel({
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
+  const [pendingPlan, setPendingPlan] = useState<{ id: string; changes: CoachPlanChange[] } | null>(null);
   const payloadState = useMemo(() => ({
     selectedDate: state.selectedDate,
     profile: state.profile,
@@ -46,6 +47,29 @@ export function CoachChatPanel({
     const userMessage = createMessage("user", message);
     setMessages((current) => [...current, userMessage]);
 
+    if (isConfirmationMessage(message) && pendingPlan?.changes.length) {
+      applyCoachPlanChanges(pendingPlan.changes);
+      setAppliedIds((current) => [...current, pendingPlan.id]);
+      setPendingPlan(null);
+      setMessages((current) => [
+        ...current,
+        {
+          ...createMessage("assistant", "Passt, ich habe den bestätigten Vorschlag in deinen Wochenplan übernommen.", "change"),
+          outcomes: [{
+            type: "plan_change",
+            domain: "planning",
+            summary: "Bestätigter Coach-Vorschlag wurde übernommen.",
+            planChange: null
+          }],
+          changes: [],
+          suggestions: [],
+          questions: []
+        }
+      ]);
+      setIsSending(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/coach", {
         method: "POST",
@@ -61,11 +85,15 @@ export function CoachChatPanel({
       }
 
       const result = await response.json() as CoachPlanResponse;
+      const proposalChanges = collectSuggestionChanges(result.suggestions);
+      if (result.mode === "planning" && proposalChanges.length > 0) {
+        setPendingPlan({ id: `proposal-${Date.now().toString(36)}`, changes: proposalChanges });
+      }
 
       setMessages((current) => [
         ...current,
         {
-          ...createMessage("assistant", result.assistantMessage),
+          ...createMessage("assistant", result.assistantMessage, result.mode),
           outcomes: result.outcomes,
           changes: result.changes,
           suggestions: result.suggestions,
@@ -84,6 +112,22 @@ export function CoachChatPanel({
 
     applyCoachPlanChanges(changes);
     setAppliedIds((current) => [...current, id]);
+    setPendingPlan(null);
+    setMessages((current) => [
+      ...current,
+      {
+        ...createMessage("assistant", "Übernommen. Ich habe den bestätigten Vorschlag in deinen Wochenplan eingetragen.", "change"),
+        outcomes: [{
+          type: "plan_change",
+          domain: "planning",
+          summary: "Vorschlag nach Bestätigung übernommen.",
+          planChange: null
+        }],
+        changes: [],
+        suggestions: [],
+        questions: []
+      }
+    ]);
   }
 
   return (
@@ -115,6 +159,12 @@ export function CoachChatPanel({
           />
         ))}
       </div>
+
+      {pendingPlan ? (
+        <div className="mt-3 rounded-xl border border-coach-100 bg-coach-50 px-3 py-2 text-xs leading-5 text-coach-800">
+          Vorschlag wartet auf Bestätigung. Nutze den Button am Vorschlag oder antworte mit „passt“.
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -167,10 +217,11 @@ function ChatBubble({
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
           {isAssistant ? "Coach" : "Du"}
         </p>
+        {isAssistant && message.mode ? <ModePill mode={message.mode} /> : null}
       </div>
       <p className="text-sm leading-6 text-ink">{message.content}</p>
 
-      {message.changes && message.changes.length > 0 ? (
+      {message.mode === "change" && message.changes && message.changes.length > 0 ? (
         <div className="mt-3 grid gap-2">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Planänderung</p>
           {message.changes.map((change, index) => (
@@ -223,6 +274,21 @@ function ChatBubble({
       ) : null}
     </article>
   );
+}
+
+function ModePill({ mode }: { mode: CoachMode }) {
+  const labels: Record<CoachMode, string> = {
+    coach: "Beratung",
+    planning: "Vorschlag",
+    change: "Plan geändert"
+  };
+  const tones: Record<CoachMode, "blue" | "amber" | "green"> = {
+    coach: "blue",
+    planning: "amber",
+    change: "green"
+  };
+
+  return <Pill tone={tones[mode]}>{labels[mode]}</Pill>;
 }
 
 function OutcomeRow({ outcome }: { outcome: CoachOutcome }) {
@@ -335,13 +401,26 @@ function kindLabel(kind: CoachSuggestion["kind"]): string {
   return labels[kind];
 }
 
-function createMessage(role: CoachChatMessage["role"], content: string): CoachChatMessage {
+function createMessage(role: CoachChatMessage["role"], content: string, mode?: CoachMode): CoachChatMessage {
   return {
     id: `${role}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     role,
     content,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    mode
   };
+}
+
+function collectSuggestionChanges(suggestions: CoachSuggestion[]): CoachPlanChange[] {
+  return suggestions.flatMap((suggestion) => suggestion.changes);
+}
+
+function isConfirmationMessage(message: string): boolean {
+  const lower = message.trim().toLowerCase();
+
+  return /^(ja|jep|yes|ok|okay|passt|genau|klingt gut|übernehmen|uebernehmen|speichern|eintragen|mach das|so machen|nimm variante [abc])[\s.!]*$/.test(lower) ||
+    lower.includes("übernimm den vorschlag") ||
+    lower.includes("uebernimm den vorschlag");
 }
 
 function formatDate(date: string): string {

@@ -42,7 +42,8 @@ export type CoachContextSource = {
 };
 
 type CoachIntent = {
-  type: "info" | "recommendation" | "plan_change" | "advice";
+  mode: "coach" | "planning" | "change";
+  type: "info" | "recommendation" | "advice";
   domain: "training" | "fueling" | "nutrition" | "planning" | "recovery" | "general";
   needsTomorrow: boolean;
   needsDeepContext: boolean;
@@ -167,17 +168,7 @@ function mapsToIntentDomain(activity: CoachExternalActivitySummary, domain: Coac
 function inferCoachContextIntent(message: string): CoachIntent {
   const lower = message.toLowerCase();
   const domain = inferDomain(lower);
-  const isPlanChange = lower.includes("verschieb") ||
-    lower.includes("verlege") ||
-    lower.includes("trage") ||
-    lower.includes("plane") ||
-    lower.includes("füge") ||
-    lower.includes("fuege") ||
-    lower.includes("setze") ||
-    lower.includes("änder") ||
-    lower.includes("aender") ||
-    lower.includes("einplanen") ||
-    lower.includes("plan anpassen");
+  const mode = inferCoachContextMode(lower);
   const isRecommendation = lower.includes("empfehl") ||
     lower.includes("gib mir") ||
     lower.includes("tipps") ||
@@ -195,11 +186,42 @@ function inferCoachContextIntent(message: string): CoachIntent {
     lower.includes("entwicklung");
 
   return {
-    type: isPlanChange ? "plan_change" : isRecommendation ? "recommendation" : isAdvice ? "advice" : "info",
+    mode,
+    type: isRecommendation ? "recommendation" : isAdvice ? "advice" : "info",
     domain,
     needsTomorrow: mentionsAlcohol || domain === "fueling" || domain === "nutrition",
     needsDeepContext,
   };
+}
+
+function inferCoachContextMode(lower: string): CoachIntent["mode"] {
+  const confirmationPattern = /^(ja|jep|yes|ok|okay|passt|genau|klingt gut|übernehmen|uebernehmen|speichern|eintragen|mach das|so machen|nimm variante [abc])[\s.!]*$/;
+  const asksForAdvice = lower.includes("was empfiehlst du") ||
+    lower.includes("was würdest du") ||
+    lower.includes("was wuerdest du") ||
+    lower.includes("soll ich") ||
+    lower.includes("macht es sinn") ||
+    lower.includes("alternativen") ||
+    (lower.includes("variante") && lower.includes("?"));
+  const explicitPlanning = lower.includes("erstelle mir") ||
+    lower.includes("erstell mir") ||
+    lower.includes("plane meine woche") ||
+    lower.includes("plan meine woche") ||
+    lower.includes("mach daraus") ||
+    lower.includes("trainingsplan erstellen") ||
+    lower.includes("wochenplan erstellen") ||
+    lower.includes("konkrete einheiten") ||
+    lower.includes("konkreten plan") ||
+    lower.includes("verschieb") ||
+    lower.includes("verlege") ||
+    lower.includes("füge") ||
+    lower.includes("fuege") ||
+    lower.includes("in den plan");
+
+  if (confirmationPattern.test(lower) || lower.includes("übernimm den vorschlag") || lower.includes("uebernimm den vorschlag")) return "change";
+  if (explicitPlanning && !asksForAdvice) return "planning";
+
+  return "coach";
 }
 
 function inferDomain(lower: string): CoachIntent["domain"] {

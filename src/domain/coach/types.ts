@@ -15,11 +15,14 @@ export type CoachChatMessage = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  mode?: CoachMode;
   outcomes?: CoachOutcome[];
   changes?: CoachPlanChange[];
   suggestions?: CoachSuggestion[];
   questions?: string[];
 };
+
+export type CoachMode = "coach" | "planning" | "change";
 
 export type CoachWorkoutDraft = {
   sport: SportType;
@@ -104,6 +107,7 @@ export type CoachSuggestion = {
 };
 
 export type CoachPlanResponse = {
+  mode: CoachMode;
   assistantMessage: string;
   outcomes: CoachOutcome[];
   questions: string[];

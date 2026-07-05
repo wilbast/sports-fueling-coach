@@ -71,7 +71,10 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - ohne AI-Env nutzt die App einen regelbasierten lokalen Parser
 - eigener Coach-Bereich unter `/coach`
 - Coach nutzt Profil, Ziele, Training, Fueling, Standards und Wochenplanung als Kontext
-- Vorschläge können bewusst in Training oder Fueling übernommen werden
+- Coach Mode ist der Standard: Beratung, Einschätzung, Varianten und Empfehlungen ohne Planänderung
+- Planning Mode entsteht nur bei ausdrücklichem Wunsch nach einem konkreten Plan
+- Change Mode entsteht erst durch Bestätigung per Button oder klare Übernahme-Nachricht
+- Vorschläge können bewusst in Training oder Fueling übernommen werden, werden aber nie automatisch gespeichert
 - unterstützte Änderungen: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten
 - Fueling- und Rezeptvorschläge sind Teil der Coach-Antwort
 - Laufen unterscheidet Laufart und Fokus

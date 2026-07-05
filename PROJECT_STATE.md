@@ -25,6 +25,8 @@ Der aktuelle Sprint trennt Demo und Beta klarer: Online-Nutzer starten mit einem
 
 Der neueste Sprint erweitert den Coach von einer Planungseingabe zu einer eigenen Beratungsfläche unter `/coach`. Nachrichten werden über `/api/coach` verarbeitet, bei gesetztem `AI_PROVIDER` serverseitig über den konfigurierten Provider und sonst über einen lokalen Fallback-Parser. Der Coach nutzt Profil, Ziele, Training, Fueling, Standards und Wochenplanung, gibt konkrete Vorschläge und kann übernehmbare Änderungen für Training oder Fueling liefern.
 
+Der aktuelle Coach-Sprint schärft die Benutzererfahrung grundlegend: Coach Mode ist der Standard und dient reiner Beratung. Planning Mode erzeugt nur Vorschläge. Change Mode entsteht erst durch ausdrückliche Bestätigung, z. B. per Button oder kurzer Übernahme-Nachricht. Damit kann der Nutzer frei mit dem Coach diskutieren, ohne Angst vor automatischen Planänderungen zu haben.
+
 Die Trainingsplanung unterscheidet jetzt Laufen, Padel Tennis, Schwimmen, Squash, HIIT, Krafttraining und Radfahren. Laufen hat zusätzlich Laufart und Fokus: Lockerer Lauf, Tempodauerlauf, Fahrtspiel, Intervalltraining sowie Basis, Regeneration, Schwellentraining und VO2Max.
 
 Der aktuelle Sprint macht Strava zur ersten externen Datenquelle. Nutzer können Strava per OAuth verbinden, Aktivitäten initial und manuell synchronisieren und den Verbindungsstatus in den Einstellungen sehen. Intern werden die Aktivitäten nicht als isolierte Strava-Daten behandelt, sondern in ein providerneutrales Aktivitätsmodell gemappt. Damit ist die App auf weitere Quellen wie Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings vorbereitet.
@@ -85,6 +87,7 @@ Weitere Bereiche:
 - Auth: Supabase SSR Clients, Middleware und Login-Seite
 - Persistenz online: JSONB-State in Supabase mit RLS pro `auth.uid()`
 - KI: providerunabhängige serverseitige AI-Schicht, aktueller Startprovider OpenAI, Fallback regelbasiert
+- Coach-Modi: `coach`, `planning`, `change`; Planänderungen werden erst nach Bestätigung angewendet
 - Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale und manuelle Synchronisation, providerneutrale Aktivitätstabellen
 - Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `equipment`, `sync_jobs`
 - Coach-Kontext: externe Aktivitäten werden serverseitig aus Supabase geladen und strukturiert zusammengefasst; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
