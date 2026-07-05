@@ -2,22 +2,18 @@ import "server-only";
 import type { AiJsonRequest, AiJsonResult, AiProvider } from "@/lib/ai/types";
 
 const providerConfigs: Record<AiProvider, {
-  apiKeyEnv: string;
   endpoint: string;
   label: string;
 }> = {
   groq: {
-    apiKeyEnv: "GROQ_API_KEY",
     endpoint: "https://api.groq.com/openai/v1/chat/completions",
     label: "Groq"
   },
   openai: {
-    apiKeyEnv: "OPENAI_API_KEY",
     endpoint: "https://api.openai.com/v1/chat/completions",
     label: "OpenAI"
   },
   openrouter: {
-    apiKeyEnv: "OPENROUTER_API_KEY",
     endpoint: "https://openrouter.ai/api/v1/chat/completions",
     label: "OpenRouter"
   }
@@ -39,10 +35,10 @@ export function resolveAiJsonClient(): AiJsonResult {
 
   const providerConfig = providerConfigs[rawProvider];
   const model = process.env.AI_MODEL?.trim();
-  const apiKey = process.env[providerConfig.apiKeyEnv]?.trim();
+  const apiKey = process.env.AI_API_KEY?.trim();
   const missing = [
     model ? "" : "AI_MODEL",
-    apiKey ? "" : providerConfig.apiKeyEnv
+    apiKey ? "" : "AI_API_KEY"
   ].filter(Boolean);
 
   if (missing.length > 0) {

@@ -23,9 +23,9 @@
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
-AI_PROVIDER=groq
-AI_MODEL=llama-3.3-70b-versatile
-GROQ_API_KEY=...
+AI_PROVIDER=openai
+AI_MODEL=gpt-5-mini
+AI_API_KEY=...
 ```
 
 Danach neu starten:
@@ -42,14 +42,14 @@ pnpm dev
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
    - `AI_PROVIDER`
    - `AI_MODEL`
-   - `GROQ_API_KEY`
+   - `AI_API_KEY`
 3. Deploy ausführen.
 4. Nach dem ersten Production-Deploy die finale Domain in Supabase Auth URL Configuration ergänzen.
 
 ## Sicherheitsnotizen
 
 - Keinen `service_role` oder Secret Key in `NEXT_PUBLIC_*` Variablen speichern.
-- AI-Keys niemals mit `NEXT_PUBLIC_` prefixen. `GROQ_API_KEY`, spätere `OPENAI_API_KEY` oder `OPENROUTER_API_KEY` bleiben serverseitig.
+- AI-Keys niemals mit `NEXT_PUBLIC_` prefixen. `AI_API_KEY` bleibt serverseitig und wird nicht an den Client ausgeliefert.
 - Öffentliche Registrierung bleibt aus, solange die App nur privat genutzt werden soll.
 - RLS muss auf jeder späteren Tabelle aktiv sein.
 - Die aktuelle JSONB-Persistenz ist ein sicherer Startpunkt, aber nicht das finale normalisierte Datenmodell.

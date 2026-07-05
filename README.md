@@ -66,7 +66,8 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - API-Route: `/api/coach`
 - Provider-Auswahl über `AI_PROVIDER`
 - Modell-Auswahl über `AI_MODEL`
-- Startprovider: `groq` mit `GROQ_API_KEY`
+- API-Key generisch über `AI_API_KEY`
+- aktueller Startprovider: `openai`
 - ohne AI-Env nutzt die App einen regelbasierten lokalen Parser
 - unterstützte Planänderungen: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten
 - Laufen unterscheidet Laufart und Fokus
@@ -74,9 +75,9 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 Beispiel für Vercel:
 
 ```text
-AI_PROVIDER=groq
-AI_MODEL=llama-3.3-70b-versatile
-GROQ_API_KEY=...
+AI_PROVIDER=openai
+AI_MODEL=gpt-5-mini
+AI_API_KEY=...
 ```
 
 ## Architektur

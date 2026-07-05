@@ -82,7 +82,7 @@ Weitere Bereiche:
 - App-State: React Context in `src/features/app-state`
 - Auth: Supabase SSR Clients, Middleware und Login-Seite
 - Persistenz online: JSONB-State in Supabase mit RLS pro `auth.uid()`
-- KI: providerunabhängige serverseitige AI-Schicht, Startprovider Groq, Fallback regelbasiert
+- KI: providerunabhängige serverseitige AI-Schicht, aktueller Startprovider OpenAI, Fallback regelbasiert
 - Externe Sportintegrationen: keine
 
 ## Bekannte Grenzen

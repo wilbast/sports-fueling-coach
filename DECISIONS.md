@@ -184,8 +184,8 @@ Fueling, Belastungssteuerung und Coach-Fragen hängen stark davon ab, ob eine Ei
 
 Entscheidung:
 
-KI-Aufrufe laufen ausschließlich über `src/lib/ai` und werden per `AI_PROVIDER` und `AI_MODEL` konfiguriert. Groq ist der erste aktive Provider. OpenAI und OpenRouter sind als providerkompatible Slots vorbereitet. Fehlt die AI-Konfiguration vollständig, nutzt die App den regelbasierten Fallback.
+KI-Aufrufe laufen ausschließlich über `src/lib/ai` und werden per `AI_PROVIDER`, `AI_MODEL` und `AI_API_KEY` konfiguriert. OpenAI ist der aktuelle aktive Provider. Groq und OpenRouter sind als providerkompatible Slots vorbereitet. Fehlt die AI-Konfiguration vollständig, nutzt die App den regelbasierten Fallback.
 
 Begründung:
 
-Die App soll fachlich nicht an einen einzelnen KI-Anbieter gekoppelt sein. Eine serverseitige Provider-Schicht hält API-Keys aus dem Client heraus, macht Vercel-Konfiguration explizit und erlaubt später Providerwechsel ohne Änderungen an Planning- oder Coach-UI.
+Die App soll fachlich nicht an einen einzelnen KI-Anbieter gekoppelt sein. Eine serverseitige Provider-Schicht hält API-Keys aus dem Client heraus, macht Vercel-Konfiguration explizit und erlaubt später Providerwechsel ohne Änderungen an Planning- oder Coach-UI. Der Key-Name bleibt bewusst generisch, damit ein Providerwechsel keine neue Secret-Nomenklatur im Produkt erzwingt.
