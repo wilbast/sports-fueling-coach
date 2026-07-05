@@ -20,3 +20,7 @@ export function createServiceRoleClient() {
 export function isServiceRoleConfigured(): boolean {
   return Boolean(getSupabaseConfig() && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
+
+export function getMissingServiceRoleEnvVars(): string[] {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY ? [] : ["SUPABASE_SERVICE_ROLE_KEY"];
+}

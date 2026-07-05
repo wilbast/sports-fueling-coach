@@ -7,6 +7,7 @@ import { Panel, Pill } from "@/components/ui";
 type StravaStatus = {
   configured: boolean;
   connected: boolean;
+  missingEnv?: string[];
   status?: string;
   athlete?: {
     id?: string;
@@ -99,7 +100,22 @@ export function StravaIntegrationPanel() {
         <div className="rounded-xl bg-canvas px-3 py-3 text-sm text-muted">Status wird geladen...</div>
       ) : !status?.configured ? (
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-800">
-          Strava ist noch nicht konfiguriert. Setze `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` und `SUPABASE_SERVICE_ROLE_KEY`.
+          <p className="font-semibold">Strava ist serverseitig noch nicht vollständig konfiguriert.</p>
+          {status?.missingEnv?.length ? (
+            <div className="mt-2">
+              <p>Fehlende Runtime-Variablen:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {status.missingEnv.map((item) => (
+                  <li key={item}><code>{item}</code></li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="mt-2">Prüfe `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` und `SUPABASE_SERVICE_ROLE_KEY`.</p>
+          )}
+          <p className="mt-2">
+            In Vercel müssen die Variablen für die aktive Umgebung gesetzt sein. Nach Änderungen bitte neu deployen.
+          </p>
         </div>
       ) : status.connected ? (
         <div className="grid gap-4">

@@ -83,6 +83,15 @@ export function getStravaConfig(): StravaConfig | null {
   return { clientId, clientSecret };
 }
 
+export function getMissingStravaEnvVars(): string[] {
+  const missing: string[] = [];
+
+  if (!process.env.STRAVA_CLIENT_ID) missing.push("STRAVA_CLIENT_ID");
+  if (!process.env.STRAVA_CLIENT_SECRET) missing.push("STRAVA_CLIENT_SECRET");
+
+  return missing;
+}
+
 export function createStravaAuthorizeUrl(input: {
   redirectUri: string;
   state: string;
