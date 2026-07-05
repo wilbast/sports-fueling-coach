@@ -29,11 +29,12 @@ export function PageHeader({ eyebrow, title, description, action }: PageHeaderPr
 type PanelProps = {
   children: React.ReactNode;
   className?: string;
+  id?: string;
 };
 
-export function Panel({ children, className }: PanelProps) {
+export function Panel({ children, className, id }: PanelProps) {
   return (
-    <section className={clsx("rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5", className)}>
+    <section id={id} className={clsx("rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5", className)}>
       {children}
     </section>
   );

@@ -6,6 +6,7 @@ import { demoMealTemplates } from "@/data/mock/nutrition";
 import { demoWeekPlan } from "@/data/mock/planning";
 import { demoUserGoals, demoUserProfile } from "@/data/mock/profile";
 import { demoStandards } from "@/data/mock/standards";
+import type { CoachMealDraft, CoachPlanChange, CoachWorkoutDraft } from "@/domain/coach/types";
 import type { RaceGoal, UserGoals } from "@/domain/goals/types";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import type { DayBlock, DayContext, DayPlan, WeekPlan } from "@/domain/planning/types";
@@ -20,7 +21,14 @@ import type {
   StandardWeekTemplate,
   WorkoutTemplate
 } from "@/domain/standards/types";
-import type { SportType, WorkoutIntensity, WorkoutPlan, WorkoutStatus } from "@/domain/training/types";
+import type {
+  RunningFocus,
+  RunningWorkoutType,
+  SportType,
+  WorkoutIntensity,
+  WorkoutPlan,
+  WorkoutStatus
+} from "@/domain/training/types";
 import { createClient as createSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "sports-fueling-coach:demo-state:v3";
@@ -44,6 +52,8 @@ type WorkoutDraft = {
   distanceKm?: number;
   status: WorkoutStatus;
   intensity: WorkoutIntensity;
+  runningType?: RunningWorkoutType;
+  runningFocus?: RunningFocus;
   description: string;
 };
 
@@ -81,6 +91,7 @@ type AppStateContextValue = {
   ) => void;
   saveCurrentWeekAsStandard: (name: string, description?: string) => void;
   applyWeekStandard: (templateId: string) => void;
+  applyCoachPlanChanges: (changes: CoachPlanChange[]) => void;
   updateProfile: (profile: UserProfile) => void;
   updateGoals: (goals: UserGoals) => void;
   updateRaceGoal: (raceGoal: RaceGoal) => void;
@@ -395,6 +406,11 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         };
       });
     },
+    applyCoachPlanChanges: (changes) => {
+      if (changes.length === 0) return;
+
+      setState((current) => changes.reduce(applyCoachPlanChange, current));
+    },
     updateProfile: (profile) => {
       setState((current) => ({ ...current, profile }));
     },
@@ -507,6 +523,116 @@ function updateDay(state: AppState, date: string, updater: (day: DayPlan) => Day
   };
 }
 
+function applyCoachPlanChange(state: AppState, change: CoachPlanChange): AppState {
+  if (!state.weekPlan.days.some((day) => day.date === change.date)) return state;
+
+  if (change.type === "set_day_context") {
+    return updateDay(state, change.date, (day) => ({
+      ...day,
+      context: [change.context, ...day.context.filter((item) => !isPlanningContext(item))],
+      blocks: [
+        ...day.blocks.filter((block) => block.type !== "work" && block.type !== "travel"),
+        createPlanningContextBlock(change.context)
+      ]
+    }));
+  }
+
+  if (change.type === "add_extra_info") {
+    const extraInfo: PlanningExtraInfo = {
+      id: createId("coach-info"),
+      label: change.label,
+      impact: change.impact ?? createCoachExtraInfoImpact(change.label),
+      type: change.blockType ?? inferExtraInfoBlockType(change.label),
+      context: change.context
+    };
+
+    return updateDay(state, change.date, (day) => ({
+      ...day,
+      context: extraInfo.context && !day.context.includes(extraInfo.context)
+        ? [...day.context, extraInfo.context]
+        : day.context,
+      blocks: [...day.blocks, planningExtraInfoToBlock(extraInfo)]
+    }));
+  }
+
+  if (change.type === "add_workout") {
+    const workout = createWorkoutFromDraft(change.date, normalizeCoachWorkout(change.workout));
+    const nextState = updateDay(state, change.date, (day) => ({
+      ...day,
+      workouts: [...day.workouts, workout],
+      blocks: [...day.blocks, createWorkoutBlock(workout)]
+    }));
+
+    if (!change.saveAsStandard) return nextState;
+
+    return {
+      ...nextState,
+      standards: {
+        ...nextState.standards,
+        workouts: [...nextState.standards.workouts, workoutToTemplate(workout)]
+      }
+    };
+  }
+
+  if (change.type === "add_meal") {
+    return applyCoachMealChange(state, change.date, change.meal);
+  }
+
+  return state;
+}
+
+function normalizeCoachWorkout(workout: CoachWorkoutDraft): WorkoutDraft {
+  return {
+    sport: workout.sport,
+    title: workout.title,
+    startTime: workout.startTime,
+    durationMinutes: workout.durationMinutes,
+    distanceKm: workout.sport === "running" ? workout.distanceKm : undefined,
+    status: workout.status ?? "planned",
+    intensity: workout.intensity ?? "moderate",
+    runningType: workout.sport === "running" ? workout.runningType : undefined,
+    runningFocus: workout.sport === "running" ? workout.runningFocus : undefined,
+    description: workout.description ?? createCoachWorkoutDescription(workout)
+  };
+}
+
+function applyCoachMealChange(state: AppState, date: IsoDate, mealDraft: CoachMealDraft): AppState {
+  const meal = createMealTemplate({
+    name: mealDraft.name,
+    description: mealDraft.description,
+    caloriesMin: mealDraft.caloriesMin ?? 350,
+    caloriesMax: mealDraft.caloriesMax ?? 650,
+    proteinMin: mealDraft.proteinMin ?? 25,
+    proteinMax: mealDraft.proteinMax ?? 45,
+    tags: mealDraft.tags ?? ["coach"]
+  }, mealDraft.saveAsStandard ?? false);
+  const nextState = {
+    ...state,
+    mealTemplates: [...state.mealTemplates, meal]
+  };
+
+  return updateDay(nextState, date, (day) => ({
+    ...day,
+    mealPlan: [
+      ...day.mealPlan,
+      {
+        time: mealDraft.time,
+        role: mealDraft.role,
+        mealTemplateId: meal.id
+      }
+    ].sort((a, b) => a.time.localeCompare(b.time)),
+    blocks: [
+      ...day.blocks,
+      {
+        id: createId("coach-nutrition"),
+        type: "nutrition",
+        label: mealDraft.name,
+        impact: mealDraft.description
+      }
+    ]
+  }));
+}
+
 function isPlanningContext(context: DayContext): context is PlanningContext {
   return context === "homeoffice" || context === "office" || context === "travel";
 }
@@ -576,6 +702,8 @@ function workoutTemplateToPlan(date: string, template: WorkoutTemplate): Workout
     distanceKm: template.distanceKm,
     status: "planned",
     intensity: template.intensity,
+    runningType: template.runningType,
+    runningFocus: template.runningFocus,
     description: template.description
   };
 }
@@ -590,6 +718,8 @@ function workoutToTemplate(workout: WorkoutPlan): WorkoutTemplate {
     durationMinutes: workout.durationMinutes,
     distanceKm: workout.distanceKm,
     intensity: workout.intensity,
+    runningType: workout.runningType,
+    runningFocus: workout.runningFocus,
     description: workout.description
   };
 }
@@ -603,6 +733,51 @@ function createWorkoutBlock(workout: Pick<WorkoutPlan, "sport" | "title">): DayB
       ? "Fueling und Kohlenhydrate rund um den Lauf einplanen"
       : "Protein und Erholung passend zur Einheit sichern"
   };
+}
+
+function inferExtraInfoBlockType(label: string): DayBlock["type"] {
+  const normalized = label.toLowerCase();
+
+  if (normalized.includes("restaurant") || normalized.includes("biergarten") || normalized.includes("essen")) {
+    return "restaurant";
+  }
+
+  if (normalized.includes("freund") || normalized.includes("familie") || normalized.includes("treffen")) {
+    return "family";
+  }
+
+  if (normalized.includes("ruhe") || normalized.includes("erholung") || normalized.includes("schlaf")) {
+    return "recovery";
+  }
+
+  return "planning";
+}
+
+function createCoachExtraInfoImpact(label: string): string {
+  const type = inferExtraInfoBlockType(label);
+
+  if (type === "restaurant") return `${label}: tagsüber Protein und einfache Standards sichern`;
+  if (type === "family") return `${label}: Training und Hauptmahlzeit realistisch platzieren`;
+  if (type === "recovery") return `${label}: Belastung und Defizit vorsichtig steuern`;
+
+  return `${label}: im Tagesbriefing berücksichtigen`;
+}
+
+function createCoachWorkoutDescription(workout: CoachWorkoutDraft): string {
+  if (workout.sport === "running") {
+    if (workout.runningType === "intervals") return "Qualitätseinheit, Fueling vorher sichern";
+    if (workout.runningType === "tempo_run") return "Temporeiz, nicht nüchtern erzwingen";
+    if (workout.runningType === "fartlek") return "Spiel mit Tempo, Belastung bewusst steuern";
+
+    return "Ruhiger Lauf, Energie vorher und danach passend halten";
+  }
+
+  if (workout.sport === "strength") return "Kraftreiz, Protein in der nächsten Mahlzeit";
+  if (workout.sport === "hiit") return "Intensitätsreiz, Erholung danach ernst nehmen";
+  if (workout.sport === "padel" || workout.sport === "squash") return "Spielbelastung, Flüssigkeit und Abendessen mitdenken";
+  if (workout.sport === "swimming" || workout.sport === "cycling") return "Ausdauereinheit im Wochenkontext";
+
+  return "Geplante Einheit im Wochenkontext";
 }
 
 function createMealTemplate(template: MealTemplateDraft, isStandard: boolean): MealTemplate {

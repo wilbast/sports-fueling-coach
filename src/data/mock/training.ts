@@ -11,13 +11,15 @@ export const demoTodayWorkouts: WorkoutPlan[] = [
     distanceKm: 10,
     status: "planned",
     intensity: "easy",
+    runningType: "easy_run",
+    runningFocus: "base",
     description: "GA1, 55-65 Minuten, Puls ruhig halten"
   },
   {
-    id: "freeletics-optional-2026-07-06",
+    id: "hiit-optional-2026-07-06",
     date: "2026-07-06",
-    sport: "freeletics",
-    title: "Freeletics optional",
+    sport: "hiit",
+    title: "HIIT optional",
     durationMinutes: 30,
     status: "optional",
     intensity: "optional",
@@ -33,8 +35,8 @@ export const trainingItems = [
     detail: "Montag, 18:00 · locker"
   },
   {
-    sport: "Krafttraining",
-    title: "Freeletics Oberkörper",
+    sport: "HIIT",
+    title: "HIIT Oberkörper",
     status: "Optional",
     detail: "Dienstag oder Montag kurz"
   },

@@ -2,13 +2,24 @@ import type { IsoDate } from "@/domain/shared";
 
 export type SportType =
   | "running"
-  | "strength"
-  | "freeletics"
   | "padel"
-  | "cycling"
   | "swimming"
-  | "hiking"
-  | "other";
+  | "squash"
+  | "hiit"
+  | "strength"
+  | "cycling";
+
+export type RunningWorkoutType =
+  | "easy_run"
+  | "tempo_run"
+  | "fartlek"
+  | "intervals";
+
+export type RunningFocus =
+  | "base"
+  | "recovery"
+  | "threshold"
+  | "vo2max";
 
 export type WorkoutStatus = "planned" | "optional" | "completed" | "cancelled";
 
@@ -24,5 +35,7 @@ export type WorkoutPlan = {
   distanceKm?: number;
   status: WorkoutStatus;
   intensity: WorkoutIntensity;
+  runningType?: RunningWorkoutType;
+  runningFocus?: RunningFocus;
   description: string;
 };

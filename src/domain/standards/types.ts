@@ -1,6 +1,6 @@
 import type { MealPlanSlot } from "@/domain/nutrition/types";
 import type { DayBlockType, DayContext } from "@/domain/planning/types";
-import type { SportType, WorkoutIntensity } from "@/domain/training/types";
+import type { RunningFocus, RunningWorkoutType, SportType, WorkoutIntensity } from "@/domain/training/types";
 
 export type PlanningContext = Extract<DayContext, "homeoffice" | "office" | "travel">;
 
@@ -29,6 +29,8 @@ export type WorkoutTemplate = {
   durationMinutes?: number;
   distanceKm?: number;
   intensity: WorkoutIntensity;
+  runningType?: RunningWorkoutType;
+  runningFocus?: RunningFocus;
   description: string;
 };
 

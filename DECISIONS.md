@@ -159,3 +159,23 @@ Sobald Supabase aktiv ist, erzeugt die App für neue Benutzer einen leeren Beta-
 Begründung:
 
 Für echte Beta-Tests müssen die sichtbaren Daten vom Nutzer kommen. Demo-Daten sind gut für Produktgefühl und lokale Entwicklung, verfälschen aber Training, Fueling und Coach-Hinweise im privaten Online-Betrieb.
+
+## ADR-017: Coach-Chat schreibt nur strukturierte Planänderungen
+
+Entscheidung:
+
+Der Coach-Chat nutzt eine serverseitige API-Route und gibt strukturierte Änderungen zurück. Der Client übernimmt nur erlaubte Change-Typen in den App-State: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten.
+
+Begründung:
+
+Ein freier Chat ohne kontrollierte Change-Schnittstelle wäre schwer nachvollziehbar und riskant für die Planung. Strukturierte Änderungen erlauben direkte Übernahme, Validierung, spätere Undo-Funktionen und eine saubere Migration in normalisierte Supabase-Tabellen.
+
+## ADR-018: Trainingsarten werden domainnah modelliert
+
+Entscheidung:
+
+Die Trainingsdomäne unterscheidet explizit Laufen, Padel Tennis, Schwimmen, Squash, HIIT, Krafttraining und Radfahren. Laufeinheiten haben zusätzlich Laufart und Fokus.
+
+Begründung:
+
+Fueling, Belastungssteuerung und Coach-Fragen hängen stark davon ab, ob eine Einheit locker, schwellenorientiert, VO2Max-lastig oder spiel-/kraftbasiert ist. Ein einzelnes Feld `sport` reicht dafür nicht mehr.

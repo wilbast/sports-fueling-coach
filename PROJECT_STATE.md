@@ -23,6 +23,10 @@ Zusätzlich ist die App für privaten Online-Betrieb vorbereitet: Supabase Auth 
 
 Der aktuelle Sprint trennt Demo und Beta klarer: Online-Nutzer starten mit einem leeren Beta-Zustand, Basis-Standards für Alltag und einfache Mahlzeiten, aber ohne vorgefüllte Trainingswoche. Bestehende Demo-Zustände in Supabase können in den Einstellungen über `Beta-Zustand neu starten` aufgeräumt werden.
 
+Der neueste Sprint ergänzt den Coach-Chat als Eingabeschicht in der Planung. Nachrichten werden über `/api/coach` verarbeitet, bei gesetztem `OPENAI_API_KEY` über OpenAI und sonst über einen lokalen Fallback-Parser. Der Chat gibt strukturierte Planänderungen zurück und übernimmt sie direkt in den App-State.
+
+Die Trainingsplanung unterscheidet jetzt Laufen, Padel Tennis, Schwimmen, Squash, HIIT, Krafttraining und Radfahren. Laufen hat zusätzlich Laufart und Fokus: Lockerer Lauf, Tempodauerlauf, Fahrtspiel, Intervalltraining sowie Basis, Regeneration, Schwellentraining und VO2Max.
+
 ## Verifikation
 
 - `pnpm typecheck` erfolgreich
@@ -78,8 +82,8 @@ Weitere Bereiche:
 - App-State: React Context in `src/features/app-state`
 - Auth: Supabase SSR Clients, Middleware und Login-Seite
 - Persistenz online: JSONB-State in Supabase mit RLS pro `auth.uid()`
-- KI: keine
-- Integrationen: keine
+- KI: OpenAI Responses API über serverseitige Route, Fallback regelbasiert
+- Externe Sportintegrationen: keine
 
 ## Bekannte Grenzen
 
@@ -90,8 +94,8 @@ Weitere Bereiche:
 - Es gibt noch keine Validierung auf fachlich unmögliche Pläne.
 - Insights sind abgeleitet, aber noch nicht tief analysiert.
 - Es gibt noch keine automatisierten Unit-Tests.
-- Es gibt noch keine Import- oder KI-Funktionen.
-- Coach-Chat ist fachlich vorgesehen, aber noch nicht implementiert.
+- Der Coach-Chat übernimmt Änderungen, hat aber noch keine Review-/Undo-Schicht.
+- Es gibt noch keine Importfunktionen.
 
 ## Nächster sinnvoller Sprint
 

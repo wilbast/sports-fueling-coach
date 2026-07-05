@@ -1,35 +1,32 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Bike, BookmarkPlus, Dumbbell, Footprints, Plus, Waves, X } from "lucide-react";
+import { Bike, BookmarkPlus, CircleDot, Dumbbell, Footprints, Plus, Waves, X, Zap } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { getDayPlanByDate } from "@/domain/planning/week";
-import type { SportType, WorkoutIntensity, WorkoutPlan, WorkoutStatus } from "@/domain/training/types";
+import {
+  describeWorkoutType,
+  intensityLabels,
+  intensityOptions,
+  runningFocusOptions,
+  runningTypeOptions,
+  sportOptions
+} from "@/domain/training/catalog";
+import type {
+  RunningFocus,
+  RunningWorkoutType,
+  SportType,
+  WorkoutIntensity,
+  WorkoutPlan,
+  WorkoutStatus
+} from "@/domain/training/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
-
-const sportLabels: Record<SportType, string> = {
-  running: "Laufen",
-  strength: "Kraft",
-  freeletics: "Freeletics",
-  padel: "Padel",
-  cycling: "Rad",
-  swimming: "Schwimmen",
-  hiking: "Wandern",
-  other: "Sonstiges"
-};
 
 const statusLabels: Record<WorkoutStatus, string> = {
   planned: "geplant",
   optional: "optional",
   completed: "erledigt",
   cancelled: "gestrichen"
-};
-
-const intensityLabels: Record<WorkoutIntensity, string> = {
-  easy: "locker",
-  moderate: "mittel",
-  hard: "hart",
-  optional: "optional"
 };
 
 export function TrainingView() {
@@ -41,6 +38,8 @@ export function TrainingView() {
   const [durationMinutes, setDurationMinutes] = useState("45");
   const [distanceKm, setDistanceKm] = useState("");
   const [intensity, setIntensity] = useState<WorkoutIntensity>("easy");
+  const [runningType, setRunningType] = useState<RunningWorkoutType>("easy_run");
+  const [runningFocus, setRunningFocus] = useState<RunningFocus>("base");
   const [saveAsStandard, setSaveAsStandard] = useState(false);
   const [selectedStandardId, setSelectedStandardId] = useState(state.standards.workouts[0]?.id ?? "");
   const workouts = useMemo(() => state.weekPlan.days.flatMap((day) => day.workouts), [state.weekPlan.days]);
@@ -69,7 +68,9 @@ export function TrainingView() {
       distanceKm: sport === "running" ? parseOptionalNumber(distanceKm) : undefined,
       status: "planned",
       intensity,
-      description: createDescription(sport, intensity)
+      runningType: sport === "running" ? runningType : undefined,
+      runningFocus: sport === "running" ? runningFocus : undefined,
+      description: createDescription(sport, intensity, runningType, runningFocus)
     }, { saveAsStandard });
     setTitle("");
     setDistanceKm("");
@@ -175,7 +176,7 @@ export function TrainingView() {
                     <div key={template.id} className="rounded-xl bg-canvas px-3 py-3">
                       <p className="text-sm font-semibold text-ink">{template.name}</p>
                       <p className="mt-1 text-xs leading-5 text-muted">
-                        {sportLabels[template.sport]} · {template.startTime ?? "flexibel"} · {intensityLabels[template.intensity]}
+                        {describeWorkoutType(template)} · {template.startTime ?? "flexibel"} · {intensityLabels[template.intensity]}
                       </p>
                     </div>
                   ))}
@@ -201,7 +202,7 @@ export function TrainingView() {
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
                   aria-label="Sportart"
                 >
-                  {Object.entries(sportLabels).map(([value, label]) => (
+                  {sportOptions.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
@@ -211,7 +212,7 @@ export function TrainingView() {
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
                   aria-label="Intensität"
                 >
-                  {Object.entries(intensityLabels).map(([value, label]) => (
+                  {intensityOptions.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
@@ -238,6 +239,30 @@ export function TrainingView() {
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400 sm:col-span-2"
                   aria-label="Distanz in Kilometern"
                 />
+                {sport === "running" ? (
+                  <>
+                    <select
+                      value={runningType}
+                      onChange={(event) => setRunningType(event.target.value as RunningWorkoutType)}
+                      className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                      aria-label="Laufart"
+                    >
+                      {runningTypeOptions.map(({ value, label }) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={runningFocus}
+                      onChange={(event) => setRunningFocus(event.target.value as RunningFocus)}
+                      className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                      aria-label="Lauf-Fokus"
+                    >
+                      {runningFocusOptions.map(({ value, label }) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
               </div>
               <label className="flex items-center gap-2 rounded-xl bg-canvas px-3 py-3 text-sm font-semibold text-ink">
                 <input
@@ -291,7 +316,7 @@ function WorkoutRow({ workout, onStatus, onRemove }: WorkoutRowProps) {
           <div>
             <p className="font-semibold text-ink">{workout.title}</p>
             <p className="mt-1 text-sm text-muted">
-              {sportLabels[workout.sport]} · {workout.startTime ?? "flexibel"} · {intensityLabels[workout.intensity]}
+              {describeWorkoutType(workout)} · {workout.startTime ?? "flexibel"} · {intensityLabels[workout.intensity]}
             </p>
           </div>
         </div>
@@ -328,6 +353,8 @@ function iconForSport(sport: SportType) {
   if (sport === "running") return Footprints;
   if (sport === "cycling") return Bike;
   if (sport === "swimming") return Waves;
+  if (sport === "hiit" || sport === "squash") return Zap;
+  if (sport === "padel") return CircleDot;
 
   return Dumbbell;
 }
@@ -352,10 +379,15 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function createDescription(sport: SportType, intensity: WorkoutIntensity): string {
-  if (sport === "running" && intensity === "hard") return "Qualitätseinheit mit bewusstem Fueling";
-  if (sport === "running") return "Lauf im Wochenplan";
-  if (sport === "strength" || sport === "freeletics") return "Kraftreiz ohne unnötige Ermüdung";
+function createDescription(
+  sport: SportType,
+  intensity: WorkoutIntensity,
+  runningType: RunningWorkoutType,
+  runningFocus: RunningFocus
+): string {
+  if (sport === "running" && intensity === "hard") return `${describeWorkoutType({ sport, runningType, runningFocus })} mit bewusstem Fueling`;
+  if (sport === "running") return `${describeWorkoutType({ sport, runningType, runningFocus })} im Wochenplan`;
+  if (sport === "strength" || sport === "hiit") return "Kraft- oder Intensitätsreiz ohne unnötige Ermüdung";
   if (sport === "padel") return "Spielbelastung mit moderatem Fueling";
 
   return "Geplante Einheit";

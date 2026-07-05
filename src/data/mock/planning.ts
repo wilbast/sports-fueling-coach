@@ -41,13 +41,15 @@ const mondayWorkouts: WorkoutPlan[] = [
     distanceKm: 10,
     status: "planned",
     intensity: "easy",
+    runningType: "easy_run",
+    runningFocus: "base",
     description: "GA1, 55-65 Minuten, Puls ruhig halten"
   },
   {
-    id: "freeletics-optional-2026-07-06",
+    id: "hiit-optional-2026-07-06",
     date: "2026-07-06",
-    sport: "freeletics",
-    title: "Freeletics optional",
+    sport: "hiit",
+    title: "HIIT optional",
     durationMinutes: 30,
     status: "optional",
     intensity: "optional",
@@ -65,7 +67,7 @@ const weekDays: DayPlan[] = [
     blocks: [
       block("homeoffice-mo", "work", "Homeoffice", "ruhiger Tagesrhythmus, Mahlzeiten planbar"),
       block("run-mo", "training", "10 km locker", "Kohlenhydrate rund um den Lauf platzieren"),
-      block("freeletics-mo", "training", "Freeletics optional", "nur bei guter Energie")
+      block("hiit-mo", "training", "HIIT optional", "nur bei guter Energie")
     ],
     note: "Gewicht reduzieren bleibt aktiv, aber der Lauf soll sich leicht anfühlen."
   },
@@ -108,6 +110,8 @@ const weekDays: DayPlan[] = [
         distanceKm: 11,
         status: "planned",
         intensity: "hard",
+        runningType: "intervals",
+        runningFocus: "vo2max",
         description: "Einlaufen, 6 x 800 m zügig, lange Trabpause, auslaufen"
       }
     ],
@@ -171,6 +175,8 @@ const weekDays: DayPlan[] = [
         distanceKm: 18,
         status: "planned",
         intensity: "moderate",
+        runningType: "easy_run",
+        runningFocus: "base",
         description: "Ruhig laufen, Fueling testen, nicht drücken"
       }
     ],
@@ -187,14 +193,14 @@ const weekDays: DayPlan[] = [
     focus: "Reset und Planung",
     workouts: [
       {
-        id: "walk-2026-07-12",
+        id: "swim-2026-07-12",
         date: "2026-07-12",
-        sport: "hiking",
-        title: "45 Minuten Spaziergang",
+        sport: "swimming",
+        title: "30 Minuten Schwimmen locker",
         durationMinutes: 45,
         status: "planned",
         intensity: "easy",
-        description: "Bewegung, Kopf frei, keine Trainingsambition"
+        description: "Locker bewegen, Kopf frei, keine Trainingsambition"
       }
     ],
     mealPlan: [standardBreakfast, chickenLunch, recoveryDinner],

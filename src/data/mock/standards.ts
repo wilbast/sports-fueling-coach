@@ -96,6 +96,8 @@ export const demoWorkoutTemplates: WorkoutTemplate[] = [
     durationMinutes: 50,
     distanceKm: 8,
     intensity: "easy",
+    runningType: "easy_run",
+    runningFocus: "base",
     description: "GA1, ruhig bleiben, danach Protein und Kohlenhydrate sichern"
   },
   {
@@ -107,6 +109,8 @@ export const demoWorkoutTemplates: WorkoutTemplate[] = [
     durationMinutes: 105,
     distanceKm: 18,
     intensity: "moderate",
+    runningType: "easy_run",
+    runningFocus: "base",
     description: "Ruhig laufen, Fueling testen, nicht drücken"
   },
   {
@@ -167,6 +171,8 @@ export const demoWeekTemplates: StandardWeekTemplate[] = [
             durationMinutes: 65,
             distanceKm: 11,
             intensity: "hard",
+            runningType: "intervals",
+            runningFocus: "vo2max",
             description: "Einlaufen, 6 x 800 m zügig, lange Trabpause, auslaufen"
           }
         ],
@@ -203,13 +209,13 @@ export const demoWeekTemplates: StandardWeekTemplate[] = [
         extraInfos: [],
         workouts: [
           {
-            id: "workout-walk-reset",
-            name: "Spaziergang Reset",
-            sport: "hiking",
-            title: "45 Minuten Spaziergang",
-            durationMinutes: 45,
+            id: "workout-swim-reset",
+            name: "Schwimmen locker",
+            sport: "swimming",
+            title: "30 Minuten Schwimmen locker",
+            durationMinutes: 30,
             intensity: "easy",
-            description: "Bewegung, Kopf frei, keine Trainingsambition"
+            description: "Locker bewegen, Kopf frei, keine Trainingsambition"
           }
         ],
         mealPlan: [breakfast, lunch, dinner],

@@ -1,24 +1,7 @@
 import type { DailyBriefing, DailyBriefingInput } from "@/domain/briefing/types";
 import type { MealPlanSlot, MealTemplate, NutritionMetric, NutritionTarget } from "@/domain/nutrition/types";
+import { describeWorkoutType, intensityLabels } from "@/domain/training/catalog";
 import type { WorkoutPlan } from "@/domain/training/types";
-
-const sportLabels: Record<string, string> = {
-  running: "Laufen",
-  strength: "Kraft",
-  freeletics: "Freeletics",
-  padel: "Padel",
-  cycling: "Rad",
-  swimming: "Schwimmen",
-  hiking: "Wandern",
-  other: "Sonstiges"
-};
-
-const intensityLabels: Record<string, string> = {
-  easy: "Locker",
-  moderate: "Mittel",
-  hard: "Hart",
-  optional: "Optional"
-};
 
 export function createDailyBriefing(input: DailyBriefingInput): DailyBriefing {
   const { profile, goals, dayPlan, mealTemplates } = input;
@@ -117,7 +100,7 @@ function createNutritionMetrics(target: NutritionTarget): NutritionMetric[] {
 
 function createWorkoutBriefing(workout: WorkoutPlan, runningDistanceKm: number) {
   return {
-    sport: sportLabels[workout.sport] ?? "Sport",
+    sport: describeWorkoutType(workout),
     title: workout.title,
     time: workout.startTime ?? "nach Bedarf",
     detail: workout.description,
@@ -135,7 +118,7 @@ function createWorkoutFueling(workout: WorkoutPlan, runningDistanceKm: number): 
     return "Banane oder Toast 45 Minuten vorher, danach Protein und Kohlenhydrate sichern.";
   }
 
-  if (workout.sport === "strength" || workout.sport === "freeletics") {
+  if (workout.sport === "strength" || workout.sport === "hiit") {
     return "Protein in der nächsten Mahlzeit einplanen.";
   }
 

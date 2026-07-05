@@ -22,8 +22,23 @@ import { createDailyBriefing } from "@/domain/briefing/create-daily-briefing";
 import type { DayBlock, DayBlockType, DayContext, DayPlan } from "@/domain/planning/types";
 import { getDayPlanByDate, getWeekTrainingLoad, getWorkoutSummary } from "@/domain/planning/week";
 import type { PlanningContext, PlanningExtraInfo } from "@/domain/standards/types";
-import type { SportType, WorkoutIntensity, WorkoutStatus } from "@/domain/training/types";
+import {
+  describeWorkoutType,
+  intensityLabels,
+  intensityOptions,
+  runningFocusOptions,
+  runningTypeOptions,
+  sportOptions
+} from "@/domain/training/catalog";
+import type {
+  RunningFocus,
+  RunningWorkoutType,
+  SportType,
+  WorkoutIntensity,
+  WorkoutStatus
+} from "@/domain/training/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 
 const planningContexts: Array<{
   value: PlanningContext;
@@ -51,29 +66,11 @@ const planningContexts: Array<{
   }
 ];
 
-const sportLabels: Record<SportType, string> = {
-  running: "Laufen",
-  strength: "Kraft",
-  freeletics: "Freeletics",
-  padel: "Padel",
-  cycling: "Rad",
-  swimming: "Schwimmen",
-  hiking: "Wandern",
-  other: "Sonstiges"
-};
-
 const statusLabels: Record<WorkoutStatus, string> = {
   planned: "geplant",
   optional: "optional",
   completed: "erledigt",
   cancelled: "gestrichen"
-};
-
-const intensityLabels: Record<WorkoutIntensity, string> = {
-  easy: "locker",
-  moderate: "mittel",
-  hard: "hart",
-  optional: "optional"
 };
 
 export function PlanningView() {
@@ -101,6 +98,8 @@ export function PlanningView() {
   const [durationMinutes, setDurationMinutes] = useState("45");
   const [distanceKm, setDistanceKm] = useState("");
   const [intensity, setIntensity] = useState<WorkoutIntensity>("easy");
+  const [runningType, setRunningType] = useState<RunningWorkoutType>("easy_run");
+  const [runningFocus, setRunningFocus] = useState<RunningFocus>("base");
   const [saveWorkoutAsStandard, setSaveWorkoutAsStandard] = useState(false);
   const [selectedWorkoutStandardId, setSelectedWorkoutStandardId] = useState(state.standards.workouts[0]?.id ?? "");
   const [selectedPlanningStandardId, setSelectedPlanningStandardId] = useState(state.standards.planning[0]?.id ?? "");
@@ -140,7 +139,9 @@ export function PlanningView() {
       distanceKm: sport === "running" ? parseOptionalNumber(distanceKm) : undefined,
       status: "planned",
       intensity,
-      description: createWorkoutDescription(sport, intensity)
+      runningType: sport === "running" ? runningType : undefined,
+      runningFocus: sport === "running" ? runningFocus : undefined,
+      description: createWorkoutDescription(sport, intensity, runningType, runningFocus)
     }, { saveAsStandard: saveWorkoutAsStandard });
     setWorkoutTitle("");
     setDistanceKm("");
@@ -478,7 +479,7 @@ export function PlanningView() {
                     <div>
                       <p className="font-semibold text-ink">{workout.title}</p>
                       <p className="mt-1 text-sm text-muted">
-                        {sportLabels[workout.sport]} · {workout.startTime ?? "flexibel"} · {intensityLabels[workout.intensity]}
+                        {describeWorkoutType(workout)} · {workout.startTime ?? "flexibel"} · {intensityLabels[workout.intensity]}
                       </p>
                     </div>
                     <Pill tone={workout.status === "cancelled" ? "red" : workout.status === "optional" ? "amber" : "green"}>
@@ -524,7 +525,7 @@ export function PlanningView() {
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
                   aria-label="Sportart"
                 >
-                  {Object.entries(sportLabels).map(([value, label]) => (
+                  {sportOptions.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
@@ -534,7 +535,7 @@ export function PlanningView() {
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
                   aria-label="Intensität"
                 >
-                  {Object.entries(intensityLabels).map(([value, label]) => (
+                  {intensityOptions.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
@@ -561,6 +562,30 @@ export function PlanningView() {
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400 sm:col-span-2"
                   aria-label="Distanz in Kilometern"
                 />
+                {sport === "running" ? (
+                  <>
+                    <select
+                      value={runningType}
+                      onChange={(event) => setRunningType(event.target.value as RunningWorkoutType)}
+                      className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                      aria-label="Laufart"
+                    >
+                      {runningTypeOptions.map(({ value, label }) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={runningFocus}
+                      onChange={(event) => setRunningFocus(event.target.value as RunningFocus)}
+                      className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                      aria-label="Lauf-Fokus"
+                    >
+                      {runningFocusOptions.map(({ value, label }) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
               </div>
               <label className="flex items-center gap-2 rounded-xl bg-white px-3 py-3 text-sm font-semibold text-ink">
                 <input
@@ -582,39 +607,43 @@ export function PlanningView() {
           </Panel>
         </div>
 
-        <Panel>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                Daily Briefing
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-ink">{briefing.heroTitle}</h2>
-            </div>
-            <Pill tone={briefing.nutritionTarget.energyDemand === "hoch" ? "amber" : "green"}>
-              Energiebedarf: {briefing.nutritionTarget.energyDemand}
-            </Pill>
-          </div>
+        <div className="grid content-start gap-6">
+          <CoachChatPanel />
 
-          <p className="text-sm leading-6 text-muted">{briefing.lead}</p>
-
-          <div className="mt-4 grid gap-2">
-            {briefing.metrics.map((metric) => (
-              <div key={metric.label} className="rounded-xl bg-canvas px-3 py-3">
+          <Panel>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                  {metric.label}
+                  Daily Briefing
                 </p>
-                <p className="mt-2 font-semibold text-ink">
-                  {metric.value} <span className="text-xs font-medium text-muted">{metric.unit}</span>
-                </p>
+                <h2 className="mt-2 text-xl font-semibold text-ink">{briefing.heroTitle}</h2>
               </div>
-            ))}
-          </div>
+              <Pill tone={briefing.nutritionTarget.energyDemand === "hoch" ? "amber" : "green"}>
+                Energiebedarf: {briefing.nutritionTarget.energyDemand}
+              </Pill>
+            </div>
 
-          <div className="mt-4 rounded-xl bg-coach-50 px-3 py-3 text-sm leading-6 text-muted">
-            <span className="font-semibold text-ink">Coach: </span>
-            {briefing.coachHint}
-          </div>
-        </Panel>
+            <p className="text-sm leading-6 text-muted">{briefing.lead}</p>
+
+            <div className="mt-4 grid gap-2">
+              {briefing.metrics.map((metric) => (
+                <div key={metric.label} className="rounded-xl bg-canvas px-3 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                    {metric.label}
+                  </p>
+                  <p className="mt-2 font-semibold text-ink">
+                    {metric.value} <span className="text-xs font-medium text-muted">{metric.unit}</span>
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-xl bg-coach-50 px-3 py-3 text-sm leading-6 text-muted">
+              <span className="font-semibold text-ink">Coach: </span>
+              {briefing.coachHint}
+            </div>
+          </Panel>
+        </div>
       </div>
     </div>
   );
@@ -744,10 +773,15 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function createWorkoutDescription(sport: SportType, intensity: WorkoutIntensity): string {
-  if (sport === "running" && intensity === "hard") return "Qualitätseinheit, Fueling vorher sichern";
-  if (sport === "running") return "Ruhig laufen, saubere Energie vorher und danach";
-  if (sport === "strength" || sport === "freeletics") return "Kraftreiz, Protein in der nächsten Mahlzeit";
+function createWorkoutDescription(
+  sport: SportType,
+  intensity: WorkoutIntensity,
+  runningType: RunningWorkoutType,
+  runningFocus: RunningFocus
+): string {
+  if (sport === "running" && intensity === "hard") return `${describeWorkoutType({ sport, runningType, runningFocus })}, Fueling vorher sichern`;
+  if (sport === "running") return `${describeWorkoutType({ sport, runningType, runningFocus })}, Energie vorher und danach passend halten`;
+  if (sport === "strength" || sport === "hiit") return "Kraft- oder Intensitätsreiz, Protein in der nächsten Mahlzeit";
   if (sport === "padel") return "Spielbelastung, Flüssigkeit und Abendessen mitdenken";
 
   return "Geplante Einheit im Wochenkontext";

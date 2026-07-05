@@ -57,8 +57,18 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - Online-Nutzer starten mit einem leeren Beta-Zustand statt mit der Demo-Woche.
 - Profil, Ziele und Wettkampfziel können in den Einstellungen gepflegt werden.
 - Planung, Training, Fueling und Standards werden als eigener Benutzerzustand gespeichert.
+- Der Coach-Chat kann Planinformationen direkt in die Woche übernehmen.
 - Bestehende Demo-Daten in Supabase können unter Einstellungen mit `Beta-Zustand neu starten` entfernt werden.
 - Der lokale Betrieb ohne Supabase bleibt bewusst als Demo-Fallback erhalten.
+
+## Coach-Chat
+
+- API-Route: `/api/coach`
+- serverseitiger OpenAI-Key über `OPENAI_API_KEY`
+- optionales Modell über `OPENAI_MODEL`
+- ohne Key nutzt die App einen regelbasierten lokalen Parser
+- unterstützte Planänderungen: Tageskontext, Zusatzinfos, Training und grobe Mahlzeiten
+- Laufen unterscheidet Laufart und Fokus
 
 ## Architektur
 
