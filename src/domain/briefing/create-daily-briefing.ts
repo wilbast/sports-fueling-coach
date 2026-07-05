@@ -46,7 +46,7 @@ export function createDailyBriefing(input: DailyBriefingInput): DailyBriefing {
     priorities: createPriorities(runningDistanceKm, optionalWorkouts.length),
     coachHint: createCoachHint(runningDistanceKm, goals.weightStrategy, profile.coachingStyle, raceContext),
     coachCards: createCoachCards(runningDistanceKm),
-    source: "rule_based_demo"
+    source: "rule_based"
   };
 }
 
@@ -176,11 +176,17 @@ function createMealReason(role: MealPlanSlot["role"]): string {
 }
 
 function createPriorities(runningDistanceKm: number, optionalWorkoutCount: number): string[] {
-  const priorities = [
-    "Wasserflasche bis Mittag zweimal füllen",
-    "Pre-Workout-Fueling passend zur Startzeit einplanen",
-    "Proteinreiches Abendessen nach dem Lauf einplanen"
-  ];
+  const priorities = runningDistanceKm > 0
+    ? [
+      "Wasserflasche bis Mittag zweimal füllen",
+      "Pre-Workout-Fueling passend zur Startzeit einplanen",
+      "Proteinreiches Abendessen nach dem Lauf einplanen"
+    ]
+    : [
+      "Training oder Ruhetag bewusst festlegen",
+      "Eine einfache Proteinbasis für den Tag planen",
+      "Alltagstermin eintragen, falls er Essen oder Training beeinflusst"
+    ];
 
   if (optionalWorkoutCount > 0) {
     priorities.push("Optionale Einheit nur machen, wenn sie sich wirklich leicht anfühlt");
@@ -203,10 +209,34 @@ function createCoachHint(
     return `${raceContext ? `${raceContext}. ` : ""}Heute ist kein Tag für ein aggressives Defizit. Fueling rund um den Lauf schützt die Qualität der nächsten Trainingstage.`;
   }
 
+  if (runningDistanceKm === 0) {
+    return "Heute ist noch wenig geplant. Lege zuerst Training, Alltag und ein bis zwei Mahlzeiten grob fest, dann wird das Briefing hilfreicher.";
+  }
+
   return "Heute ruhig planen: Training, Essen und Erholung sollen zusammenpassen.";
 }
 
 function createCoachCards(runningDistanceKm: number) {
+  if (runningDistanceKm === 0) {
+    return [
+      {
+        title: "Tag strukturieren",
+        body: "Plane zuerst Kontext, Training oder bewusst Erholung.",
+        tone: "green" as const
+      },
+      {
+        title: "Fueling grob halten",
+        body: "Ein bis zwei Standardmahlzeiten reichen als Startpunkt.",
+        tone: "neutral" as const
+      },
+      {
+        title: "Coach wird besser",
+        body: "Je mehr echte Planung drin ist, desto konkreter wird das Briefing.",
+        tone: "blue" as const
+      }
+    ];
+  }
+
   return [
     {
       title: "Kalorien bewusst",

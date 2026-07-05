@@ -42,5 +42,5 @@ export type DailyBriefing = {
   priorities: string[];
   coachHint: string;
   coachCards: BriefingCoachCard[];
-  source: "rule_based_demo";
+  source: "rule_based";
 };

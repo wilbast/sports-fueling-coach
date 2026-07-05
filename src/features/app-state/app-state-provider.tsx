@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createBetaAppState } from "@/data/beta/app-state";
 import { demoMealTemplates } from "@/data/mock/nutrition";
 import { demoWeekPlan } from "@/data/mock/planning";
 import { demoUserGoals, demoUserProfile } from "@/data/mock/profile";
@@ -25,6 +26,8 @@ import { createClient as createSupabaseClient, isSupabaseConfigured } from "@/li
 const STORAGE_KEY = "sports-fueling-coach:demo-state:v3";
 
 export type AppState = {
+  schemaVersion: number;
+  appMode: "demo" | "beta";
   profile: UserProfile;
   goals: UserGoals;
   weekPlan: WeekPlan;
@@ -82,6 +85,7 @@ type AppStateContextValue = {
   updateGoals: (goals: UserGoals) => void;
   updateRaceGoal: (raceGoal: RaceGoal) => void;
   resetDemoState: () => void;
+  resetBetaState: () => void;
 };
 
 const AppStateContext = createContext<AppStateContextValue | undefined>(undefined);
@@ -94,6 +98,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
   const [state, setState] = useState<AppState>(() => createInitialAppState());
   const [hasHydrated, setHasHydrated] = useState(false);
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
+  const [supabaseUserEmail, setSupabaseUserEmail] = useState<string | undefined>();
 
   useEffect(() => {
     let active = true;
@@ -125,6 +130,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       }
 
       setSupabaseUserId(user.id);
+      setSupabaseUserEmail(user.email);
 
       const { data, error } = await supabase
         .from("app_states")
@@ -137,7 +143,11 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       if (data?.state) {
         setState(normalizeAppState(data.state as Partial<AppState>));
       } else if (!error) {
-        const initialState = createInitialAppState();
+        const initialState = createBetaAppState({
+          userId: user.id,
+          email: user.email,
+          firstName: getUserMetadataName(user.user_metadata)
+        });
         setState(initialState);
 
         await supabase
@@ -401,8 +411,30 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
     resetDemoState: () => {
       window.localStorage.removeItem(STORAGE_KEY);
       setState(createInitialAppState());
+    },
+    resetBetaState: () => {
+      setState((current) => {
+        const betaState = createBetaAppState({
+          userId: supabaseUserId ?? current.profile.id,
+          email: supabaseUserEmail,
+          firstName: current.profile.firstName
+        });
+
+        return {
+          ...betaState,
+          profile: {
+            ...betaState.profile,
+            firstName: current.profile.firstName,
+            bodyMetrics: current.profile.bodyMetrics,
+            primarySports: current.profile.primarySports,
+            coachingStyle: current.profile.coachingStyle,
+            raceGoal: current.profile.raceGoal
+          },
+          goals: current.goals
+        };
+      });
     }
-  }), [hasHydrated, state]);
+  }), [hasHydrated, state, supabaseUserEmail, supabaseUserId]);
 
   return (
     <AppStateContext.Provider value={value}>
@@ -422,7 +454,13 @@ export function useAppState() {
 }
 
 function createInitialAppState(): AppState {
+  if (isSupabaseConfigured()) {
+    return createBetaAppState();
+  }
+
   return {
+    schemaVersion: 4,
+    appMode: "demo",
     profile: clone(demoUserProfile),
     goals: clone(demoUserGoals),
     weekPlan: clone(demoWeekPlan),
@@ -448,6 +486,8 @@ function normalizeAppState(parsed: Partial<AppState>): AppState {
   const fallback = createInitialAppState();
 
   return {
+    schemaVersion: parsed.schemaVersion ?? fallback.schemaVersion,
+    appMode: parsed.appMode ?? fallback.appMode,
     profile: parsed.profile ?? fallback.profile,
     goals: parsed.goals ?? fallback.goals,
     weekPlan: parsed.weekPlan ?? fallback.weekPlan,
@@ -581,7 +621,7 @@ function weekPlanToTemplate(weekPlan: WeekPlan, name: string, description?: stri
   return {
     id: createId("week-standard"),
     name,
-    description: description?.trim() || "Aus der aktuellen Demo-Woche gespeichert.",
+    description: description?.trim() || "Aus der aktuellen Woche gespeichert.",
     days: weekPlan.days.map((day) => ({
       label: formatWeekday(day.date),
       context: getPlanningContext(day),
@@ -646,4 +686,14 @@ function clone<T>(value: T): T {
 
 function asIsoDate(value: string): IsoDate {
   return value as IsoDate;
+}
+
+function getUserMetadataName(metadata: Record<string, unknown> | null | undefined): string | undefined {
+  const fullName = metadata?.full_name;
+  const name = metadata?.name;
+
+  if (typeof fullName === "string" && fullName.trim()) return fullName.trim().split(" ")[0];
+  if (typeof name === "string" && name.trim()) return name.trim().split(" ")[0];
+
+  return undefined;
 }

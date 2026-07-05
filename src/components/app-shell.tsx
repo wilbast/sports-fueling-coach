@@ -33,7 +33,7 @@ export function AppShell({ children }: AppShellProps) {
             <span className="block text-sm font-semibold tracking-wide text-ink">
               Sports & Fueling
             </span>
-            <span className="block text-xs text-muted">Coach Demo</span>
+            <span className="block text-xs text-muted">{onlineMode ? "Coach Beta" : "Coach Demo"}</span>
           </span>
         </Link>
 

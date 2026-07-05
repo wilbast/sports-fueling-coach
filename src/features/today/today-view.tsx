@@ -53,8 +53,8 @@ export function TodayView({ briefing }: TodayViewProps) {
               {briefing.heroTitle}
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
-              Gewicht reduzieren bleibt das Ziel, aber heute schützt gutes Timing die
-              Trainingsqualität.
+              Der Coach bewertet Training, Alltag und Fueling als ruhigen Entscheidungsrahmen
+              für den Tag.
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
@@ -86,7 +86,11 @@ export function TodayView({ briefing }: TodayViewProps) {
             <Pill tone="green">{briefing.workouts.length} Einheiten</Pill>
           </div>
           <div className="grid gap-3">
-            {briefing.workouts.map((workout) => (
+            {briefing.workouts.length === 0 ? (
+              <div className="rounded-2xl border border-line bg-white p-4 text-sm leading-6 text-muted shadow-soft">
+                Noch keine Sporteinheit geplant. Ergänze Training in Planung oder Training, damit das Briefing konkreter wird.
+              </div>
+            ) : briefing.workouts.map((workout) => (
               <article key={workout.title} className="rounded-2xl border border-line bg-white p-4 shadow-soft">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -121,7 +125,11 @@ export function TodayView({ briefing }: TodayViewProps) {
             <Pill tone="amber">Timing wichtig</Pill>
           </div>
           <div className="grid gap-3">
-            {briefing.meals.map((meal) => (
+            {briefing.meals.length === 0 ? (
+              <div className="rounded-2xl border border-line bg-white p-4 text-sm leading-6 text-muted shadow-soft">
+                Noch kein Mahlzeitenvorschlag für den Tag. Füge in Fueling eine grobe Mahlzeit oder einen Standard hinzu.
+              </div>
+            ) : briefing.meals.map((meal) => (
               <article key={`${meal.time}-${meal.name}`} className="rounded-2xl border border-line bg-white p-4 shadow-soft">
                 <div className="flex items-start gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-coach-50 text-coach-700">
@@ -171,7 +179,7 @@ export function TodayView({ briefing }: TodayViewProps) {
               <p className="mt-2 text-sm leading-6 text-muted">{briefing.coachHint}</p>
               <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-coach-700">
                 <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                Regelbasierte Demo-Empfehlung
+                Regelbasierte Empfehlung
               </div>
             </div>
           </div>

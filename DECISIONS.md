@@ -149,3 +149,13 @@ Der komplette `AppState` wird zunächst pro User in `public.app_states.state` ge
 Begründung:
 
 Das bringt die App schnell sicher online, ohne jetzt alle Trainings-, Fueling-, Standard- und Planungsdaten vorschnell in Tabellen zu normalisieren. RLS schützt die Daten pro `auth.uid()`. Später kann das JSONB-Modell schrittweise in fachliche Tabellen migriert werden.
+
+## ADR-016: Online-Nutzer starten im Beta-Zustand statt mit Demo-Daten
+
+Entscheidung:
+
+Sobald Supabase aktiv ist, erzeugt die App für neue Benutzer einen leeren Beta-Zustand mit Basisprofil, aktueller Woche, Planungsstandards und einfachen Fueling-Bausteinen. Die volle Demo-Woche bleibt nur lokaler Fallback ohne Supabase.
+
+Begründung:
+
+Für echte Beta-Tests müssen die sichtbaren Daten vom Nutzer kommen. Demo-Daten sind gut für Produktgefühl und lokale Entwicklung, verfälschen aber Training, Fueling und Coach-Hinweise im privaten Online-Betrieb.

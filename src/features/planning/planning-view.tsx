@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BookmarkPlus,
@@ -109,6 +109,16 @@ export function PlanningView() {
   const [selectedWeekTemplateId, setSelectedWeekTemplateId] = useState(state.standards.weeks[0]?.id ?? "");
   const [weekStandardName, setWeekStandardName] = useState("");
   const trainingLoad = getWeekTrainingLoad(state.weekPlan);
+
+  useEffect(() => {
+    if (!selectedWorkoutStandardId && state.standards.workouts[0]) {
+      setSelectedWorkoutStandardId(state.standards.workouts[0].id);
+    }
+
+    if (!selectedWeekTemplateId && state.standards.weeks[0]) {
+      setSelectedWeekTemplateId(state.standards.weeks[0].id);
+    }
+  }, [selectedWeekTemplateId, selectedWorkoutStandardId, state.standards.weeks, state.standards.workouts]);
 
   const briefing = useMemo(() => createDailyBriefing({
     profile: state.profile,
@@ -223,25 +233,31 @@ export function PlanningView() {
               <Layers3 className="h-5 w-5 text-coach-600" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-ink">Standardwoche</h2>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <select
-                value={selectedWeekTemplateId}
-                onChange={(event) => setSelectedWeekTemplateId(event.target.value)}
-                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="Standardwoche auswählen"
-              >
-                {state.standards.weeks.map((template) => (
-                  <option key={template.id} value={template.id}>{template.name}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => applyWeekStandard(selectedWeekTemplateId)}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
-              >
-                Anwenden
-              </button>
-            </div>
+            {state.standards.weeks.length === 0 ? (
+              <div className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
+                Noch keine Standardwoche gespeichert. Plane eine echte Woche und speichere sie anschließend als Vorlage.
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <select
+                  value={selectedWeekTemplateId}
+                  onChange={(event) => setSelectedWeekTemplateId(event.target.value)}
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                  aria-label="Standardwoche auswählen"
+                >
+                  {state.standards.weeks.map((template) => (
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => applyWeekStandard(selectedWeekTemplateId)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
+                >
+                  Anwenden
+                </button>
+              </div>
+            )}
             <p className="mt-2 text-sm leading-5 text-muted">
               Eine Standardwoche setzt Rahmenbedingungen, Training und grobe Fueling-Slots.
             </p>
@@ -425,25 +441,31 @@ export function PlanningView() {
               </Pill>
             </div>
 
-            <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto]">
-              <select
-                value={selectedWorkoutStandardId}
-                onChange={(event) => setSelectedWorkoutStandardId(event.target.value)}
-                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="Trainingsstandard auswählen"
-              >
-                {state.standards.workouts.map((template) => (
-                  <option key={template.id} value={template.id}>{template.name}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => applyWorkoutStandard(selectedDay.date, selectedWorkoutStandardId)}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700"
-              >
-                Standard einfügen
-              </button>
-            </div>
+            {state.standards.workouts.length === 0 ? (
+              <div className="mb-4 rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
+                Noch keine Trainingsstandards. Füge eine Einheit hinzu und markiere sie als Standard.
+              </div>
+            ) : (
+              <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <select
+                  value={selectedWorkoutStandardId}
+                  onChange={(event) => setSelectedWorkoutStandardId(event.target.value)}
+                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                  aria-label="Trainingsstandard auswählen"
+                >
+                  {state.standards.workouts.map((template) => (
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => applyWorkoutStandard(selectedDay.date, selectedWorkoutStandardId)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700"
+                >
+                  Standard einfügen
+                </button>
+              </div>
+            )}
 
             <div className="grid gap-3">
               {selectedDay.workouts.length === 0 ? (

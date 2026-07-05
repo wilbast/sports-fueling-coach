@@ -1,6 +1,6 @@
 # Sports & Fueling Coach
 
-Persönlicher Demo-Coach für Training, Ernährung, Fueling und sportliche Zielerreichung.
+Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreichung.
 
 ## Sprint 1
 
@@ -52,6 +52,14 @@ Persönlicher Demo-Coach für Training, Ernährung, Fueling und sportliche Ziele
 - RLS-SQL liegt in `supabase/001_app_state_rls.sql`
 - Deployment-Anleitung liegt in `docs/deployment.md`
 
+## Beta-Modus
+
+- Online-Nutzer starten mit einem leeren Beta-Zustand statt mit der Demo-Woche.
+- Profil, Ziele und Wettkampfziel können in den Einstellungen gepflegt werden.
+- Planung, Training, Fueling und Standards werden als eigener Benutzerzustand gespeichert.
+- Bestehende Demo-Daten in Supabase können unter Einstellungen mit `Beta-Zustand neu starten` entfernt werden.
+- Der lokale Betrieb ohne Supabase bleibt bewusst als Demo-Fallback erhalten.
+
 ## Architektur
 
 ```text
@@ -59,10 +67,10 @@ src/
   app/          Next.js Routen
   components/   wiederverwendbare UI-Bausteine
   config/       App-Konfiguration wie Navigation
-  data/mock/    austauschbare Demo-Daten
+  data/         Beta-Startzustand und austauschbare Demo-Daten
   domain/       fachliche Typen und Regeln ohne React
   features/     produktnahe UI pro Bereich
-    app-state/  lokaler Demo-Zustand und Persistenz
+    app-state/  App-Zustand und Persistenz
 ```
 
 ## Lokal starten

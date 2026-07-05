@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Bike, BookmarkPlus, Dumbbell, Footprints, Plus, Waves, X } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { getDayPlanByDate } from "@/domain/planning/week";
@@ -49,6 +49,12 @@ export function TrainingView() {
     .filter((workout) => workout.sport === "running")
     .reduce((sum, workout) => sum + (workout.distanceKm ?? 0), 0);
   const hardSessions = activeWorkouts.filter((workout) => workout.intensity === "hard").length;
+
+  useEffect(() => {
+    if (!selectedStandardId && state.standards.workouts[0]) {
+      setSelectedStandardId(state.standards.workouts[0].id);
+    }
+  }, [selectedStandardId, state.standards.workouts]);
 
   function submitWorkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -137,37 +143,45 @@ export function TrainingView() {
               <Pill tone="green">{state.standards.workouts.length} Vorlagen</Pill>
             </div>
 
-            <div className="grid gap-2">
-              <select
-                value={selectedStandardId}
-                onChange={(event) => setSelectedStandardId(event.target.value)}
-                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="Trainingsstandard auswählen"
-              >
-                {state.standards.workouts.map((template) => (
-                  <option key={template.id} value={template.id}>{template.name}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => applyWorkoutStandard(selectedDay.date, selectedStandardId)}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Beim Tag einfügen
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-2">
-              {state.standards.workouts.slice(0, 4).map((template) => (
-                <div key={template.id} className="rounded-xl bg-canvas px-3 py-3">
-                  <p className="text-sm font-semibold text-ink">{template.name}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted">
-                    {sportLabels[template.sport]} · {template.startTime ?? "flexibel"} · {intensityLabels[template.intensity]}
-                  </p>
+            {state.standards.workouts.length === 0 ? (
+              <div className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
+                Noch keine Trainingsstandards. Speichere die nächste echte Einheit als Standard.
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-2">
+                  <select
+                    value={selectedStandardId}
+                    onChange={(event) => setSelectedStandardId(event.target.value)}
+                    className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                    aria-label="Trainingsstandard auswählen"
+                  >
+                    {state.standards.workouts.map((template) => (
+                      <option key={template.id} value={template.id}>{template.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => applyWorkoutStandard(selectedDay.date, selectedStandardId)}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Beim Tag einfügen
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                <div className="mt-4 grid gap-2">
+                  {state.standards.workouts.slice(0, 4).map((template) => (
+                    <div key={template.id} className="rounded-xl bg-canvas px-3 py-3">
+                      <p className="text-sm font-semibold text-ink">{template.name}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted">
+                        {sportLabels[template.sport]} · {template.startTime ?? "flexibel"} · {intensityLabels[template.intensity]}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </Panel>
 
           <Panel>

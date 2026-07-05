@@ -12,7 +12,7 @@ export default function NotFound() {
           Nicht gefunden
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-normal text-ink">
-          Diese Seite gibt es im Demo-Modus nicht.
+          Diese Seite gibt es in der App nicht.
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted">
           Gehe zurück zur Heute-Seite und starte dort mit dem aktuellen Tagesbriefing.

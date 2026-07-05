@@ -22,8 +22,8 @@ export default function AppError({ error, reset }: AppErrorProps) {
           Die Ansicht konnte nicht geladen werden.
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted">
-          Bitte versuche es erneut. Falls der Fehler bleibt, setze den lokalen Demo-Zustand in
-          den Einstellungen zurück.
+          Bitte versuche es erneut. Falls der Fehler bleibt, setze den App-Zustand in den
+          Einstellungen neu auf.
         </p>
         {error.digest ? (
           <p className="mt-3 rounded-xl bg-canvas px-3 py-2 text-xs font-medium text-muted">

@@ -1,11 +1,11 @@
 # Project State
 
 **Datum:** 2026-07-05  
-**Status:** Sprint 4-6 umgesetzt und verifiziert  
+**Status:** Beta-Übergang umgesetzt
 
 ## Produktstand
 
-Sports & Fueling Coach ist aktuell eine lokale Next.js-Demo-App ohne Backend, Auth, KI oder externe Integrationen.
+Sports & Fueling Coach ist eine private Next.js-App mit Supabase Auth/RLS für den Online-Betrieb und einem lokalen Demo-Fallback ohne Backend.
 
 Sprint 1 hat das klickbare Produktgefühl geliefert: Navigation, sechs Hauptbereiche und eine starke Heute-Seite.
 
@@ -19,7 +19,9 @@ Nach Product-Owner-Feedback wurde die Planung geschärft: Sie enthält keinen Ta
 
 Der aktuelle Stand ergänzt wiederverwendbare Standards: Planungsstandards, Trainingsstandards, Fuelingstandards und komplette Standardwochen. Standardwochen enthalten Rahmenbedingungen, Training und grobe Fueling-Slots, bleiben aber Startpunkte für Tagesbriefings und spätere Coach-Anpassungen, nicht starre Essens-Wochenpläne.
 
-Zusätzlich ist die App für privaten Online-Betrieb vorbereitet: Supabase Auth per E-Mail/Passwort, geschützte App-Routen und eine RLS-abgesicherte `app_states`-Tabelle für den vollständigen lokalen App-State.
+Zusätzlich ist die App für privaten Online-Betrieb vorbereitet: Supabase Auth per E-Mail/Passwort, geschützte App-Routen und eine RLS-abgesicherte `app_states`-Tabelle für den vollständigen App-State.
+
+Der aktuelle Sprint trennt Demo und Beta klarer: Online-Nutzer starten mit einem leeren Beta-Zustand, Basis-Standards für Alltag und einfache Mahlzeiten, aber ohne vorgefüllte Trainingswoche. Bestehende Demo-Zustände in Supabase können in den Einstellungen über `Beta-Zustand neu starten` aufgeräumt werden.
 
 ## Verifikation
 
@@ -83,7 +85,7 @@ Weitere Bereiche:
 
 - Empfehlungen sind regelbasiert und grob.
 - LocalStorage ist Demo-Persistenz, keine robuste Datenbank.
-- Supabase wurde lokal ohne echte Projekt-Credentials nicht gegen eine echte Instanz getestet.
+- Bestehende Supabase-Zustände werden nicht automatisch überschrieben, sondern müssen bewusst zurückgesetzt werden.
 - JSONB-State ist bewusst ein Übergangsmodell und noch kein normalisiertes Datenmodell.
 - Es gibt noch keine Validierung auf fachlich unmögliche Pläne.
 - Insights sind abgeleitet, aber noch nicht tief analysiert.

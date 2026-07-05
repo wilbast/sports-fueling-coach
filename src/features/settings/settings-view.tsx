@@ -5,19 +5,21 @@ import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { PerformanceStrategy, RaceGoal, WeightStrategy } from "@/domain/goals/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { SignOutButton } from "@/features/auth/sign-out-button";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export function SettingsView() {
-  const { state, updateProfile, updateGoals, updateRaceGoal, resetDemoState } = useAppState();
+  const { state, updateProfile, updateGoals, updateRaceGoal, resetDemoState, resetBetaState } = useAppState();
   const profile = state.profile;
   const goals = state.goals;
   const raceGoal = profile.raceGoal ?? createFallbackRaceGoal();
+  const onlineMode = isSupabaseConfigured();
 
   return (
     <div>
       <PageHeader
         eyebrow="Einstellungen"
-        title="Profil, Ziele und Demo-Daten"
-        description="Stammdaten steuern die lokalen Coach-Empfehlungen."
+        title="Profil, Ziele und Daten"
+        description="Stammdaten steuern die Coach-Empfehlungen."
       />
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.95fr]">
@@ -206,24 +208,26 @@ export function SettingsView() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Pill tone="neutral">Strava später</Pill>
                   <Pill tone="neutral">OpenAI später</Pill>
-                  <Pill tone="neutral">Supabase später</Pill>
+                  <Pill tone={onlineMode ? "green" : "neutral"}>
+                    {onlineMode ? "Supabase aktiv" : "Supabase lokal aus"}
+                  </Pill>
                 </div>
               </div>
             </div>
           </Panel>
 
           <Panel>
-            <h2 className="text-lg font-semibold text-ink">Demo-Daten</h2>
+            <h2 className="text-lg font-semibold text-ink">Datenzustand</h2>
             <p className="mt-2 text-sm leading-6 text-muted">
               Ohne Supabase bleiben Änderungen lokal. Mit Supabase werden sie pro Benutzer gespeichert.
             </p>
             <button
               type="button"
-              onClick={resetDemoState}
+              onClick={onlineMode ? resetBetaState : resetDemoState}
               className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              Demo zurücksetzen
+              {onlineMode ? "Beta-Zustand neu starten" : "Demo zurücksetzen"}
             </button>
             <SignOutButton />
           </Panel>
@@ -235,12 +239,23 @@ export function SettingsView() {
 
 function createFallbackRaceGoal(): RaceGoal {
   return {
-    name: "Halbmarathon",
-    date: "2026-10-04",
-    distanceKm: 21.1,
-    targetTime: "1:45:00",
+    name: "Mein Wettkampf",
+    date: createFutureDate(90),
+    distanceKm: 10,
+    targetTime: "0:50:00",
     priority: "A"
   };
+}
+
+function createFutureDate(daysFromNow: number): RaceGoal["date"] {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromNow);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}` as RaceGoal["date"];
 }
 
 function parseNumber(value: string, fallback: number): number {
