@@ -422,8 +422,10 @@ export function SettingsView() {
                 <label className="grid gap-2 text-sm font-semibold text-ink">
                   Zielzeit
                   <input
-                    value={raceGoal.targetTime}
+                    value={toTimePickerValue(raceGoal.targetTime)}
                     onChange={(event) => updateRaceGoal({ ...raceGoal, targetTime: event.target.value })}
+                    type="time"
+                    step="1"
                     className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                   />
                 </label>
@@ -487,9 +489,17 @@ function createFallbackRaceGoal(): RaceGoal {
     name: "Mein Wettkampf",
     date: createFutureDate(90),
     distanceKm: 10,
-    targetTime: "0:50:00",
+    targetTime: "00:50:00",
     priority: "A"
   };
+}
+
+function toTimePickerValue(value: string): string {
+  const parts = value.split(":").map((part) => part.padStart(2, "0"));
+  if (parts.length === 2) return `${parts[0]}:${parts[1]}:00`;
+  if (parts.length === 3) return `${parts[0]}:${parts[1]}:${parts[2]}`;
+
+  return "00:50:00";
 }
 
 function createFallbackFamilyProfile(): FamilyProfile {

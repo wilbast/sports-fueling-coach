@@ -18,7 +18,7 @@ export function WeekCalendar({ className }: WeekCalendarProps) {
 
   return (
     <section className={clsx("mb-6 rounded-2xl border border-line bg-white p-3 shadow-soft sm:p-4", className)}>
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-coach-50 text-coach-700">
             <CalendarDays className="h-5 w-5" aria-hidden="true" />
@@ -38,6 +38,13 @@ export function WeekCalendar({ className }: WeekCalendarProps) {
           >
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
           </button>
+          <input
+            type="date"
+            value={state.selectedDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            className="min-h-10 w-[8.75rem] rounded-full border border-line bg-white px-3 text-xs font-semibold text-ink outline-none transition focus:border-coach-400"
+            aria-label="Datum auswählen"
+          />
           <button
             type="button"
             onClick={() => setSelectedDate(todayIsoDate())}
