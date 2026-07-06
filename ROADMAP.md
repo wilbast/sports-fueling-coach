@@ -179,7 +179,27 @@ Umgesetzt:
 - sichtbare Coach-/KI-Empfehlungen auf Today, Planning, Training, Fueling, Insights und Settings
 - Planning-Chat nutzt Planning-Kontext
 
-## Sprint 12: Regelqualität und Tests
+## Sprint 12: Product Experience 2.0
+
+Status: umgesetzt
+
+Ziel:
+
+Das Produkt wird konsequenter als persönlicher Coach ausgerichtet. Seiten liefern Kontext und Aktionen, der Coach bleibt der Entscheidungsanker.
+
+Umgesetzt:
+
+- Product Review für Today, Planning, Training, Fueling, Insights, Settings und Coach
+- `docs/PRODUCT_REVIEW.md`, `docs/UX_REVIEW.md`, `docs/ARCHITECTURE_REVIEW.md`
+- Today-Reihenfolge geschärft: Briefing, Tagesziele, Fortschritt, Aktivitäten, Ernährung, Empfehlungen, Morgen, Quick Actions
+- alte doppelte Today-Hinweise entfernt
+- Coach-Empfehlungen auf Today mit „Mit Coach besprechen“ und Mini-Chat
+- CoachChatPanel unterstützt getrennte Threads und initiale Gesprächsimpulse
+- Context Builder gewichtet Kontext nach Page Context
+- Quick-Fueling und Coach-Übernahmen speichern Kategorie und Hauptmahlzeit
+- Quick-Fueling-Entwürfe können direkt als Standardmahlzeit gespeichert werden
+
+## Sprint 13: Regelqualität und Tests
 
 Ziel:
 

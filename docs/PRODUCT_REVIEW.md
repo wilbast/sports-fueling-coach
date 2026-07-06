@@ -1,68 +1,130 @@
 # Product Review
 
-Datum: 2026-07-05
+Datum: 2026-07-06
 
-## Positives
+## Produkturteil
 
-- Die Produktvision ist klar erkennbar: Heute-Seite, Coach, Planung, Training, Fueling und Insights zahlen auf eine persönliche Trainings- und Ernährungssteuerung ein.
-- Die Heute-Seite ist weiterhin der stärkste Produktanker. Sie verbindet Training, Verbrauch, Nutrition Status, Coach-Hinweis und schnelle Fueling-Erfassung.
-- Supabase Auth/RLS, normalisierte Aktivitätsdaten und Meal Logs sind gute Schritte weg vom Demo-State.
-- Der Coach verhält sich inzwischen vorsichtiger: Beratung und Vorschläge sind von echten Änderungen getrennt.
-- Strava ist architektonisch richtig als externe Datenquelle modelliert, nicht als isoliertes UI-Feature.
+Sports & Fueling Coach hat einen klaren Kern: Der Nutzer soll nicht Daten verwalten, sondern bessere Tagesentscheidungen treffen. Die stärkste Seite ist Today, weil dort Training, Fueling, Energieverbrauch, gegessene Mahlzeiten und Coach-Empfehlungen zusammenkommen.
 
-## Schwächen
+Die App ist noch keine voll belastbare Beta für eine große Nutzergruppe. Sie ist aber inzwischen deutlich mehr als ein Mockup: Auth, RLS, Strava-Import, Meal Logs, Coach-Historie und serverseitiger AI-Kontext sind echte Produktfundamente.
 
-- Fueling war vor diesem Sprint auf mehrere Bedienmodelle verteilt: Quick Chat, Standards, Tagesplan und Today Logs waren nicht ausreichend verbunden.
-- Die Standardverwaltung war zu technisch und konnte Mahlzeiten nicht bearbeiten, sortieren oder per KI schätzen.
-- Insights waren eher Wocheninterpretation als echte Erkenntnis. Plan vs. Ist war nicht sichtbar.
-- Es gibt weiterhin zwei Datenwelten: JSONB-App-State für Planung/Standards und normalisierte Tabellen für Aktivitäten/Meal Logs.
-- Rezepte sind im Datenmodell vorbereitet, aber noch nicht als vollwertige Bedienoberfläche umgesetzt.
+## Review nach Bereich
 
-## Inkonsistenzen
+### Today
 
-- Navigation: `Konfig` klang technisch und wurde zu `Standards` umbenannt.
-- Coach-Fueling: Fueling-Vorschläge wirkten wie Planänderungen. Sie werden jetzt als Tages-Fueling oder Standard übernommen.
-- Fueling-Seite: Geloggte Mahlzeiten waren nicht dort sichtbar, wo der Nutzer Fueling erwartet. Die Seite zeigt jetzt Standards, Tageslogs, Wochenhistorie und Rezeptstatus.
-- Standardmahlzeiten: Erstellen war möglich, aber Bearbeiten, Löschen, Reihenfolge und Makros für Carbs/Fett fehlten.
-- Insights: Training, Ernährung, Kalorien, Protein und Carbs wurden nicht konsistent gegenübergestellt.
+Zweck: tägliche Entscheidungshilfe.
 
-## Direkt Behobene UX-Probleme
+Bewertung: passt am stärksten zur Vision. Today wurde in diesem Sprint vom Dashboard stärker zum Tagescoach geschoben: Briefing, Tagesfortschritt, Aktivitäten, Ernährung, Empfehlungen, Morgenblick und Quick Actions sind klarer sortiert. Die alten doppelten Hinweisbereiche wurden entfernt.
 
-- Coach-Fueling-Vorschläge haben jetzt spezifische Aktionen:
-  - Zum Tag hinzufügen
-  - Zum Tag + Standard
-  - Nur als Standard
-- Standardmahlzeiten können in der Standards-Seite hinzugefügt, bearbeitet, gelöscht, ausgeblendet und sortiert werden.
-- Beim Hinzufügen/Bearbeiten von Standardmahlzeiten kann eine KI-Schätzung für kcal, Protein, Kohlenhydrate und Fett geladen und anschließend bestätigt werden.
-- Fueling zeigt geloggte Mahlzeiten des aktiven Tages und eine Wochenhistorie.
-- Insights zeigt eine tägliche Plan-vs.-Ist-Tabelle für Training, Mahlzeiten, Kalorien, Protein und Carbs.
-- PWA-Basis mit Manifest, Theme Color und App Icons wurde vorbereitet.
+Verbessert:
 
-## Architekturprobleme
+- Aktivitäten stehen vor Ernährung, weil Training den Tagesbedarf beeinflusst.
+- Coach-Empfehlungen sind dialogfähig über „Mit Coach besprechen“.
+- Fortschritt zeigt nun kcal, Protein, Carbs, Fett und Wasser transparent.
+- Ernährung hat direkte Aktionen für Mahlzeit, Foto und Standard.
 
-- `AppState` als JSONB ist für Planung und Standards noch sinnvoll für Geschwindigkeit, wird aber langfristig zum Engpass für Analysen, Historie, Undo und mehrbenutzerfähige Datenqualität.
-- Standardmahlzeiten existieren aktuell im App-State, während echte Mahlzeiten in `meal_logs` liegen. Eine Migration auf `standard_meals` als Quelle ist weiterhin notwendig.
-- Rezepte, Zutaten und Nutrition Estimates sind vorbereitet, aber nicht vollständig als UI-Workflow angebunden.
-- Coach-Änderungen sind typisiert, aber noch nicht vollständig domain-spezifisch. Fueling ist jetzt besser getrennt, Rezepte und Standardänderungen sollten eigene Change-Typen bekommen.
-- Insights nutzt aktuell verfügbare Plan-, Activity- und Meal-Log-Daten, aber Gewichtstrend fehlt als normalisierte Zeitreihe.
+Offen:
 
-## Verbesserungsvorschläge
+- Wetter, Schlaf, Krankheit, Alkohol und Regeneration sind noch nicht als echte Datenquellen modelliert.
+- Tagesbewertung ist noch nicht live, sollte erst kommen, wenn Ist-Daten verlässlich sind.
 
-- Standards normalisieren: `standard_meals`, `workout_templates`, `planning_templates` und `standard_weeks` sollten mittelfristig eigene Supabase-Tabellen werden.
-- Coach-Commands erweitern:
-  - `create_standard_meal`
-  - `update_standard_meal`
-  - `create_recipe`
-  - `plan_day`
-- Rezeptverwaltung als separaten Sprint bauen: Zutaten, Portionen, KI-Schätzung, manuelle Bestätigung, Log aus Rezept.
-- Meal Logs bearbeitbar machen, damit falsche KI-Schätzungen direkt korrigiert werden können.
-- Gewicht als Zeitreihe speichern und in Insights als 7-/14-/30-Tage-Trend anzeigen.
-- Mobile Navigation mittelfristig auf häufigste Workflows reduzieren und seltenere Bereiche in ein Mehr-Menü legen.
+### Planning
 
-## Offene Entscheidungen
+Zweck: Woche so strukturieren, dass Training, Alltag und Regeneration zusammenpassen.
 
-- Sollen Standardmahlzeiten sofort vollständig aus `standard_meals` kommen oder bleibt der App-State noch ein Übergangsmodell?
-- Soll Fueling primär gegessene Mahlzeiten loggen oder auch geplante Mahlzeiten als eigene Planobjekte führen?
-- Soll der Coach Standards direkt ändern dürfen, oder immer erst einen Änderungsentwurf mit expliziter Bestätigung anzeigen?
-- Wie exakt sollen Rezepte werden: grobe Portionen oder Zutaten mit Grammangaben?
-- Welche PWA-Assets sollen final verwendet werden: einfache Systemicons oder ein gestaltetes Brand-Icon?
+Bewertung: fachlich sinnvoll, aber noch zu stark formulargetrieben. Der Coach sollte künftig der primäre Planungsdialog sein; die Seite bleibt die Kontroll- und Bearbeitungsfläche.
+
+Offen:
+
+- Planvalidierung für harte Wochen, Reisetage und fehlende Regeneration.
+- Vorschlagsmodus für mehrere Varianten mit klarer Empfehlung.
+
+### Training
+
+Zweck: geplante und tatsächliche Belastung verstehen.
+
+Bewertung: gute Basis durch Sportarten, Laufart/Fokus und Strava-Ist-Daten. Noch fehlt die echte Coach-Logik zur Trainingsphase.
+
+Offen:
+
+- Trainingsphase und Wettkampfnähe ableiten.
+- Strava-Trends für Pace, Herzfrequenz, Belastung und Umfang auswerten.
+- Verletzungen/Krankheit als Kontext erfassen.
+
+### Fueling
+
+Zweck: mehrfach täglich einfach Essen und Trinken erfassen und in Entscheidungen übersetzen.
+
+Bewertung: deutlich besser nach diesem Sprint. Meal Logs sind editierbar, kategorisiert und können als Hauptmahlzeit markiert werden. Quick-Fueling speichert Kategorie/Hauptmahlzeit und kann Chat-Entwürfe direkt als Standard speichern.
+
+Offen:
+
+- Standardmahlzeiten und Rezepte müssen vollständig aus normalisierten Supabase-Tabellen kommen.
+- Rezeptverwaltung mit Zutaten, Portionen, KI-Schätzung und manueller Bestätigung fehlt noch.
+- Fotoanalyse ist bewusst nur vorbereitet.
+
+### Insights
+
+Zweck: Erkenntnisse statt Statistik.
+
+Bewertung: Plan-vs.-Ist existiert, aber noch nicht genug „Aha“. Insights müssen Muster erkennen und priorisieren.
+
+Offen:
+
+- Wiederkehrende Protein-/Carb-Lücken.
+- Fueling vor harten Einheiten.
+- Regenerationsqualität nach langen Läufen.
+- Gewichtstrend als Zeitreihe.
+
+### Settings
+
+Zweck: Datenbasis für bessere Coach-Empfehlungen.
+
+Bewertung: sinnvoll, aber langfristig zu breit. Settings sollten weniger wie Formularverwaltung wirken und stärker zeigen, welche Angaben den Coach konkret verbessern.
+
+Offen:
+
+- Datenqualitäts-Score.
+- Geführte Profilverbesserung.
+- Gesundheits-/Familien-/Jobkontext granularer und datenschutzbewusst.
+
+### Coach
+
+Zweck: zentrales Produktinterface.
+
+Bewertung: der richtige strategische Schwerpunkt. Der Coach ist nicht mehr nur Planänderungsassistent, sondern berät, diskutiert und speichert erst nach Bestätigung. Page Context verbessert die Relevanz.
+
+Offen:
+
+- Thread-Auswahl, Archiv, Suche.
+- Bessere Memory-Strategie jenseits der letzten Nachrichten.
+- Tool-/Action-Schema für Rezepte, Standards, Training und Planung weiter normalisieren.
+
+## Vergleich mit bestehenden Produkten
+
+Garmin Connect ist stärker bei Gerätedaten und Trainingshistorie, aber schwächer bei alltagstauglichem Ernährungscoaching.
+
+Strava ist sozial und aktivitätszentriert, aber kein persönlicher Entscheidungscoach.
+
+TrainingPeaks ist stark für strukturierte Trainingsplanung, aber weniger niedrigschwellig für Alltag, Familie und Fueling.
+
+MyFitnessPal ist stark beim Food-Logging, aber zu trackerlastig und nicht coachig genug.
+
+Athlytic ist stark bei Readiness, aber abhängig von Wearable-Daten und weniger planungsorientiert.
+
+HumanGo ist näher am adaptiven Trainingscoach, aber Fueling und Alltag sind nicht der zentrale Produktanker.
+
+## Vor Beta mit 10.000 ambitionierten Sportlern nötig
+
+- Normalisierte Supabase-Modelle für Standards, Rezepte, Gewicht, Profilevents und Trainingstemplates.
+- Automatisierte Tests für Briefing, Coach-Intent, Nutrition-Schätzung und Planänderungen.
+- Echte Datenqualität: Strava-Live-Verifikation, Sync-Retry, Fehlerdiagnose und Monitoring.
+- Coach-Sicherheit: klare Action-Schemas, Undo, Audit Trail und keine stillen Änderungen.
+- Insights mit echten Mustern statt nur Tabellen.
+- Mobile UX mit weniger Formularlast und schnelleren täglichen Eingaben.
+- Datenschutz-/Export-/Löschkonzept.
+- Onboarding, das Profil, Ziel, Wettkampf, Familie, Job und Standards schnell erfasst.
+
+## Produktentscheidung dieses Sprints
+
+Die KI bleibt das Produktzentrum. Today und die anderen Seiten liefern Kontext, Kontrollflächen und schnelle Aktionen. Neue Features werden nur priorisiert, wenn sie Zeit sparen, bessere Entscheidungen ermöglichen oder Motivation steigern.

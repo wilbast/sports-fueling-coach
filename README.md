@@ -83,6 +83,7 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - Coach-Kontext wird serverseitig gebaut und enthält importierte externe Aktivitäten nur als strukturierte Zusammenfassung
 - Coach-Aufrufe können einen Bereichskontext wie `today`, `fueling`, `training`, `planning`, `insights` oder `settings` senden
 - Hauptseiten bieten sichtbare Coach-/KI-Empfehlungen, die beraten, aber keine Daten automatisch ändern
+- Page Context wird im serverseitigen Context Builder gewichtet, damit Today, Fueling, Training, Planning und Insights unterschiedlich beraten
 - Migration: `supabase/004_coach_chat_history.sql`
 
 Beispiel für Vercel:
@@ -127,6 +128,8 @@ Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, OAuth-State-Secret
 - Geloggte Mahlzeiten werden für eingeloggte Nutzer in `meal_logs` gespeichert
 - Geloggte Mahlzeiten können im Fueling-Bereich bearbeitet und gelöscht werden
 - Meal Logs speichern Kategorie und Hauptmahlzeit in `metadata`; ältere Logs bekommen serverseitige Fallbacks aus Uhrzeit und Name
+- Quick-Fueling und Coach-Übernahmen speichern Kategorie und Hauptmahlzeit konsistent mit
+- Chat-Entwürfe im Quick-Fueling können direkt als Standardmahlzeit gespeichert werden
 - Standardmahlzeiten, Rezepte, Zutaten und KI-Schätzungen sind mit `standard_meals`, `recipes`, `recipe_ingredients` und `nutrition_estimates` vorbereitet
 - Migration: `supabase/003_nutrition.sql`
 - API-Routen:
@@ -139,7 +142,14 @@ Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, OAuth-State-Secret
 
 - Die Heute-Seite ist der tägliche Coach-Einstieg mit Briefing, Tageszielen, Tagesfortschritt, Aktivitäten, Ernährung, Coach-Empfehlungen, Morgenblick und Quick Actions
 - Fueling Quick Add ist direkt auf Heute sichtbar
-- Tagesbilanz zeigt kcal Input, Tagesverbrauch, Zielbereich, Protein-/Carb-Fortschritt und was noch fehlt
+- Tagesbilanz zeigt kcal Input, Tagesverbrauch, Zielbereich, Protein-/Carb-/Fett-Fortschritt und was noch fehlt
+- Jede Coach-Empfehlung kann direkt mit dem Coach besprochen werden; Änderungen werden erst nach Bestätigung übernommen
+
+## Reviews
+
+- Produktreview: `docs/PRODUCT_REVIEW.md`
+- UX Review: `docs/UX_REVIEW.md`
+- Architekturreview: `docs/ARCHITECTURE_REVIEW.md`
 
 ## Architektur
 

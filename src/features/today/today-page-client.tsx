@@ -31,7 +31,9 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
   const {
     logs: nutritionLogs,
     isLoading: nutritionLogsLoading,
-    error: nutritionLogsError
+    error: nutritionLogsError,
+    updateLog,
+    deleteLog
   } = useNutritionLogs(activeDate);
 
   useEffect(() => {
@@ -64,6 +66,8 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
       nutritionSummary={nutritionSummary}
       nutritionLogsLoading={nutritionLogsLoading}
       nutritionLogsError={nutritionLogsError}
+      onNutritionLogUpdate={updateLog}
+      onNutritionLogDelete={deleteLog}
       tomorrowHint={createTomorrowHint(tomorrowPlan)}
       manualForecastCalories={state.energySettings.manualDailyBurnForecastCaloriesByDate[activeDate]}
       onManualForecastCaloriesChange={(calories) => updateManualDailyBurnForecastCalories(activeDate, calories)}

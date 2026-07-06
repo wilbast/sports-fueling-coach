@@ -43,6 +43,8 @@ export type CoachContextSource = {
   nutritionLogsToday?: MealLog[];
 };
 
+export type CoachPageContext = "today" | "fueling" | "training" | "planning" | "insights" | "settings" | "coach";
+
 type CoachIntent = {
   mode: "coach" | "planning" | "change";
   type: "info" | "recommendation" | "advice";
@@ -51,8 +53,8 @@ type CoachIntent = {
   needsDeepContext: boolean;
 };
 
-export function buildCoachContext(message: string, source: CoachContextSource) {
-  const intent = inferCoachContextIntent(message);
+export function buildCoachContext(message: string, source: CoachContextSource, pageContext: CoachPageContext = "coach") {
+  const intent = applyPageContextToIntent(inferCoachContextIntent(message), pageContext);
   const weekPlans = normalizeWeekPlans(source);
   const allDays = flattenDays(weekPlans);
   const selectedDay = findDay(allDays, source.selectedDate) ?? source.weekPlan.days[0];
@@ -76,6 +78,7 @@ export function buildCoachContext(message: string, source: CoachContextSource) {
     request: {
       message,
       selectedDate: source.selectedDate,
+      pageContext,
       interpretedIntent: intent
     },
     contextPolicy: {
@@ -83,6 +86,7 @@ export function buildCoachContext(message: string, source: CoachContextSource) {
       openAiReceivesRawDatabase: false,
       openAiCanAccessSupabase: false,
       strategy: "structured_relevant_summary",
+      pageWeighting: describePageContextWeighting(pageContext),
       includedDeepContext: intent.needsDeepContext
     },
     userProfile: {
@@ -208,6 +212,47 @@ function inferCoachContextIntent(message: string): CoachIntent {
     needsTomorrow: mentionsAlcohol || domain === "fueling" || domain === "nutrition",
     needsDeepContext,
   };
+}
+
+function applyPageContextToIntent(intent: CoachIntent, pageContext: CoachPageContext): CoachIntent {
+  if (intent.domain !== "general") {
+    return {
+      ...intent,
+      needsTomorrow: intent.needsTomorrow || pageContext === "today" || pageContext === "fueling",
+      needsDeepContext: intent.needsDeepContext || pageContext === "insights"
+    };
+  }
+
+  const domainByPage: Partial<Record<CoachPageContext, CoachIntent["domain"]>> = {
+    today: "general",
+    fueling: "fueling",
+    training: "training",
+    planning: "planning",
+    insights: "general",
+    settings: "general",
+    coach: "general"
+  };
+
+  return {
+    ...intent,
+    domain: domainByPage[pageContext] ?? intent.domain,
+    needsTomorrow: intent.needsTomorrow || pageContext === "today" || pageContext === "fueling",
+    needsDeepContext: intent.needsDeepContext || pageContext === "insights"
+  };
+}
+
+function describePageContextWeighting(pageContext: CoachPageContext): string {
+  const descriptions: Record<CoachPageContext, string> = {
+    today: "Tagescoach: wichtigste Entscheidung, heutiger Plan, Fueling-Lücke, Aktivitäten und Morgenblick priorisieren.",
+    fueling: "Ernährungscoach: geloggte Mahlzeiten, Makros, Timing, Standards, Rezepte und alltagstaugliche Schätzungen priorisieren.",
+    training: "Lauf-/Trainingscoach: Wettkampfziel, Belastung, Intensität, Regeneration und Strava-Aktivitäten priorisieren.",
+    planning: "Planungscoach: Wochenstruktur, Alltag, Familie, Arbeit, Reise, Regeneration und Verschiebungsoptionen priorisieren.",
+    insights: "Analyst: Plan-vs-Ist, wiederkehrende Muster, Abweichungen und nächste Lernpunkte priorisieren.",
+    settings: "Datenqualitätscoach: fehlende Profil-, Ziel-, Familien-, Job- und Gesundheitsdaten priorisieren.",
+    coach: "Gesamtcoach: ausgewogene Beratung über Training, Fueling, Alltag, Ziele und Regeneration."
+  };
+
+  return descriptions[pageContext];
 }
 
 function inferCoachContextMode(lower: string): CoachIntent["mode"] {

@@ -279,3 +279,23 @@ Coach-Aufrufe können einen `pageContext` wie `today`, `fueling`, `training`, `p
 Begründung:
 
 Der Coach soll sich in jedem Bereich passend anfühlen: Fueling fragt anders als Training oder Insights. Gleichzeitig bleibt das Grundprinzip erhalten: Im Zweifel Beratung, keine automatische Planänderung.
+
+## ADR-029: KI ist Produktkern, Seiten sind Kontextflächen
+
+Entscheidung:
+
+Die Hauptseiten werden nicht als gleichwertige Feature-Silos weiterentwickelt. Today und Coach sind die primären Erlebnisflächen. Planning, Training, Fueling, Insights und Settings liefern Kontext, Kontrollmöglichkeiten und schnelle Aktionen für bessere Coach-Empfehlungen.
+
+Begründung:
+
+Sports & Fueling Coach soll keine weitere Fitness-App, kein Kalorientracker und kein Trainingsplan-Tool werden. Der zentrale Nutzen ist die tägliche Antwort auf: „Was sollte ich heute tun, um meinem Ziel näherzukommen?“ Features werden daher nur priorisiert, wenn sie Zeit sparen, bessere Entscheidungen ermöglichen oder Motivation steigern.
+
+## ADR-030: Today-Empfehlungen sind dialogfähig
+
+Entscheidung:
+
+Coach-Empfehlungen auf Today sind keine statischen Karten mehr. Jede Empfehlung kann über „Mit Coach besprechen“ in einen eigenen Mini-Chat überführt werden. Der Chat nutzt denselben serverseitigen Coach-Flow, getrennte Thread-IDs und weiterhin explizite Bestätigung vor Änderungen.
+
+Begründung:
+
+Eine Empfehlung ist nur wertvoll, wenn der Nutzer sie an seinen Alltag anpassen kann: vegetarische Alternative, Grillabend, Bier, Rezeptwunsch oder konkretes Protein-Ziel. Der Dialog ist deshalb Teil der Empfehlung, nicht ein separates Feature.

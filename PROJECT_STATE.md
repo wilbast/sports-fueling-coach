@@ -35,6 +35,8 @@ Meal Logs können im Fueling-Bereich bearbeitet und gelöscht werden. Jede gelog
 
 Coach-Anfragen können jetzt pro Bereich einen `pageContext` senden. Heute, Fueling, Training, Planung, Insights und Einstellungen erhalten damit sichtbare Coach-/KI-Empfehlungen, ohne das Grundprinzip zu brechen: Beratung zuerst, keine automatische Planänderung.
 
+Product Experience Sprint 2.0 schärft diese Richtung: Today ist nicht mehr als Statistik-Dashboard gedacht, sondern als persönlicher Tagescoach. Coach-Empfehlungen auf Today können direkt in einem eigenen Mini-Chat besprochen werden. Der Context Builder gewichtet den Kontext nun explizit nach Seite, und Quick-Fueling sowie Coach-Übernahmen speichern Kategorie und Hauptmahlzeit konsistent.
+
 Die Trainingsplanung unterscheidet jetzt Laufen, Padel Tennis, Schwimmen, Squash, HIIT, Krafttraining und Radfahren. Laufen hat zusätzlich Laufart und Fokus: Lockerer Lauf, Tempodauerlauf, Fahrtspiel, Intervalltraining sowie Basis, Regeneration, Schwellentraining und VO2Max.
 
 Der aktuelle Sprint macht Strava zur ersten externen Datenquelle. Nutzer können Strava per OAuth verbinden, Aktivitäten initial und manuell synchronisieren und den Verbindungsstatus in den Einstellungen sehen. Intern werden die Aktivitäten nicht als isolierte Strava-Daten behandelt, sondern in ein providerneutrales Aktivitätsmodell gemappt. Damit ist die App auf weitere Quellen wie Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings vorbereitet.
@@ -103,7 +105,9 @@ Weitere Bereiche:
 - Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros
 - Meal-Log-Metadaten: Kategorie und Hauptmahlzeit werden in `metadata` gespeichert und in Coach-Kontext, Today und Fueling-UI genutzt
 - Coach Page Context: `/api/coach` akzeptiert `pageContext` und schärft die Empfehlung je nach App-Bereich
+- Context Builder: Page Context wird serverseitig in die Kontextstrategie aufgenommen und beeinflusst Domain-Fokus, Morgenblick und Deep Context
 - AI-Fueling: `/api/nutrition/estimate` schätzt Nährwerte serverseitig mit AI oder transparentem Fallback; Werte werden als KI-Schätzung oder manuell bestätigt gekennzeichnet
+- Reviews: `docs/PRODUCT_REVIEW.md`, `docs/UX_REVIEW.md`, `docs/ARCHITECTURE_REVIEW.md`
 
 ## Bekannte Grenzen
 
@@ -116,6 +120,8 @@ Weitere Bereiche:
 - Insights sind abgeleitet, aber noch nicht tief analysiert.
 - Es gibt noch keine automatisierten Unit-Tests.
 - Der Coach bietet übernehmbare Vorschläge, hat aber noch keine Undo-Historie.
+- Wasser, Schlaf, Krankheit, Alkohol und Regeneration sind noch keine echten Zeitreihen.
+- Tagesbewertung ist bewusst noch nicht aktiv, weil dafür mehr Ist-Daten nötig sind.
 - Alte Coach-Antworten werden als Textverlauf wiederhergestellt; frühere Vorschlagsbuttons werden nach Reload nicht rekonstruiert.
 - Strava-Synchronisation ist implementiert, aber ohne echte Strava-Credentials und produktive Supabase-Migration nicht live verifiziert.
 

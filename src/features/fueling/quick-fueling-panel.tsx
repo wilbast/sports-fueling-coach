@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Beef, Bot, CheckCircle2, Loader2, Salad, SendHorizontal, Soup, Wheat } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
-import type { NutritionConfidence } from "@/domain/nutrition/logs";
+import type { MealLogCategory, NutritionConfidence } from "@/domain/nutrition/logs";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
@@ -41,7 +41,7 @@ type ChatMessage = {
 };
 
 export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelProps) {
-  const { state, addMealSlot, addMealEntry } = useAppState();
+  const { state, addMealSlot, addMealEntry, addMealTemplate } = useAppState();
   const { addLog } = useNutritionLogs(date);
   const standards = state.mealTemplates.filter((meal) => meal.isStandard !== false);
   const [input, setInput] = useState("");
@@ -76,12 +76,19 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
       confidence: meal.nutritionConfidence ?? "manual",
       rationale: meal.nutritionRationale,
       manuallyConfirmed: meal.nutritionSource === "manual" || meal.nutritionConfidence === "manual",
-      rawInput: meal.description
+      rawInput: meal.description,
+      category: mealRoleToLogCategory(slot.role),
+      isMainMeal: inferMainMealFromTemplate(meal, slot.role)
     });
 
     if (!savedLog) {
       addMealSlot(date, slot);
     }
+
+    setMessages((current) => [
+      ...current,
+      createChatMessage("assistant", `${meal.name} wurde für heute hinzugefügt.`)
+    ]);
   }
 
   async function submitChat(event: FormEvent<HTMLFormElement>) {
@@ -113,11 +120,15 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
         confidence: draft.confidence,
         rationale: draft.rationale,
         manuallyConfirmed: false,
-        rawInput: draft.template.description
+        rawInput: draft.template.description,
+        category: mealRoleToLogCategory(draft.slot.role),
+        isMainMeal: inferMainMealFromDraft(draft)
       });
 
       if (!savedLog) {
         addMealEntry(date, draft.template, draft.slot, { saveAsStandard: draft.saveAsStandard });
+      } else if (draft.saveAsStandard) {
+        addMealTemplate(draft.template);
       }
       setMessages((current) => [...current, createChatMessage("assistant", `${draft.template.name} ist für heute gespeichert.`)]);
       setDraft(null);
@@ -270,6 +281,15 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
                   onChange={(value) => updateDraftValue("fat", value)}
                 />
               </div>
+              <label className="mt-3 flex items-center gap-2 rounded-lg bg-canvas px-3 py-2 text-xs font-semibold text-ink">
+                <input
+                  type="checkbox"
+                  checked={draft.saveAsStandard}
+                  onChange={(event) => setDraft((current) => current ? { ...current, saveAsStandard: event.target.checked } : current)}
+                  className="h-4 w-4 rounded border-line text-coach-600"
+                />
+                Als Standardmahlzeit speichern
+              </label>
             </div>
           ) : null}
 
@@ -457,6 +477,40 @@ function inferMealRole(meal: MealTemplate): MealPlanSlot["role"] {
   if (text.includes("dinner") || text.includes("abend")) return "dinner";
 
   return "lunch";
+}
+
+function mealRoleToLogCategory(role: MealPlanSlot["role"]): MealLogCategory {
+  if (role === "breakfast") return "breakfast";
+  if (role === "dinner") return "dinner";
+  if (role === "pre_workout" || role === "post_workout") return "snack";
+
+  return "lunch";
+}
+
+function inferMainMealFromTemplate(meal: MealTemplate, role: MealPlanSlot["role"]): boolean {
+  if (role === "pre_workout" || role === "post_workout") return false;
+  const text = `${meal.name} ${meal.description} ${meal.tags.join(" ")}`.toLowerCase();
+
+  return role === "lunch" ||
+    role === "dinner" ||
+    text.includes("bowl") ||
+    text.includes("pasta") ||
+    text.includes("lachs") ||
+    text.includes("chili") ||
+    text.includes("reis");
+}
+
+function inferMainMealFromDraft(draft: FuelingDraft): boolean {
+  if (draft.slot.role === "pre_workout" || draft.slot.role === "post_workout") return false;
+  const text = `${draft.template.name} ${draft.template.description}`.toLowerCase();
+
+  return draft.slot.role === "lunch" ||
+    draft.slot.role === "dinner" ||
+    text.includes("bowl") ||
+    text.includes("pasta") ||
+    text.includes("lachs") ||
+    text.includes("chili") ||
+    text.includes("reis");
 }
 
 function inferCalories(lower: string): number {

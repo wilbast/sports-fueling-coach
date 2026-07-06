@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Lightbulb, Loader2, MessageCircle, RotateCcw, SendHorizontal, Sparkles } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
 import type { CoachChatMessage, CoachMealDraft, CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
+import type { MealLogCategory } from "@/domain/nutrition/logs";
 import { describeWorkoutType } from "@/domain/training/catalog";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
@@ -13,6 +14,8 @@ type CoachChatPanelProps = {
   intro?: string;
   compact?: boolean;
   pageContext?: "today" | "fueling" | "training" | "planning" | "insights" | "settings" | "coach";
+  threadId?: string;
+  initialMessage?: string;
 };
 
 const CHAT_RESET_STORAGE_KEY = "sports-fueling-coach:coach-chat-reset-at";
@@ -21,7 +24,9 @@ export function CoachChatPanel({
   title = "Coach fragen",
   intro = "Frag nach Training, Fueling, Rezepten, Regeneration oder Tagesstrategie.",
   compact = false,
-  pageContext = "coach"
+  pageContext = "coach",
+  threadId = "default",
+  initialMessage
 }: CoachChatPanelProps) {
   const { state, addMealEntry, addMealTemplate, applyCoachPlanChanges } = useAppState();
   const { addLog } = useNutritionLogs(state.selectedDate);
@@ -32,6 +37,7 @@ export function CoachChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
+  const [appliedInitialMessage, setAppliedInitialMessage] = useState<string | null>(null);
   const [pendingPlan, setPendingPlan] = useState<{ id: string; changes: CoachPlanChange[] } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const payloadState = useMemo(() => ({
@@ -56,7 +62,7 @@ export function CoachChatPanel({
       setIsLoadingHistory(true);
 
       try {
-        const response = await fetch("/api/coach?threadId=default");
+        const response = await fetch(`/api/coach?threadId=${encodeURIComponent(threadId)}`);
         const result = await response.json() as { messages?: Array<{
           id: string;
           role: CoachChatMessage["role"];
@@ -66,7 +72,7 @@ export function CoachChatPanel({
         }> };
 
         if (active && response.ok) {
-          const resetAt = getLocalChatResetAt();
+          const resetAt = getLocalChatResetAt(threadId);
           setMessages((result.messages ?? [])
             .filter((message) => isAfterReset(message.createdAt, resetAt))
             .map((message) => ({
@@ -91,11 +97,17 @@ export function CoachChatPanel({
     return () => {
       active = false;
     };
-  }, []);
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!initialMessage || input.trim() || appliedInitialMessage === initialMessage) return;
+    setInput(initialMessage);
+    setAppliedInitialMessage(initialMessage);
+  }, [appliedInitialMessage, initialMessage, input]);
 
   function resetVisibleChat() {
     const resetAt = new Date().toISOString();
-    window.localStorage.setItem(CHAT_RESET_STORAGE_KEY, resetAt);
+    window.localStorage.setItem(getChatResetStorageKey(threadId), resetAt);
     setMessages([]);
     setPendingPlan(null);
     setAppliedIds([]);
@@ -124,7 +136,7 @@ export function CoachChatPanel({
       void persistLocalMessages([
         { role: "user", content: message },
         { role: "assistant", content: assistantMessage.content, mode: assistantMessage.mode }
-      ]);
+      ], threadId);
       setMessages((current) => [
         ...current,
         {
@@ -150,7 +162,7 @@ export function CoachChatPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
-          threadId: "default",
+          threadId,
           pageContext,
           state: payloadState
         })
@@ -206,7 +218,7 @@ export function CoachChatPanel({
     );
     void persistLocalMessages([
       { role: "assistant", content: assistantMessage.content, mode: assistantMessage.mode }
-    ]);
+    ], threadId);
     setMessages((current) => [
       ...current,
       {
@@ -250,7 +262,9 @@ export function CoachChatPanel({
         confidence: "medium",
         rationale: "Aus dem Coach-Chat übernommen. Grobe Schätzung, nicht grammgenau.",
         manuallyConfirmed: false,
-        rawInput: change.meal.description
+        rawInput: change.meal.description,
+        category: coachMealRoleToLogCategory(change.meal.role),
+        isMainMeal: inferCoachMealMainMeal(change.meal)
       });
 
       if (savedLog && saveAsStandard) {
@@ -363,13 +377,13 @@ async function persistLocalMessages(messages: Array<{
   role: "user" | "assistant";
   content: string;
   mode?: CoachMode;
-}>) {
+}>, threadId: string) {
   try {
     await fetch("/api/coach/history", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        threadId: "default",
+        threadId,
         messages
       })
     });
@@ -378,12 +392,16 @@ async function persistLocalMessages(messages: Array<{
   }
 }
 
-function getLocalChatResetAt(): string | null {
+function getLocalChatResetAt(threadId: string): string | null {
   try {
-    return window.localStorage.getItem(CHAT_RESET_STORAGE_KEY);
+    return window.localStorage.getItem(getChatResetStorageKey(threadId));
   } catch {
     return null;
   }
+}
+
+function getChatResetStorageKey(threadId: string): string {
+  return `${CHAT_RESET_STORAGE_KEY}:${threadId}`;
 }
 
 function isAfterReset(createdAt: string, resetAt: string | null): boolean {
@@ -626,6 +644,27 @@ function coachMealToNutritionValues(meal: CoachMealDraft) {
     carbohydrateGrams,
     fatGrams
   };
+}
+
+function coachMealRoleToLogCategory(role: CoachMealDraft["role"]): MealLogCategory {
+  if (role === "breakfast") return "breakfast";
+  if (role === "dinner") return "dinner";
+  if (role === "pre_workout" || role === "post_workout") return "snack";
+
+  return "lunch";
+}
+
+function inferCoachMealMainMeal(meal: CoachMealDraft): boolean {
+  if (meal.role === "pre_workout" || meal.role === "post_workout") return false;
+  const text = `${meal.name} ${meal.description} ${(meal.tags ?? []).join(" ")}`.toLowerCase();
+
+  return meal.role === "lunch" ||
+    meal.role === "dinner" ||
+    text.includes("bowl") ||
+    text.includes("pasta") ||
+    text.includes("lachs") ||
+    text.includes("chili") ||
+    text.includes("reis");
 }
 
 function midpoint(min: number | undefined, max: number | undefined, fallback: number): number {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildCoachContext, type CoachContextSource } from "@/domain/coach/context-builder";
+import { buildCoachContext, type CoachContextSource, type CoachPageContext } from "@/domain/coach/context-builder";
 import type { CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import type { MealLog, MealLogCategory } from "@/domain/nutrition/logs";
 import type { DayBlockType, DayContext, DayPlan } from "@/domain/planning/types";
@@ -20,7 +20,7 @@ type CoachRequestBody = {
   message?: string;
   state?: CoachContextSource;
   threadId?: string;
-  pageContext?: "today" | "fueling" | "training" | "planning" | "insights" | "settings" | "coach";
+  pageContext?: CoachPageContext;
 };
 
 type CoachChatHistoryMessage = {
@@ -96,8 +96,7 @@ export async function POST(request: NextRequest) {
     const outputText = await aiClient.generateJson({
       systemPrompt: createSystemPrompt(),
       userPayload: {
-        ...buildCoachContext(message, coachState),
-        pageContext: body?.pageContext ?? "coach",
+        ...buildCoachContext(message, coachState, body?.pageContext ?? "coach"),
         conversationHistory: conversationHistory.map((item) => ({
           role: item.role,
           content: item.content,

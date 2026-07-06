@@ -11,6 +11,9 @@
 - Standardmahlzeiten und Rezepte vollständig aus `standard_meals`/`recipes` statt App-State verwalten.
 - Coach-Verlauf um Thread-Auswahl und Löschen/Archivieren erweitern.
 - Coach-Empfehlungen aus Header-Aktionen optional als eigene Seitenpanels anzeigen, falls sie im engen Header zu dominant werden.
+- Normalisierte Zeitreihen für Gewicht, Wasser, Schlaf, Krankheit, Alkohol und Regeneration ergänzen.
+- Coach-Audit-Trail und Undo für übernommene Änderungen bauen.
+- Tagesbewertung erst nach belastbarer Datenbasis aktivieren.
 
 ## P1
 
@@ -49,6 +52,10 @@
 - Meal-Log-Kategorien und Hauptmahlzeit-Metadaten eingeführt.
 - Today Experience mit Tagesfortschritt, Coach-Empfehlungen, Morgenblick und Quick Actions geschärft.
 - Bereichskontext für Coach-Aufrufe und sichtbare Empfehlungen auf Hauptseiten ergänzt.
+- Today-Empfehlungen dialogfähig mit eigenem Mini-Chat gemacht.
+- Context Builder um Page-Context-Gewichtung erweitert.
+- Quick-Fueling- und Coach-Übernahmen speichern Kategorie/Hauptmahlzeit konsistent.
+- Product-, UX- und Architekturreview dokumentiert.
 
 ## P2
 

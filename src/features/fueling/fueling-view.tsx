@@ -1,26 +1,20 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Beef, BookmarkPlus, History, Pencil, Plus, Salad, Save, Soup, Trash2, Utensils, Wheat, X } from "lucide-react";
+import { Beef, BookmarkPlus, History, Plus, Salad, Soup, Trash2, Utensils, Wheat } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
-import type { MealLog, MealLogCategory } from "@/domain/nutrition/logs";
-import { sourceLabel } from "@/domain/nutrition/logs";
+import type { MealLog } from "@/domain/nutrition/logs";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
+import { MealLogList } from "@/features/nutrition/meal-log-list";
 import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
 const mealIcons = [Salad, Beef, Soup, Wheat];
-const mealLogCategories: Array<{ value: MealLogCategory; label: string }> = [
-  { value: "breakfast", label: "Frühstück" },
-  { value: "lunch", label: "Mittagessen" },
-  { value: "dinner", label: "Abendessen" },
-  { value: "snack", label: "Snack" },
-  { value: "drink", label: "Getränk" }
-];
+const NUTRITION_LOGS_UPDATED_EVENT = "sports-fueling-coach:nutrition-logs-updated";
 
 export function FuelingView() {
   const { state, addMealTemplate, addMealEntry, addMealSlot, removeMealSlot, saveMealTemplateAsStandard } = useAppState();
@@ -39,11 +33,11 @@ export function FuelingView() {
   const [slotTime, setSlotTime] = useState("12:30");
   const [slotRole, setSlotRole] = useState<MealPlanSlot["role"]>("lunch");
   const selectedDayTotals = useMemo(() => calculateDayMealTotals(selectedDay.mealPlan, state.mealTemplates), [selectedDay.mealPlan, state.mealTemplates]);
-  const { logs: selectedDayLogs, isLoading: logsLoading, error: logsError, updateLog, deleteLog } = useNutritionLogs(selectedDay.date);
+  const { logs: selectedDayLogs, isLoading: logsLoading, error: logsError, addLog, updateLog, deleteLog } = useNutritionLogs(selectedDay.date);
   const weeklyLogs = useWeekMealLogs(state.weekPlan.days.map((day) => day.date));
   const selectedDayLoggedTotals = useMemo(() => calculateMealLogTotals(selectedDayLogs), [selectedDayLogs]);
 
-  function submitTemplate(event: FormEvent<HTMLFormElement>) {
+  async function submitTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
     const trimmedDescription = description.trim();
@@ -56,14 +50,41 @@ export function FuelingView() {
       caloriesMax: parseNumber(calories, 0),
       proteinMin: parseNumber(protein, 0),
       proteinMax: parseNumber(protein, 0),
+      carbsGrams: 0,
+      fatGrams: 0,
       tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean)
     };
 
     if (addNewMealToDay) {
-      addMealEntry(selectedDay.date, template, {
+      const slot = {
         time: newMealTime,
         role: newMealRole
-      }, { saveAsStandard: saveMealAsStandard });
+      };
+      const savedLog = await addLog({
+        date: selectedDay.date,
+        time: slot.time,
+        name: template.name,
+        description: template.description,
+        source: saveMealAsStandard ? "standard" : "manual",
+        values: {
+          calories: template.caloriesMin,
+          proteinGrams: template.proteinMin,
+          carbohydrateGrams: template.carbsGrams ?? 0,
+          fatGrams: template.fatGrams ?? 0
+        },
+        confidence: "manual",
+        rationale: "Manuell in Fueling erfasst.",
+        manuallyConfirmed: true,
+        rawInput: template.description,
+        category: mealRoleToLogCategory(slot.role),
+        isMainMeal: inferMainMealFromTemplate(template, slot.role)
+      });
+
+      if (!savedLog) {
+        addMealEntry(selectedDay.date, template, slot, { saveAsStandard: saveMealAsStandard });
+      } else if (saveMealAsStandard) {
+        addMealTemplate(template);
+      }
     } else if (saveMealAsStandard) {
       addMealTemplate(template);
     } else {
@@ -75,15 +96,46 @@ export function FuelingView() {
     setSaveMealAsStandard(true);
   }
 
-  function submitSlot(event: FormEvent<HTMLFormElement>) {
+  async function submitSlot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!slotTemplateId || !slotTime) return;
+    const meal = standardMealTemplates.find((template) => template.id === slotTemplateId);
+    if (!meal) return;
 
-    addMealSlot(selectedDay.date, {
+    await addStandardMealToDay(meal, {
       time: slotTime,
-      mealTemplateId: slotTemplateId,
       role: slotRole
     });
+  }
+
+  async function addStandardMealToDay(meal: MealTemplate, slot: Omit<MealPlanSlot, "mealTemplateId">) {
+    const savedLog = await addLog({
+      date: selectedDay.date,
+      time: slot.time,
+      name: meal.name,
+      description: meal.description,
+      source: "standard",
+      sourceId: meal.id,
+      values: {
+        calories: midpoint(meal.estimatedCalories.min, meal.estimatedCalories.max),
+        proteinGrams: midpoint(meal.estimatedProteinGrams.min, meal.estimatedProteinGrams.max),
+        carbohydrateGrams: midpoint(meal.estimatedCarbohydratesGrams?.min, meal.estimatedCarbohydratesGrams?.max),
+        fatGrams: midpoint(meal.estimatedFatGrams?.min, meal.estimatedFatGrams?.max)
+      },
+      confidence: meal.nutritionConfidence ?? "manual",
+      rationale: meal.nutritionRationale,
+      manuallyConfirmed: meal.nutritionSource === "manual" || meal.nutritionConfidence === "manual",
+      rawInput: meal.description,
+      category: mealRoleToLogCategory(slot.role),
+      isMainMeal: inferMainMealFromTemplate(meal, slot.role)
+    });
+
+    if (!savedLog) {
+      addMealSlot(selectedDay.date, {
+        ...slot,
+        mealTemplateId: meal.id
+      });
+    }
   }
 
   return (
@@ -150,18 +202,13 @@ export function FuelingView() {
             <History className="h-5 w-5 text-coach-600" aria-hidden="true" />
             <h2 className="text-lg font-semibold text-ink">Historie dieser Woche</h2>
           </div>
-          <div className="grid gap-2">
-            {weeklyLogs.isLoading ? (
-              <p className="rounded-xl bg-canvas px-3 py-3 text-sm text-muted">Historie wird geladen...</p>
-            ) : weeklyLogs.logs.length === 0 ? (
-              <p className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">Noch keine geloggten Mahlzeiten in dieser Woche.</p>
-            ) : weeklyLogs.logs.slice(0, 8).map((log) => (
-              <div key={log.id} className="rounded-xl border border-line px-3 py-3">
-                <p className="text-sm font-semibold text-ink">{formatShortDate(log.date)} · {log.name}</p>
-                <p className="mt-1 text-xs text-muted">{log.values.calories} kcal · {log.values.proteinGrams} g Protein · {sourceLabel(log.source, log.manuallyConfirmed)}</p>
-              </div>
-            ))}
-          </div>
+          <MealLogList
+            logs={weeklyLogs.logs.slice(0, 8)}
+            isLoading={weeklyLogs.isLoading}
+            emptyText="Noch keine geloggten Mahlzeiten in dieser Woche."
+            onUpdate={updateLog}
+            onDelete={deleteLog}
+          />
         </Panel>
 
         <Panel className="lg:col-span-2">
@@ -190,10 +237,9 @@ export function FuelingView() {
                   <button
                     key={meal.id}
                     type="button"
-                    onClick={() => addMealSlot(selectedDay.date, {
+                    onClick={() => void addStandardMealToDay(meal, {
                       time: inferNextMealTime(selectedDay.mealPlan.length),
-                      role: inferMealRole(meal),
-                      mealTemplateId: meal.id
+                      role: inferMealRole(meal)
                     })}
                     className="rounded-xl border border-line px-3 py-3 text-left transition hover:border-coach-200 hover:bg-coach-50"
                   >
@@ -205,6 +251,7 @@ export function FuelingView() {
                         <p className="font-semibold text-ink">{meal.name}</p>
                         <p className="mt-1 text-sm leading-5 text-muted">{meal.description}</p>
                         <p className="mt-2 text-xs font-semibold text-coach-700">{formatMealEstimate(meal)}</p>
+                        <p className="mt-2 text-xs font-semibold text-muted">Antippen: zum aktiven Tag loggen</p>
                       </div>
                     </div>
                   </button>
@@ -434,213 +481,6 @@ function calculateMealLogTotals(logs: MealLog[]) {
   });
 }
 
-function MealLogList({
-  logs,
-  isLoading,
-  error,
-  emptyText,
-  onUpdate,
-  onDelete
-}: {
-  logs: MealLog[];
-  isLoading: boolean;
-  error: string | null;
-  emptyText: string;
-  onUpdate: (input: {
-    id: string;
-    date: string;
-    time?: string;
-    name: string;
-    description?: string;
-    source: MealLog["source"];
-    values: MealLog["values"];
-    confidence: MealLog["confidence"];
-    rationale?: string;
-    manuallyConfirmed?: boolean;
-    category?: MealLogCategory;
-    isMainMeal?: boolean;
-  }) => Promise<MealLog | null>;
-  onDelete: (id: string, date?: string) => Promise<boolean>;
-}) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-
-  if (isLoading) {
-    return <p className="rounded-xl bg-canvas px-3 py-3 text-sm text-muted">Mahlzeiten werden geladen...</p>;
-  }
-
-  if (error) {
-    return <p className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3 text-sm text-rose-700">{error}</p>;
-  }
-
-  if (logs.length === 0) {
-    return <p className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">{emptyText}</p>;
-  }
-
-  return (
-    <div className="grid gap-2">
-      {logs.map((log) => (
-        <MealLogCard
-          key={log.id}
-          log={log}
-          isEditing={editingId === log.id}
-          onEdit={() => setEditingId(log.id)}
-          onCancel={() => setEditingId(null)}
-          onUpdate={async (input) => {
-            const updated = await onUpdate(input);
-            if (updated) setEditingId(null);
-          }}
-          onDelete={async () => {
-            const deleted = await onDelete(log.id, log.date);
-            if (deleted) setEditingId(null);
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function MealLogCard({
-  log,
-  isEditing,
-  onEdit,
-  onCancel,
-  onUpdate,
-  onDelete
-}: {
-  log: MealLog;
-  isEditing: boolean;
-  onEdit: () => void;
-  onCancel: () => void;
-  onUpdate: (input: {
-    id: string;
-    date: string;
-    time?: string;
-    name: string;
-    description?: string;
-    source: MealLog["source"];
-    values: MealLog["values"];
-    confidence: MealLog["confidence"];
-    rationale?: string;
-    manuallyConfirmed?: boolean;
-    category?: MealLogCategory;
-    isMainMeal?: boolean;
-  }) => Promise<void>;
-  onDelete: () => Promise<void>;
-}) {
-  const [time, setTime] = useState(log.time ?? "");
-  const [name, setName] = useState(log.name);
-  const [description, setDescription] = useState(log.description ?? "");
-  const [category, setCategory] = useState<MealLogCategory>(log.category);
-  const [isMainMeal, setIsMainMeal] = useState(log.isMainMeal);
-  const [calories, setCalories] = useState(String(log.values.calories));
-  const [protein, setProtein] = useState(String(log.values.proteinGrams));
-  const [carbs, setCarbs] = useState(String(log.values.carbohydrateGrams));
-  const [fat, setFat] = useState(String(log.values.fatGrams ?? 0));
-
-  useEffect(() => {
-    if (!isEditing) return;
-    setTime(log.time ?? "");
-    setName(log.name);
-    setDescription(log.description ?? "");
-    setCategory(log.category);
-    setIsMainMeal(log.isMainMeal);
-    setCalories(String(log.values.calories));
-    setProtein(String(log.values.proteinGrams));
-    setCarbs(String(log.values.carbohydrateGrams));
-    setFat(String(log.values.fatGrams ?? 0));
-  }, [isEditing, log]);
-
-  if (isEditing) {
-    return (
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!name.trim()) return;
-          void onUpdate({
-            id: log.id,
-            date: log.date,
-            time,
-            name: name.trim(),
-            description: description.trim() || undefined,
-            source: log.source,
-            values: {
-              calories: parseNumber(calories, 0),
-              proteinGrams: parseNumber(protein, 0),
-              carbohydrateGrams: parseNumber(carbs, 0),
-              fatGrams: parseNumber(fat, 0)
-            },
-            confidence: "manual",
-            rationale: log.rationale ?? undefined,
-            manuallyConfirmed: true,
-            category,
-            isMainMeal
-          });
-        }}
-        className="rounded-xl border border-coach-100 bg-white px-3 py-3"
-      >
-        <div className="grid gap-2 sm:grid-cols-[0.5fr_1fr]">
-          <input value={time} onChange={(event) => setTime(event.target.value)} type="time" className="min-h-10 rounded-lg border border-line px-2 text-sm outline-none focus:border-coach-400" aria-label="Uhrzeit" />
-          <input value={name} onChange={(event) => setName(event.target.value)} className="min-h-10 rounded-lg border border-line px-2 text-sm outline-none focus:border-coach-400" aria-label="Name" />
-        </div>
-        <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Beschreibung" className="mt-2 min-h-10 w-full rounded-lg border border-line px-2 text-sm outline-none focus:border-coach-400" aria-label="Beschreibung" />
-        <div className="mt-2 grid gap-2 sm:grid-cols-5">
-          <select value={category} onChange={(event) => setCategory(event.target.value as MealLogCategory)} className="min-h-10 rounded-lg border border-line px-2 text-sm outline-none focus:border-coach-400" aria-label="Kategorie">
-            {mealLogCategories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
-          <input value={calories} onChange={(event) => setCalories(event.target.value)} inputMode="numeric" placeholder="kcal" className="min-h-10 rounded-lg border border-line px-2 text-sm outline-none focus:border-coach-400" aria-label="Kalorien" />
-          <input value={protein} onChange={(event) => setProtein(event.target.value)} inputMode="numeric" placeholder="Protein" className="min-h-10 rounded-lg border border-line px-2 text-sm outline-none focus:border-coach-400" aria-label="Protein" />
-          <input value={carbs} onChange={(event) => setCarbs(event.target.value)} inputMode="numeric" placeholder="Carbs" className="min-h-10 rounded-lg border border-line px-2 text-sm outline-none focus:border-coach-400" aria-label="Kohlenhydrate" />
-          <input value={fat} onChange={(event) => setFat(event.target.value)} inputMode="numeric" placeholder="Fett" className="min-h-10 rounded-lg border border-line px-2 text-sm outline-none focus:border-coach-400" aria-label="Fett" />
-        </div>
-        <label className="mt-2 flex items-center gap-2 rounded-lg bg-canvas px-3 py-2 text-sm font-semibold text-ink">
-          <input type="checkbox" checked={isMainMeal} onChange={(event) => setIsMainMeal(event.target.checked)} className="h-4 w-4 rounded border-line text-coach-600" />
-          Hauptmahlzeit
-        </label>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="submit" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-coach-600 px-3 text-xs font-semibold text-white">
-            <Save className="h-4 w-4" aria-hidden="true" />
-            Speichern
-          </button>
-          <button type="button" onClick={onCancel} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-semibold text-muted">
-            <X className="h-4 w-4" aria-hidden="true" />
-            Abbrechen
-          </button>
-          <button type="button" onClick={() => void onDelete()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-rose-100 bg-rose-50 px-3 text-xs font-semibold text-rose-700">
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-            Löschen
-          </button>
-        </div>
-      </form>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-line px-3 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold text-ink">{log.name}</p>
-            <Pill tone="blue">{mealLogCategoryLabel(log.category)}</Pill>
-            {log.isMainMeal ? <Pill tone="green">Hauptmahlzeit</Pill> : null}
-          </div>
-          <p className="mt-1 text-sm text-muted">{log.time ?? "ohne Uhrzeit"} · {sourceLabel(log.source, log.manuallyConfirmed)}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Pill tone={log.manuallyConfirmed ? "green" : "amber"}>
-            {log.confidence === "manual" ? "bestätigt" : "Schätzung"}
-          </Pill>
-          <button type="button" onClick={onEdit} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition hover:bg-canvas hover:text-ink" aria-label="Mahlzeit bearbeiten">
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-      <p className="mt-3 text-xs font-semibold text-coach-700">
-        {log.values.calories} kcal · {log.values.proteinGrams} g Protein · {log.values.carbohydrateGrams} g Carbs{typeof log.values.fatGrams === "number" ? ` · ${log.values.fatGrams} g Fett` : ""}
-      </p>
-    </div>
-  );
-}
-
 function useWeekMealLogs(dates: string[]) {
   const [logs, setLogs] = useState<MealLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -675,8 +515,18 @@ function useWeekMealLogs(dates: string[]) {
       void loadLogs();
     }
 
+    function handleLogsUpdated(event: Event) {
+      const detail = (event as CustomEvent<{ date?: string }>).detail;
+      if (!detail?.date || selectedDates.includes(detail.date)) {
+        void loadLogs();
+      }
+    }
+
+    window.addEventListener(NUTRITION_LOGS_UPDATED_EVENT, handleLogsUpdated);
+
     return () => {
       cancelled = true;
+      window.removeEventListener(NUTRITION_LOGS_UPDATED_EVENT, handleLogsUpdated);
     };
   }, [datesKey]);
 
@@ -691,10 +541,6 @@ function formatRange(min: number, max: number): string {
   return min === max ? String(min) : `${min}-${max}`;
 }
 
-function mealLogCategoryLabel(category: MealLogCategory): string {
-  return mealLogCategories.find((item) => item.value === category)?.label ?? "Snack";
-}
-
 function roleLabel(role: MealPlanSlot["role"]): string {
   const labels: Record<MealPlanSlot["role"], string> = {
     breakfast: "Frühstück",
@@ -705,6 +551,39 @@ function roleLabel(role: MealPlanSlot["role"]): string {
   };
 
   return labels[role];
+}
+
+function mealRoleToLogCategory(role: MealPlanSlot["role"]) {
+  if (role === "breakfast") return "breakfast";
+  if (role === "dinner") return "dinner";
+  if (role === "pre_workout" || role === "post_workout") return "snack";
+
+  return "lunch";
+}
+
+function inferMainMealFromTemplate(
+  meal: Pick<MealTemplate, "name" | "description" | "tags"> | { name: string; description: string; tags: string[] },
+  role: MealPlanSlot["role"]
+): boolean {
+  if (role === "pre_workout" || role === "post_workout") return false;
+  const text = `${meal.name} ${meal.description} ${meal.tags.join(" ")}`.toLowerCase();
+
+  return role === "lunch" ||
+    role === "dinner" ||
+    text.includes("bowl") ||
+    text.includes("pasta") ||
+    text.includes("lachs") ||
+    text.includes("chili") ||
+    text.includes("reis") ||
+    text.includes("kartoffel");
+}
+
+function midpoint(min?: number, max?: number): number {
+  if (typeof min === "number" && typeof max === "number") return Math.round((min + max) / 2);
+  if (typeof min === "number") return Math.round(min);
+  if (typeof max === "number") return Math.round(max);
+
+  return 0;
 }
 
 function inferNextMealTime(mealCount: number): string {
