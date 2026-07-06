@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { Beef, Bot, CheckCircle2, Loader2, Salad, SendHorizontal, Soup, Wheat } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
 import type { MealLogCategory, NutritionConfidence } from "@/domain/nutrition/logs";
+import { estimateMealLogTime, inferMealCategory, mealCategoryToRole } from "@/domain/nutrition/meal-timing";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
+import { getDayPlanByDate } from "@/domain/planning/week";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
@@ -44,20 +46,19 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
   const { state, addMealTemplate } = useAppState();
   const { addLog } = useNutritionLogs(date);
   const standards = state.mealTemplates.filter((meal) => meal.isStandard !== false);
+  const selectedDay = getDayPlanByDate(state.weekPlan, date);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState<FuelingDraft | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);
   const latestMessages = compact ? messages.slice(-3) : messages.slice(-5);
-  const currentDayMealCount = useMemo(() => {
-    const selectedWeek = state.weekPlans.find((week) => week.days.some((day) => day.date === date)) ?? state.weekPlan;
-    return selectedWeek.days.find((day) => day.date === date)?.mealPlan.length ?? 0;
-  }, [date, state.weekPlan, state.weekPlans]);
 
   async function addStandardToDay(meal: MealTemplate) {
+    const category = inferMealCategory(meal);
+    const loggedTime = estimateMealLogTime(meal, selectedDay);
     const slot = {
-      time: inferNextMealTime(currentDayMealCount),
-      role: inferMealRole(meal),
+      time: loggedTime,
+      role: mealCategoryToRole(category),
       mealTemplateId: meal.id
     };
     const savedLog = await addLog({
@@ -78,7 +79,7 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
       manuallyConfirmed: meal.nutritionSource === "manual" || meal.nutritionConfidence === "manual",
       rawInput: meal.description,
       category: mealRoleToLogCategory(slot.role),
-      isMainMeal: inferMainMealFromTemplate(meal, slot.role)
+      isMainMeal: false
     });
 
     if (!savedLog) {
@@ -91,7 +92,7 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
 
     setMessages((current) => [
       ...current,
-      createChatMessage("assistant", `${meal.name} wurde für heute hinzugefügt.`)
+      createChatMessage("assistant", `${meal.name} wurde um ${loggedTime} für heute hinzugefügt.`)
     ]);
   }
 
@@ -109,9 +110,10 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
         return;
       }
 
+      const loggedTime = estimateMealLogTime(draft.template, selectedDay);
       const savedLog = await addLog({
         date,
-        time: draft.slot.time,
+        time: loggedTime,
         name: draft.template.name,
         description: draft.template.description,
         source: draft.source,
@@ -126,7 +128,7 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
         manuallyConfirmed: false,
         rawInput: draft.template.description,
         category: mealRoleToLogCategory(draft.slot.role),
-        isMainMeal: inferMainMealFromDraft(draft)
+        isMainMeal: false
       });
 
       if (!savedLog) {
@@ -137,13 +139,13 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
       if (draft.saveAsStandard) {
         addMealTemplate(draft.template);
       }
-      setMessages((current) => [...current, createChatMessage("assistant", `${draft.template.name} ist für heute gespeichert.`)]);
+      setMessages((current) => [...current, createChatMessage("assistant", `${draft.template.name} ist um ${loggedTime} für heute gespeichert.`)]);
       setDraft(null);
       return;
     }
 
     setIsEstimating(true);
-    const nextDraft = await createFuelingDraft(message, currentDayMealCount);
+    const nextDraft = await createFuelingDraft(message, selectedDay);
     setIsEstimating(false);
     setDraft(nextDraft);
     setMessages((current) => [
@@ -349,7 +351,7 @@ function NutritionDraftInput({
   );
 }
 
-async function createFuelingDraft(message: string, mealCount: number): Promise<FuelingDraft> {
+async function createFuelingDraft(message: string, day: ReturnType<typeof getDayPlanByDate>): Promise<FuelingDraft> {
   const estimate = await estimateNutrition(message);
   const lower = message.toLowerCase();
   const calories = estimate.calories;
@@ -359,7 +361,7 @@ async function createFuelingDraft(message: string, mealCount: number): Promise<F
   return {
     template: {
       name: estimate.name,
-      description: message,
+      description: estimate.description,
       caloriesMin: calories,
       caloriesMax: calories,
       proteinMin: protein,
@@ -369,7 +371,12 @@ async function createFuelingDraft(message: string, mealCount: number): Promise<F
       tags: ["chat", "fueling", role]
     },
     slot: {
-      time: inferTime(lower) ?? inferNextMealTime(mealCount),
+      time: estimateMealLogTime({
+        name: estimate.name,
+        description: estimate.description,
+        tags: ["chat", "fueling", role],
+        category: undefined
+      }, day),
       role
     },
     saveAsStandard: false,
@@ -381,6 +388,7 @@ async function createFuelingDraft(message: string, mealCount: number): Promise<F
 
 async function estimateNutrition(input: string): Promise<{
   name: string;
+  description: string;
   calories: number;
   proteinGrams: number;
   carbohydrateGrams: number;
@@ -398,6 +406,7 @@ async function estimateNutrition(input: string): Promise<{
     const result = await response.json() as {
       estimate?: {
         name: string;
+        description: string;
         calories: number;
         proteinGrams: number;
         carbohydrateGrams: number;
@@ -423,6 +432,7 @@ async function estimateNutrition(input: string): Promise<{
 
   return {
     name: inferMealName(input),
+    description: inferMealDescription(input),
     calories,
     proteinGrams: protein,
     carbohydrateGrams: carbs,
@@ -451,37 +461,22 @@ function inferMealName(message: string): string {
   return cleaned.length > 42 ? `${cleaned.slice(0, 39).trim()}...` : cleaned;
 }
 
+function inferMealDescription(message: string): string {
+  const cleaned = message
+    .replace(/[.,;:!?]/g, " ")
+    .replace(/\b(ich|habe|hatte|gegessen|geplant|heute|bitte|speichern|mit|und|oder)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = cleaned.split(" ").filter(Boolean).slice(0, 6);
+
+  return words.length > 0 ? words.join(" ") : inferMealName(message);
+}
+
 function inferRole(lower: string): MealPlanSlot["role"] {
   if (lower.includes("frühstück") || lower.includes("fruehstueck") || lower.includes("morgens")) return "breakfast";
-  if (lower.includes("pre") || lower.includes("vor dem") || lower.includes("vor training") || lower.includes("vor lauf")) return "pre_workout";
-  if (lower.includes("post") || lower.includes("nach dem") || lower.includes("nach training") || lower.includes("nach lauf")) return "post_workout";
+  if (lower.includes("pre") || lower.includes("vor dem") || lower.includes("vor training") || lower.includes("vor lauf") || lower.includes("banane")) return "pre_workout";
+  if (lower.includes("post") || lower.includes("nach dem") || lower.includes("nach training") || lower.includes("nach lauf") || lower.includes("proteinshake") || lower.includes("protein shake") || lower.includes("whey") || lower.includes("recovery")) return "post_workout";
   if (lower.includes("abend") || lower.includes("dinner")) return "dinner";
-
-  return "lunch";
-}
-
-function inferTime(lower: string): string | undefined {
-  const clockMatch = lower.match(/(?:um\s*)?(\d{1,2})[:.](\d{2})/);
-  if (clockMatch) return `${clockMatch[1].padStart(2, "0")}:${clockMatch[2]}`;
-
-  if (lower.includes("frühstück") || lower.includes("fruehstueck") || lower.includes("morgens")) return "08:00";
-  if (lower.includes("mittag")) return "12:30";
-  if (lower.includes("abend")) return "19:00";
-
-  return undefined;
-}
-
-function inferNextMealTime(mealCount: number): string {
-  const times = ["08:00", "12:30", "16:30", "19:00", "21:00"];
-  return times[Math.min(mealCount, times.length - 1)];
-}
-
-function inferMealRole(meal: MealTemplate): MealPlanSlot["role"] {
-  const text = `${meal.name} ${meal.tags.join(" ")}`.toLowerCase();
-  if (text.includes("breakfast") || text.includes("frühstück")) return "breakfast";
-  if (text.includes("pre")) return "pre_workout";
-  if (text.includes("post") || text.includes("recovery")) return "post_workout";
-  if (text.includes("dinner") || text.includes("abend")) return "dinner";
 
   return "lunch";
 }
@@ -492,32 +487,6 @@ function mealRoleToLogCategory(role: MealPlanSlot["role"]): MealLogCategory {
   if (role === "pre_workout" || role === "post_workout") return "snack";
 
   return "lunch";
-}
-
-function inferMainMealFromTemplate(meal: MealTemplate, role: MealPlanSlot["role"]): boolean {
-  if (role === "pre_workout" || role === "post_workout") return false;
-  const text = `${meal.name} ${meal.description} ${meal.tags.join(" ")}`.toLowerCase();
-
-  return role === "lunch" ||
-    role === "dinner" ||
-    text.includes("bowl") ||
-    text.includes("pasta") ||
-    text.includes("lachs") ||
-    text.includes("chili") ||
-    text.includes("reis");
-}
-
-function inferMainMealFromDraft(draft: FuelingDraft): boolean {
-  if (draft.slot.role === "pre_workout" || draft.slot.role === "post_workout") return false;
-  const text = `${draft.template.name} ${draft.template.description}`.toLowerCase();
-
-  return draft.slot.role === "lunch" ||
-    draft.slot.role === "dinner" ||
-    text.includes("bowl") ||
-    text.includes("pasta") ||
-    text.includes("lachs") ||
-    text.includes("chili") ||
-    text.includes("reis");
 }
 
 function inferCalories(lower: string): number {

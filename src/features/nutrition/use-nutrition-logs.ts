@@ -192,7 +192,7 @@ function createLocalMealLog(input: CreateMealLogInput): MealLog {
     rationale: input.rationale?.trim() || null,
     manuallyConfirmed: Boolean(input.manuallyConfirmed),
     category: input.category ?? inferMealLogCategory(input.name, input.time),
-    isMainMeal: typeof input.isMainMeal === "boolean" ? input.isMainMeal : inferMainMeal(input.name, input.category),
+    isMainMeal: typeof input.isMainMeal === "boolean" ? input.isMainMeal : false,
     createdAt: new Date().toISOString()
   };
 }
@@ -224,7 +224,7 @@ function updateLocalMealLog(input: UpdateMealLogInput): MealLog | null {
       rationale: input.rationale?.trim() || null,
       manuallyConfirmed: Boolean(input.manuallyConfirmed),
       category: input.category ?? inferMealLogCategory(input.name, input.time),
-      isMainMeal: typeof input.isMainMeal === "boolean" ? input.isMainMeal : inferMainMeal(input.name, input.category)
+      isMainMeal: typeof input.isMainMeal === "boolean" ? input.isMainMeal : false
     };
 
     return updatedLog;
@@ -292,17 +292,4 @@ function inferMealLogCategory(name: string, time?: string): MealLogCategory {
   }
 
   return "snack";
-}
-
-function inferMainMeal(name: string, category?: MealLogCategory): boolean {
-  if (category === "drink" || category === "snack") return false;
-  const text = name.toLowerCase();
-
-  return category === "breakfast" ||
-    category === "lunch" ||
-    category === "dinner" ||
-    text.includes("bowl") ||
-    text.includes("pasta") ||
-    text.includes("reis") ||
-    text.includes("kartoffel");
 }

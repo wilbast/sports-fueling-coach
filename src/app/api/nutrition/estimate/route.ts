@@ -3,6 +3,7 @@ import { resolveAiJsonClient } from "@/lib/ai/server";
 
 type NutritionEstimateResponse = {
   name: string;
+  description: string;
   calories: number;
   proteinGrams: number;
   carbohydrateGrams: number;
@@ -63,7 +64,8 @@ function createSystemPrompt(): string {
     "Stelle Werte nie als exakt dar. Nutze confidence niedrig, mittel oder hoch.",
     "Wenn Angaben ungenau sind, schätze konservativ und erkläre kurz die Unsicherheit.",
     "Antworte ausschließlich als JSON im Schema.",
-    "Felder: name, calories, proteinGrams, carbohydrateGrams, fatGrams, confidence, rationale.",
+    "Felder: name, description, calories, proteinGrams, carbohydrateGrams, fatGrams, confidence, rationale.",
+    "description ist eine sehr kurze Beschreibung mit 2-6 Worten, z. B. 'Banane vor Training' oder 'Skyr mit Müsli'.",
     "Alle Nährwerte beziehen sich auf die beschriebene gegessene Menge, nicht auf 100 g."
   ].join("\n");
 }
@@ -72,9 +74,10 @@ function createNutritionEstimateSchema(): Record<string, unknown> {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["name", "calories", "proteinGrams", "carbohydrateGrams", "fatGrams", "confidence", "rationale"],
+    required: ["name", "description", "calories", "proteinGrams", "carbohydrateGrams", "fatGrams", "confidence", "rationale"],
     properties: {
       name: { type: "string" },
+      description: { type: "string" },
       calories: { type: "number" },
       proteinGrams: { type: "number" },
       carbohydrateGrams: { type: "number" },
@@ -92,6 +95,9 @@ function normalizeEstimate(
 ): NutritionEstimateResponse {
   return {
     name: typeof estimate.name === "string" && estimate.name.trim() ? estimate.name.trim() : createName(input),
+    description: typeof estimate.description === "string" && estimate.description.trim()
+      ? createShortDescription(estimate.description)
+      : createShortDescription(input),
     calories: normalizeNumber(estimate.calories, createFallbackEstimate(input).calories),
     proteinGrams: normalizeNumber(estimate.proteinGrams, createFallbackEstimate(input).proteinGrams),
     carbohydrateGrams: normalizeNumber(estimate.carbohydrateGrams, createFallbackEstimate(input).carbohydrateGrams),
@@ -127,6 +133,7 @@ function createFallbackEstimate(input: string): NutritionEstimateResponse {
 
   return {
     name: createName(input),
+    description: createShortDescription(input),
     calories,
     proteinGrams: protein,
     carbohydrateGrams: carbs,
@@ -140,6 +147,17 @@ function createFallbackEstimate(input: string): NutritionEstimateResponse {
 function createName(input: string): string {
   const trimmed = input.trim();
   return trimmed.length > 44 ? `${trimmed.slice(0, 41).trim()}...` : trimmed;
+}
+
+function createShortDescription(input: string): string {
+  const cleaned = input
+    .replace(/[.,;:!?]/g, " ")
+    .replace(/\b(ich|habe|hatte|gegessen|geplant|bitte|heute|speichern|zum|zur|mit|und|oder)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = cleaned.split(" ").filter(Boolean).slice(0, 6);
+
+  return words.length > 0 ? words.join(" ") : createName(input);
 }
 
 function normalizeNumber(value: unknown, fallback: number): number {

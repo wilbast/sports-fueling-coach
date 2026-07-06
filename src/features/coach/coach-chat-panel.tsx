@@ -5,6 +5,7 @@ import { CheckCircle2, Lightbulb, Loader2, MessageCircle, RotateCcw, SendHorizon
 import { Panel, Pill } from "@/components/ui";
 import type { CoachChatMessage, CoachMealDraft, CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import type { MealLogCategory } from "@/domain/nutrition/logs";
+import { estimateMealLogTime, inferMealCategory, mealCategoryToRole } from "@/domain/nutrition/meal-timing";
 import { describeWorkoutType } from "@/domain/training/catalog";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
@@ -266,9 +267,13 @@ export function CoachChatPanel({
         continue;
       }
 
+      const day = state.weekPlans.flatMap((week) => week.days).find((item) => item.date === change.date) ?? state.weekPlan.days.find((item) => item.date === change.date);
+      const category = inferMealCategory(template);
+      const role = mealCategoryToRole(category);
+      const loggedTime = estimateMealLogTime(template, day);
       const savedLog = await addLog({
         date: change.date,
-        time: change.meal.time,
+        time: loggedTime,
         name: change.meal.name,
         description: change.meal.description,
         source: "ai_estimate",
@@ -277,13 +282,11 @@ export function CoachChatPanel({
         rationale: "Aus dem Coach-Chat übernommen. Grobe Schätzung, nicht grammgenau.",
         manuallyConfirmed: false,
         rawInput: change.meal.description,
-        category: coachMealRoleToLogCategory(change.meal.role),
-        isMainMeal: inferCoachMealMainMeal(change.meal)
+        category: coachMealRoleToLogCategory(role),
+        isMainMeal: false
       });
 
-      if (savedLog && saveAsStandard) {
-        addMealTemplate(template);
-      }
+      if (savedLog && saveAsStandard) addMealTemplate(template);
 
       if (!savedLog) {
         setError(`${change.meal.name} konnte gerade nicht als Mahlzeit gespeichert werden. Ich habe den Plan nicht heimlich verändert.`);
@@ -635,6 +638,12 @@ function coachMealToTemplate(meal: CoachMealDraft) {
     proteinMax: meal.proteinMax ?? meal.proteinMin ?? 35,
     carbsGrams: meal.carbohydrateGrams,
     fatGrams: meal.fatGrams,
+    category: inferMealCategory({
+      name: meal.name,
+      description: meal.description,
+      tags: meal.tags ?? ["coach", "fueling"],
+      category: undefined
+    }),
     nutritionSource: "ai_estimate" as const,
     nutritionConfidence: "medium" as const,
     nutritionRationale: "Aus dem Coach-Chat übernommen.",
@@ -666,19 +675,6 @@ function coachMealRoleToLogCategory(role: CoachMealDraft["role"]): MealLogCatego
   if (role === "pre_workout" || role === "post_workout") return "snack";
 
   return "lunch";
-}
-
-function inferCoachMealMainMeal(meal: CoachMealDraft): boolean {
-  if (meal.role === "pre_workout" || meal.role === "post_workout") return false;
-  const text = `${meal.name} ${meal.description} ${(meal.tags ?? []).join(" ")}`.toLowerCase();
-
-  return meal.role === "lunch" ||
-    meal.role === "dinner" ||
-    text.includes("bowl") ||
-    text.includes("pasta") ||
-    text.includes("lachs") ||
-    text.includes("chili") ||
-    text.includes("reis");
 }
 
 function midpoint(min: number | undefined, max: number | undefined, fallback: number): number {

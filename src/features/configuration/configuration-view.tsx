@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { ArrowDown, ArrowUp, BookmarkPlus, Bot, CalendarRange, Dumbbell, Pencil, Plus, Salad, SlidersHorizontal, Trash2 } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
+import { inferMealCategory, mealCategoryLabel, mealCategoryOptions } from "@/domain/nutrition/meal-timing";
 import type { MealTemplate } from "@/domain/nutrition/types";
 import type { PlanningContext } from "@/domain/standards/types";
 import {
@@ -72,6 +73,7 @@ export function ConfigurationView() {
   const [protein, setProtein] = useState("35");
   const [carbsGrams, setCarbsGrams] = useState("70");
   const [fatGrams, setFatGrams] = useState("20");
+  const [mealCategory, setMealCategory] = useState<MealTemplate["category"]>("main");
   const [mealTags, setMealTags] = useState("standard, protein");
   const [mealEditingId, setMealEditingId] = useState<string | null>(null);
   const [isEstimatingMeal, setIsEstimatingMeal] = useState(false);
@@ -134,6 +136,7 @@ export function ConfigurationView() {
       proteinMax: parseNumber(protein, 0),
       carbsGrams: parseNumber(carbsGrams, 0),
       fatGrams: parseNumber(fatGrams, 0),
+      category: mealCategory,
       nutritionSource: mealEstimateNotice ? "ai_estimate" as const : "manual" as const,
       nutritionConfidence: mealEstimateNotice ? "medium" as const : "manual" as const,
       nutritionRationale: mealEstimateNotice ?? "Manuell gepflegte Standardmahlzeit.",
@@ -165,6 +168,7 @@ export function ConfigurationView() {
       const result = await response.json() as {
         estimate?: {
           name: string;
+          description?: string;
           calories: number;
           proteinGrams: number;
           carbohydrateGrams: number;
@@ -177,6 +181,7 @@ export function ConfigurationView() {
 
       if (response.ok && estimate) {
         if (!mealName.trim()) setMealName(estimate.name);
+        if (estimate.description) setMealDescription(estimate.description);
         setCalories(String(estimate.calories));
         setProtein(String(estimate.proteinGrams));
         setCarbsGrams(String(estimate.carbohydrateGrams));
@@ -200,6 +205,7 @@ export function ConfigurationView() {
     setProtein(String(midpoint(meal.estimatedProteinGrams.min, meal.estimatedProteinGrams.max)));
     setCarbsGrams(String(meal.estimatedCarbohydratesGrams?.min ?? 0));
     setFatGrams(String(meal.estimatedFatGrams?.min ?? 0));
+    setMealCategory(inferMealCategory(meal));
     setMealTags(meal.tags.join(", "));
     setMealEstimateNotice(meal.nutritionRationale ?? null);
   }
@@ -211,6 +217,7 @@ export function ConfigurationView() {
     setProtein("35");
     setCarbsGrams("70");
     setFatGrams("20");
+    setMealCategory("main");
     setMealTags("standard, protein");
     setMealEditingId(null);
     setMealEstimateNotice(null);
@@ -418,13 +425,15 @@ export function ConfigurationView() {
               <EmptyState text="Noch keine Fuelingstandards gespeichert." />
             ) : standardMeals.map((meal, index) => (
               <div key={meal.id} className="rounded-xl border border-line px-3 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <div className="grid gap-3">
+                  <div className="min-w-0">
                     <p className="font-semibold text-ink">{meal.name}</p>
                     <p className="mt-1 text-sm leading-5 text-muted">{meal.description}</p>
-                    <p className="mt-2 text-xs text-muted">{meal.tags.join(" · ") || "ohne Kategorie"}</p>
+                    <p className="mt-2 text-xs text-muted">
+                      {mealCategoryLabel(inferMealCategory(meal))} · {meal.tags.join(" · ") || "ohne Tags"}
+                    </p>
                   </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                  <div className="flex flex-wrap gap-1">
                     <IconButton label="Nach oben" disabled={index === 0} onClick={() => moveMealTemplate(meal.id, "up")}>
                       <ArrowUp className="h-4 w-4" aria-hidden="true" />
                     </IconButton>
@@ -434,7 +443,13 @@ export function ConfigurationView() {
                     <IconButton label="Fuelingstandard bearbeiten" onClick={() => editMealStandard(meal)}>
                       <Pencil className="h-4 w-4" aria-hidden="true" />
                     </IconButton>
-                    <DeleteButton label="Aus Standards entfernen" onClick={() => removeMealStandard(meal.id)} />
+                    <button
+                      type="button"
+                      onClick={() => removeMealStandard(meal.id)}
+                      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-white px-2 text-xs font-semibold text-muted transition hover:bg-canvas hover:text-ink"
+                    >
+                      Ausblenden
+                    </button>
                     <DeleteButton label="Fuelingstandard löschen" onClick={() => deleteMealTemplate(meal.id)} />
                   </div>
                 </div>
@@ -472,6 +487,16 @@ export function ConfigurationView() {
               className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
               aria-label="Beschreibung des Fuelingstandards"
             />
+            <select
+              value={mealCategory}
+              onChange={(event) => setMealCategory(event.target.value as MealTemplate["category"])}
+              className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+              aria-label="Kategorie des Fuelingstandards"
+            >
+              {mealCategoryOptions.map((category) => (
+                <option key={category.value} value={category.value}>{category.label}</option>
+              ))}
+            </select>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
                 value={calories}

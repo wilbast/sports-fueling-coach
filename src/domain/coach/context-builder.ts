@@ -55,6 +55,7 @@ type CoachIntent = {
 
 export function buildCoachContext(message: string, source: CoachContextSource, pageContext: CoachPageContext = "coach") {
   const intent = applyPageContextToIntent(inferCoachContextIntent(message), pageContext);
+  const coachNow = createCoachNow();
   const weekPlans = normalizeWeekPlans(source);
   const allDays = flattenDays(weekPlans);
   const selectedDay = findDay(allDays, source.selectedDate) ?? source.weekPlan.days[0];
@@ -64,6 +65,7 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
   const mealTemplates = source.mealTemplates ?? [];
   const todayMeals = selectedDay ? hydrateMeals(selectedDay.mealPlan, mealTemplates) : [];
   const nutritionLogsToday = source.nutritionLogsToday ?? [];
+  const timedNutritionLogsToday = categorizeNutritionLogsByCurrentTime(nutritionLogsToday, source.selectedDate, coachNow);
   const todayMacroTarget = selectedDay
     ? createMacroTarget(source.profile, source.goals, selectedDay)
     : null;
@@ -71,7 +73,10 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
     ? createMacroBalance(todayMacroTarget, todayMeals)
     : null;
   const loggedNutritionBalance = todayMacroTarget
-    ? createLoggedNutritionBalance(todayMacroTarget, nutritionLogsToday)
+    ? createLoggedNutritionBalance(todayMacroTarget, timedNutritionLogsToday.eatenMeals, "Bilanz nur aus Meals, deren Uhrzeit vor oder gleich der aktuellen Uhrzeit liegt.")
+    : null;
+  const plannedLoggedNutritionBalance = todayMacroTarget
+    ? createLoggedNutritionBalance(todayMacroTarget, timedNutritionLogsToday.plannedMeals, "Geplante/spätere Meals sind noch nicht gegessen und zählen nicht zur Ist-Bilanz.")
     : null;
 
   return {
@@ -105,9 +110,16 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
     plannedWorkouts: summarizeWorkouts(source.weekPlan.days.flatMap((day) => day.workouts)),
     loggedMealsToday: {
       status: nutritionLogsToday.length > 0 ? "available_from_supabase" : "empty",
-      meals: nutritionLogsToday.map((log) => ({
+      currentDate: coachNow.date,
+      currentTime: coachNow.time,
+      timeZone: coachNow.timeZone,
+      rule: "Für den ausgewählten heutigen Tag gelten Meals mit Uhrzeit vor oder gleich aktueller Uhrzeit als bereits gegessen; spätere Uhrzeiten sind geplant. Vergangene Tage gelten als gegessen, zukünftige Tage als geplant.",
+      eatenMeals: timedNutritionLogsToday.eatenMeals.map(summarizeMealLogForCoach),
+      plannedMeals: timedNutritionLogsToday.plannedMeals.map(summarizeMealLogForCoach),
+      meals: timedNutritionLogsToday.allMeals.map((log) => ({
         time: log.time,
         name: log.name,
+        consumptionStatus: log.consumptionStatus,
         source: log.source,
         confidence: log.confidence,
         manuallyConfirmed: log.manuallyConfirmed,
@@ -120,7 +132,8 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
     nutritionToday: {
       target: todayMacroTarget,
       plannedBalance: todayMacroBalance,
-      loggedBalance: loggedNutritionBalance
+      loggedBalance: loggedNutritionBalance,
+      plannedLoggedBalance: plannedLoggedNutritionBalance
     },
     recentTraining: summarizeTrainingWindow(last14Days),
     recentWeightTrend: summarizeWeightTrend(source.profile),
@@ -400,6 +413,88 @@ function hydrateMeals(slots: MealPlanSlot[], mealTemplates: MealTemplate[]) {
   });
 }
 
+type TimedMealLog = MealLog & {
+  consumptionStatus: "eaten" | "planned";
+};
+
+function categorizeNutritionLogsByCurrentTime(
+  logs: MealLog[],
+  selectedDate: string,
+  coachNow: ReturnType<typeof createCoachNow>
+): {
+  eatenMeals: TimedMealLog[];
+  plannedMeals: TimedMealLog[];
+  allMeals: TimedMealLog[];
+} {
+  const allMeals = logs
+    .map((log) => ({
+      ...log,
+      consumptionStatus: getMealConsumptionStatus(log, selectedDate, coachNow)
+    }))
+    .sort((left, right) => (left.time ?? "99:99").localeCompare(right.time ?? "99:99"));
+
+  return {
+    eatenMeals: allMeals.filter((log) => log.consumptionStatus === "eaten"),
+    plannedMeals: allMeals.filter((log) => log.consumptionStatus === "planned"),
+    allMeals
+  };
+}
+
+function getMealConsumptionStatus(
+  log: MealLog,
+  selectedDate: string,
+  coachNow: ReturnType<typeof createCoachNow>
+): TimedMealLog["consumptionStatus"] {
+  if (selectedDate < coachNow.date) return "eaten";
+  if (selectedDate > coachNow.date) return "planned";
+
+  const time = normalizeTimeLabel(log.time);
+  if (!time) return "eaten";
+
+  return time <= coachNow.time ? "eaten" : "planned";
+}
+
+function summarizeMealLogForCoach(log: TimedMealLog) {
+  return {
+    time: log.time,
+    name: log.name,
+    consumptionStatus: log.consumptionStatus,
+    source: log.source,
+    confidence: log.confidence,
+    manuallyConfirmed: log.manuallyConfirmed,
+    calories: log.values.calories,
+    proteinGrams: log.values.proteinGrams,
+    carbohydrateGrams: log.values.carbohydrateGrams,
+    fatGrams: log.values.fatGrams
+  };
+}
+
+function createCoachNow() {
+  const parts = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "00";
+
+  return {
+    date: `${part("year")}-${part("month")}-${part("day")}`,
+    time: `${part("hour")}:${part("minute")}`,
+    timeZone: "Europe/Berlin"
+  };
+}
+
+function normalizeTimeLabel(value: string | null | undefined): string | null {
+  const match = String(value ?? "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
 function createMacroTarget(profile: UserProfile, goals: UserGoals, day: DayPlan) {
   const plannedWorkouts = day.workouts.filter((workout) => workout.status !== "cancelled");
   const runningKm = sumRunningKm(plannedWorkouts);
@@ -451,7 +546,8 @@ function createMacroBalance(
 
 function createLoggedNutritionBalance(
   target: NonNullable<ReturnType<typeof createMacroTarget>>,
-  logs: MealLog[]
+  logs: MealLog[],
+  note?: string
 ) {
   const totals = logs.reduce((sum, log) => ({
     calories: sum.calories + log.values.calories,
@@ -474,9 +570,9 @@ function createLoggedNutritionBalance(
     remainingCarbohydrateGrams: Math.max(0, target.carbohydrates.min - totals.carbs),
     caloriesVsTargetMin: totals.calories - target.calories.min,
     caloriesVsTargetMax: totals.calories - target.calories.max,
-    note: logs.length > 0
+    note: note ?? (logs.length > 0
       ? "Bilanz aus persistenten Supabase Meal Logs."
-      : "Noch keine geloggten Mahlzeiten vorhanden."
+      : "Noch keine geloggten Mahlzeiten vorhanden.")
   };
 }
 

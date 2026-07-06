@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Beef, BookmarkPlus, History, Plus, Salad, Soup, Utensils, Wheat } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { MealLog } from "@/domain/nutrition/logs";
+import { estimateMealLogTime, inferMealCategory, mealCategoryOptions, mealCategoryToRole } from "@/domain/nutrition/meal-timing";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
@@ -24,10 +25,9 @@ export function FuelingView() {
   const [calories, setCalories] = useState("550");
   const [protein, setProtein] = useState("35");
   const [tags, setTags] = useState("standard, protein");
+  const [mealCategory, setMealCategory] = useState<MealTemplate["category"]>("main");
   const [saveMealAsStandard, setSaveMealAsStandard] = useState(true);
   const [addNewMealToDay, setAddNewMealToDay] = useState(true);
-  const [newMealTime, setNewMealTime] = useState("12:30");
-  const [newMealRole, setNewMealRole] = useState<MealPlanSlot["role"]>("lunch");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const { logs: selectedDayLogs, isLoading: logsLoading, error: logsError, addLog, updateLog, deleteLog } = useNutritionLogs(selectedDay.date);
   const weeklyLogs = useWeekMealLogs(state.weekPlan.days.map((day) => day.date));
@@ -48,13 +48,15 @@ export function FuelingView() {
       proteinMax: parseNumber(protein, 0),
       carbsGrams: 0,
       fatGrams: 0,
+      category: mealCategory,
       tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean)
     };
 
     if (addNewMealToDay) {
+      const loggedTime = estimateMealLogTime(template, selectedDay);
       const slot = {
-        time: newMealTime,
-        role: newMealRole
+        time: loggedTime,
+        role: mealCategoryToRole(mealCategory ?? "main")
       };
       const savedLog = await addLog({
         date: selectedDay.date,
@@ -73,7 +75,7 @@ export function FuelingView() {
         manuallyConfirmed: true,
         rawInput: template.description,
         category: mealRoleToLogCategory(slot.role),
-        isMainMeal: inferMainMealFromTemplate(template, slot.role)
+        isMainMeal: false
       });
 
       if (!savedLog) {
@@ -84,7 +86,7 @@ export function FuelingView() {
       if (saveMealAsStandard) {
         addMealTemplate(template);
       }
-      setStatusMessage(`${template.name} wurde für ${formatShortDate(selectedDay.date)} geloggt.`);
+      setStatusMessage(`${template.name} wurde um ${loggedTime} für ${formatShortDate(selectedDay.date)} geloggt.`);
     } else if (saveMealAsStandard) {
       addMealTemplate(template);
       setStatusMessage(`${template.name} wurde als Fuelingstandard gespeichert.`);
@@ -94,13 +96,16 @@ export function FuelingView() {
 
     setName("");
     setDescription("");
+    setMealCategory("main");
     setSaveMealAsStandard(true);
   }
 
   async function addStandardMealToDay(meal: MealTemplate, slot: Omit<MealPlanSlot, "mealTemplateId">) {
+    const loggedTime = estimateMealLogTime(meal, selectedDay);
+    const category = inferMealCategory(meal);
     const savedLog = await addLog({
       date: selectedDay.date,
-      time: slot.time,
+      time: loggedTime,
       name: meal.name,
       description: meal.description,
       source: "standard",
@@ -115,8 +120,8 @@ export function FuelingView() {
       rationale: meal.nutritionRationale,
       manuallyConfirmed: meal.nutritionSource === "manual" || meal.nutritionConfidence === "manual",
       rawInput: meal.description,
-      category: mealRoleToLogCategory(slot.role),
-      isMainMeal: inferMainMealFromTemplate(meal, slot.role)
+      category: mealRoleToLogCategory(mealCategoryToRole(category)),
+      isMainMeal: false
     });
 
     if (!savedLog) {
@@ -124,7 +129,7 @@ export function FuelingView() {
       return;
     }
 
-    setStatusMessage(`${meal.name} wurde für ${formatShortDate(selectedDay.date)} geloggt.`);
+    setStatusMessage(`${meal.name} wurde um ${loggedTime} für ${formatShortDate(selectedDay.date)} geloggt.`);
   }
 
   return (
@@ -230,8 +235,8 @@ export function FuelingView() {
                     key={meal.id}
                     type="button"
                     onClick={() => void addStandardMealToDay(meal, {
-                      time: inferNextMealTime(selectedDay.mealPlan.length),
-                      role: inferMealRole(meal)
+                      time: estimateMealLogTime(meal, selectedDay),
+                      role: mealCategoryToRole(inferMealCategory(meal))
                     })}
                     className="rounded-xl border border-line px-3 py-3 text-left transition hover:border-coach-200 hover:bg-coach-50"
                   >
@@ -243,7 +248,7 @@ export function FuelingView() {
                         <p className="font-semibold text-ink">{meal.name}</p>
                         <p className="mt-1 text-sm leading-5 text-muted">{meal.description}</p>
                         <p className="mt-2 text-xs font-semibold text-coach-700">{formatMealEstimate(meal)}</p>
-                        <p className="mt-2 text-xs font-semibold text-muted">Antippen: zum aktiven Tag loggen</p>
+                        <p className="mt-2 text-xs font-semibold text-muted">Antippen: geschätzt um {estimateMealLogTime(meal, selectedDay)} loggen</p>
                       </div>
                     </div>
                   </button>
@@ -295,23 +300,19 @@ export function FuelingView() {
                 aria-label="Tags"
               />
               <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  value={newMealTime}
-                  onChange={(event) => setNewMealTime(event.target.value)}
-                  type="time"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Zeit für neue Mahlzeit"
-                />
                 <select
-                  value={newMealRole}
-                  onChange={(event) => setNewMealRole(event.target.value as MealPlanSlot["role"])}
+                  value={mealCategory}
+                  onChange={(event) => setMealCategory(event.target.value as MealTemplate["category"])}
                   className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Rolle der neuen Mahlzeit"
+                  aria-label="Fueling-Kategorie"
                 >
-                  {(["breakfast", "lunch", "pre_workout", "post_workout", "dinner"] as MealPlanSlot["role"][]).map((role) => (
-                    <option key={role} value={role}>{roleLabel(role)}</option>
+                  {mealCategoryOptions.map((category) => (
+                    <option key={category.value} value={category.value}>{category.label}</option>
                   ))}
                 </select>
+                <div className="flex min-h-11 items-center rounded-xl border border-line bg-white px-3 text-sm text-muted">
+                  Zeit wird beim Speichern geschätzt
+                </div>
               </div>
               <div className="grid gap-2">
                 <label className="flex items-center gap-2 rounded-xl bg-canvas px-3 py-3 text-sm font-semibold text-ink">
@@ -436,18 +437,6 @@ function formatRange(min: number, max: number): string {
   return min === max ? String(min) : `${min}-${max}`;
 }
 
-function roleLabel(role: MealPlanSlot["role"]): string {
-  const labels: Record<MealPlanSlot["role"], string> = {
-    breakfast: "Frühstück",
-    lunch: "Lunch",
-    pre_workout: "Pre-Workout",
-    post_workout: "Post-Workout",
-    dinner: "Abendessen"
-  };
-
-  return labels[role];
-}
-
 function mealRoleToLogCategory(role: MealPlanSlot["role"]) {
   if (role === "breakfast") return "breakfast";
   if (role === "dinner") return "dinner";
@@ -456,44 +445,12 @@ function mealRoleToLogCategory(role: MealPlanSlot["role"]) {
   return "lunch";
 }
 
-function inferMainMealFromTemplate(
-  meal: Pick<MealTemplate, "name" | "description" | "tags"> | { name: string; description: string; tags: string[] },
-  role: MealPlanSlot["role"]
-): boolean {
-  if (role === "pre_workout" || role === "post_workout") return false;
-  const text = `${meal.name} ${meal.description} ${meal.tags.join(" ")}`.toLowerCase();
-
-  return role === "lunch" ||
-    role === "dinner" ||
-    text.includes("bowl") ||
-    text.includes("pasta") ||
-    text.includes("lachs") ||
-    text.includes("chili") ||
-    text.includes("reis") ||
-    text.includes("kartoffel");
-}
-
 function midpoint(min?: number, max?: number): number {
   if (typeof min === "number" && typeof max === "number") return Math.round((min + max) / 2);
   if (typeof min === "number") return Math.round(min);
   if (typeof max === "number") return Math.round(max);
 
   return 0;
-}
-
-function inferNextMealTime(mealCount: number): string {
-  const times = ["08:00", "12:30", "16:30", "19:00", "21:00"];
-  return times[Math.min(mealCount, times.length - 1)];
-}
-
-function inferMealRole(meal: MealTemplate): MealPlanSlot["role"] {
-  const text = `${meal.name} ${meal.tags.join(" ")}`.toLowerCase();
-  if (text.includes("breakfast") || text.includes("frühstück")) return "breakfast";
-  if (text.includes("pre")) return "pre_workout";
-  if (text.includes("post") || text.includes("recovery")) return "post_workout";
-  if (text.includes("dinner") || text.includes("abend")) return "dinner";
-
-  return "lunch";
 }
 
 function formatShortDate(date: string): string {

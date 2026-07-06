@@ -34,6 +34,7 @@ export type MealTemplate = {
   id: string;
   name: string;
   description: string;
+  category?: "breakfast" | "main" | "snack" | "dinner";
   estimatedCalories: Range;
   estimatedProteinGrams: Range;
   estimatedCarbohydratesGrams?: Range;

@@ -70,6 +70,7 @@ type MealTemplateDraft = {
   proteinMax: number;
   carbsGrams?: number;
   fatGrams?: number;
+  category?: MealTemplate["category"];
   nutritionSource?: MealTemplate["nutritionSource"];
   nutritionConfidence?: MealTemplate["nutritionConfidence"];
   nutritionRationale?: string;
@@ -1159,6 +1160,7 @@ function createMealTemplate(template: MealTemplateDraft, isStandard: boolean): M
     estimatedFatGrams: typeof template.fatGrams === "number"
       ? { min: template.fatGrams, max: template.fatGrams, unit: "g" }
       : undefined,
+    category: template.category,
     nutritionSource: template.nutritionSource,
     nutritionConfidence: template.nutritionConfidence,
     nutritionRationale: template.nutritionRationale,

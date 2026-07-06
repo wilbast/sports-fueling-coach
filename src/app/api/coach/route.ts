@@ -303,7 +303,7 @@ async function loadNutritionLogsForCoach(userId: string, date: string): Promise<
       rationale: typeof row.estimate_rationale === "string" ? row.estimate_rationale : null,
       manuallyConfirmed: Boolean(row.manually_confirmed),
       category,
-      isMainMeal: typeof metadata.isMainMeal === "boolean" ? metadata.isMainMeal : inferMealLogMainMeal(name, category),
+      isMainMeal: typeof metadata.isMainMeal === "boolean" ? metadata.isMainMeal : false,
       createdAt: typeof row.created_at === "string" ? row.created_at : undefined
     };
   });
@@ -328,18 +328,6 @@ function normalizeMealLogCategory(value: unknown, time?: string | null, name?: s
   }
 
   return "snack";
-}
-
-function inferMealLogMainMeal(name: string, category: MealLogCategory): boolean {
-  if (category === "drink" || category === "snack") return false;
-  const text = name.toLowerCase();
-
-  return category === "lunch" ||
-    category === "dinner" ||
-    text.includes("bowl") ||
-    text.includes("pasta") ||
-    text.includes("reis") ||
-    text.includes("kartoff");
 }
 
 function isCoachContextSource(value: unknown): value is CoachContextSource {
@@ -382,6 +370,8 @@ function createSystemPrompt(): string {
     "Bei Beratungsfragen: analysiere, vergleiche Varianten, nenne Vor- und Nachteile und gib eine klare Empfehlung mit Begründung.",
     "Bei Info/Wunsch/Stimmung, z. B. Alkohol, Restaurant, Müdigkeit: keine automatische Planänderung. Gib kurze Einordnung und optionales Angebot.",
     "Bei Empfehlungsfragen: gib konkrete Mengen, Timing, Mahlzeiten, Snacks, Flüssigkeit oder Regenerationstipps ohne changes zu erzwingen.",
+    "Bei Fueling: Unterscheide strikt zwischen bereits gegessenen Meals und geplanten/späteren Meals. Nutze loggedMealsToday.eatenMeals für die Ist-Bilanz und loggedMealsToday.plannedMeals nur als geplante spätere Aufnahme.",
+    "Wenn ein Meal-Log eine spätere Uhrzeit als currentTime hat, behandle es als geplant und nicht als schon gegessen.",
     "Ausnahme für Fueling/Nutrition: Wenn der Nutzer eine konkrete Mahlzeit, ein Rezept oder ein Fueling beschreibt, darfst du einen speicherbaren Entwurf in suggestion.changes mit type=add_meal liefern. Das ist nur ein Vorschlag und wird erst bei Bestätigung gespeichert.",
     "Bei add_meal schätze alltagstauglich einen Durchschnittswert. Setze caloriesMin=caloriesMax und proteinMin=proteinMax. Schätze zusätzlich carbohydrateGrams und fatGrams. Stelle die Werte nicht als exakt dar.",
     "Wenn der Nutzer sagt 'Merke dir das als Standard', 'Füge ... als Standard hinzu' oder 'Standardfrühstück', liefere einen add_meal-Entwurf mit saveAsStandard=true. Der Client zeigt danach eine Standard-Speichern-Aktion.",

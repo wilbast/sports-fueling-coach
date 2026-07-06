@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       raw_input: body.rawInput?.trim() || body.description?.trim() || name,
       metadata: {
         category: normalizeCategory(body.category, body.time, name),
-        isMainMeal: typeof body.isMainMeal === "boolean" ? body.isMainMeal : inferMainMeal(name, body.category)
+        isMainMeal: typeof body.isMainMeal === "boolean" ? body.isMainMeal : false
       }
     })
     .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, metadata, created_at")
@@ -249,7 +249,7 @@ function mapMealLog(row: MealLogRow): MealLog {
     rationale: row.estimate_rationale,
     manuallyConfirmed: row.manually_confirmed,
     category: normalizeCategory(row.metadata?.category, row.time_label, row.name),
-    isMainMeal: typeof row.metadata?.isMainMeal === "boolean" ? row.metadata.isMainMeal : inferMainMeal(row.name, row.metadata?.category),
+    isMainMeal: typeof row.metadata?.isMainMeal === "boolean" ? row.metadata.isMainMeal : false,
     createdAt: row.created_at
   };
 }
@@ -303,19 +303,4 @@ function normalizeCategory(value: unknown, time?: string | null, name?: string |
   }
 
   return "snack";
-}
-
-function inferMainMeal(name: string | null | undefined, category: unknown): boolean {
-  if (category === "drink" || category === "snack") return false;
-  const text = String(name ?? "").toLowerCase();
-  if (text.includes("cappuccino") || text.includes("kaffee") || text.includes("wasser") || text.includes("bier")) return false;
-
-  return text.includes("chili") ||
-    text.includes("bowl") ||
-    text.includes("pasta") ||
-    text.includes("lachs") ||
-    text.includes("kartoff") ||
-    text.includes("reis") ||
-    category === "lunch" ||
-    category === "dinner";
 }
