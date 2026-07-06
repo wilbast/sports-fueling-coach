@@ -12,6 +12,7 @@ import { useExternalActivities } from "@/features/activities/external-activities
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import type { AppState } from "@/features/app-state/app-state-provider";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 
 export function InsightsView() {
   const { state } = useAppState();
@@ -31,6 +32,13 @@ export function InsightsView() {
         eyebrow="Insights"
         title="Plan vs. Ist"
         description="Training, Fueling und Zielwerte werden pro Tag und Woche gegenübergestellt."
+        action={
+          <CoachRecommendationButton
+            pageContext="insights"
+            prompt="Gib mir eine kurze Auswertung der aktuellen Plan-vs-Ist-Daten: wichtigste Abweichung, Lernpunkt und nächste sinnvolle Anpassung. Keine Planänderung."
+            label="KI-Empfehlung"
+          />
+        }
       />
 
       <WeekCalendar />

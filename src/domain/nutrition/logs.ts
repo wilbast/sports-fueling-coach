@@ -4,6 +4,8 @@ export type NutritionEstimateSource = "standard" | "recipe" | "free_text" | "ai_
 
 export type NutritionConfidence = "low" | "medium" | "high" | "manual";
 
+export type MealLogCategory = "breakfast" | "lunch" | "dinner" | "snack" | "drink";
+
 export type NutritionValues = {
   calories: number;
   proteinGrams: number;
@@ -22,6 +24,8 @@ export type MealLog = {
   values: NutritionValues;
   rationale?: string | null;
   manuallyConfirmed: boolean;
+  category: MealLogCategory;
+  isMainMeal: boolean;
   createdAt?: string;
 };
 

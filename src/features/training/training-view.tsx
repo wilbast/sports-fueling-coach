@@ -23,6 +23,7 @@ import type {
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { ExternalActivityList, useExternalActivities } from "@/features/activities/external-activities";
+import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 
 const statusLabels: Record<WorkoutStatus, string> = {
   planned: "geplant",
@@ -100,6 +101,13 @@ export function TrainingView() {
         eyebrow="Training"
         title="Training planen"
         description="Geplante Einheiten liefern den Kontext für Energie, Protein, Kohlenhydrate und Erholung."
+        action={
+          <CoachRecommendationButton
+            pageContext="training"
+            prompt="Gib mir eine kurze Trainingsempfehlung für den aktiven Tag und die Woche: Belastung, Regeneration, Laufqualität und Fueling. Keine Planänderung."
+            label="Coach-Empfehlung"
+          />
+        }
       />
 
       <WeekCalendar />

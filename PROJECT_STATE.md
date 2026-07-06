@@ -1,7 +1,7 @@
 # Project State
 
-**Datum:** 2026-07-05  
-**Status:** Coach-Chat mit serverseitigem Kontext und gespeicherter Historie
+**Datum:** 2026-07-06
+**Status:** Today Experience mit kontextbewusstem Coach und konsistenterem Fueling
 
 ## Produktstand
 
@@ -28,6 +28,12 @@ Der neueste Sprint erweitert den Coach von einer Planungseingabe zu einer eigene
 Der aktuelle Coach-Sprint schärft die Benutzererfahrung grundlegend: Coach Mode ist der Standard und dient reiner Beratung. Planning Mode erzeugt nur Vorschläge. Change Mode entsteht erst durch ausdrückliche Bestätigung, z. B. per Button oder kurzer Übernahme-Nachricht. Damit kann der Nutzer frei mit dem Coach diskutieren, ohne Angst vor automatischen Planänderungen zu haben.
 
 Der neueste Coach-Sprint macht den Chat näher an ChatGPT: Für eingeloggte Nutzer wird die Unterhaltung in `coach_chat_messages` gespeichert, beim Öffnen wieder geladen und bei neuen Nachrichten als Verlauf an die serverseitige Coach-API gegeben. OpenAI läuft ausschließlich serverseitig über `OPENAI_API_KEY` oder den generischen `AI_API_KEY`; fehlt die Konfiguration, bleibt die App nutzbar und zeigt den regelbasierten Fallback transparent an.
+
+Der aktuelle Experience-Sprint macht die Heute-Seite stärker zum täglichen Coach: Sie zeigt Briefing, Tagesfortschritt, gegessene Mahlzeiten, Tagesbilanz, Lücken bei Protein/Kohlenhydraten, Coach-Empfehlungen, Morgenblick und Quick Actions in einer klareren Reihenfolge. Fueling ist direkt von Heute erreichbar, weil Essen und Trinken mehrfach am Tag geloggt werden.
+
+Meal Logs können im Fueling-Bereich bearbeitet und gelöscht werden. Jede geloggte Mahlzeit hat eine Kategorie wie Frühstück, Mittagessen, Abendessen, Snack oder Getränk und kann als Hauptmahlzeit markiert werden. Diese Metadaten werden persistent in Supabase gespeichert und für ältere Einträge aus Uhrzeit und Name abgeleitet.
+
+Coach-Anfragen können jetzt pro Bereich einen `pageContext` senden. Heute, Fueling, Training, Planung, Insights und Einstellungen erhalten damit sichtbare Coach-/KI-Empfehlungen, ohne das Grundprinzip zu brechen: Beratung zuerst, keine automatische Planänderung.
 
 Die Trainingsplanung unterscheidet jetzt Laufen, Padel Tennis, Schwimmen, Squash, HIIT, Krafttraining und Radfahren. Laufen hat zusätzlich Laufart und Fokus: Lockerer Lauf, Tempodauerlauf, Fahrtspiel, Intervalltraining sowie Basis, Regeneration, Schwellentraining und VO2Max.
 
@@ -95,6 +101,8 @@ Weitere Bereiche:
 - Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `equipment`, `sync_jobs`
 - Coach-Kontext: externe Aktivitäten werden serverseitig aus Supabase geladen und strukturiert zusammengefasst; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
 - Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros
+- Meal-Log-Metadaten: Kategorie und Hauptmahlzeit werden in `metadata` gespeichert und in Coach-Kontext, Today und Fueling-UI genutzt
+- Coach Page Context: `/api/coach` akzeptiert `pageContext` und schärft die Empfehlung je nach App-Bereich
 - AI-Fueling: `/api/nutrition/estimate` schätzt Nährwerte serverseitig mit AI oder transparentem Fallback; Werte werden als KI-Schätzung oder manuell bestätigt gekennzeichnet
 
 ## Bekannte Grenzen

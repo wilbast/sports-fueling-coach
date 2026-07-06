@@ -19,6 +19,10 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
   const { state, setSelectedDate, updateManualDailyBurnForecastCalories } = useAppState();
   const activeDate = date ?? state.selectedDate;
   const dayPlan = getDayPlanByDate(state.weekPlan, activeDate);
+  const tomorrowDate = addDays(activeDate, 1);
+  const tomorrowPlan = state.weekPlans
+    .flatMap((week) => week.days)
+    .find((day) => day.date === tomorrowDate);
   const {
     activitiesByDate,
     isLoading: activitiesLoading,
@@ -60,9 +64,26 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
       nutritionSummary={nutritionSummary}
       nutritionLogsLoading={nutritionLogsLoading}
       nutritionLogsError={nutritionLogsError}
+      tomorrowHint={createTomorrowHint(tomorrowPlan)}
       manualForecastCalories={state.energySettings.manualDailyBurnForecastCaloriesByDate[activeDate]}
       onManualForecastCaloriesChange={(calories) => updateManualDailyBurnForecastCalories(activeDate, calories)}
       fuelingQuickAdd={<QuickFuelingPanel date={activeDate} compact />}
     />
   );
+}
+
+function addDays(date: string, days: number): string {
+  const nextDate = new Date(`${date}T12:00:00`);
+  nextDate.setDate(nextDate.getDate() + days);
+
+  return nextDate.toISOString().slice(0, 10);
+}
+
+function createTomorrowHint(day: ReturnType<typeof getDayPlanByDate> | undefined): string {
+  if (!day) return "Morgen ist noch nicht geplant. Ein kurzer Blick in die Planung kann den Coach-Kontext verbessern.";
+  const workout = day.workouts.find((item) => item.status !== "cancelled");
+  if (!workout) return "Morgen ist kein Training geplant. Heute kannst du den Abend ruhig halten und Protein sichern.";
+  if (workout.sport === "running" && (workout.distanceKm ?? 0) >= 12) return "Morgen langer Lauf - heute Abend Kohlenhydrate und Flüssigkeit nicht zu knapp halten.";
+
+  return `Morgen steht ${workout.title} an - heute Abend normal essen, Schlaf und Flüssigkeit priorisieren.`;
 }

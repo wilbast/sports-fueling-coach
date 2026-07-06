@@ -161,7 +161,25 @@ Umgesetzt:
 - Fallback-Hinweis, wenn OpenAI fehlt oder nicht antwortet
 - lokale Bestätigungen werden ebenfalls im Verlauf protokolliert
 
-## Sprint 11: Regelqualität und Tests
+## Sprint 11: Today Experience, Context-Aware Coach und Fueling Consistency
+
+Status: umgesetzt
+
+Ziel:
+
+Die Heute-Seite wird zum täglichen Coach-Startpunkt. Fueling wird konsistenter loggbar, und Coach-Empfehlungen berücksichtigen den App-Bereich.
+
+Umgesetzt:
+
+- Heute-Seite neu priorisiert: Briefing, Tagesfortschritt, gegessene Mahlzeiten, Tagesbilanz, Coach-Empfehlungen, Morgenblick und Quick Actions
+- Fueling Quick Add direkt auf Heute
+- Meal Logs im Fueling-Bereich bearbeitbar und löschbar
+- Meal Logs mit Kategorie und Hauptmahlzeit-Metadaten
+- Coach-API mit `pageContext`
+- sichtbare Coach-/KI-Empfehlungen auf Today, Planning, Training, Fueling, Insights und Settings
+- Planning-Chat nutzt Planning-Kontext
+
+## Sprint 12: Regelqualität und Tests
 
 Ziel:
 

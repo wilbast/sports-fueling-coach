@@ -1,19 +1,24 @@
 import Link from "next/link";
 import {
   Clock3,
+  Dumbbell,
   Flame,
+  ImagePlus,
   MessageCircle,
+  Plus,
   ShieldCheck,
   Sparkles,
+  Sunrise,
   Target,
   Utensils,
   Wheat
 } from "lucide-react";
 import { PageHeader, Panel, Pill, StatCard } from "@/components/ui";
 import type { DailyBriefing } from "@/domain/briefing/types";
-import type { DailyNutritionSummary, MealLog } from "@/domain/nutrition/logs";
+import type { DailyNutritionSummary, MealLog, MealLogCategory } from "@/domain/nutrition/logs";
 import { sourceLabel } from "@/domain/nutrition/logs";
 import { ExternalActivityList, type ExternalActivitySummary } from "@/features/activities/external-activities";
+import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 
 type TodayViewProps = {
   briefing: DailyBriefing;
@@ -25,6 +30,7 @@ type TodayViewProps = {
   nutritionSummary: DailyNutritionSummary;
   nutritionLogsLoading?: boolean;
   nutritionLogsError?: string | null;
+  tomorrowHint?: string;
   manualForecastCalories?: number;
   onManualForecastCaloriesChange?: (calories?: number) => void;
   fuelingQuickAdd?: React.ReactNode;
@@ -40,6 +46,7 @@ export function TodayView({
   nutritionSummary,
   nutritionLogsLoading = false,
   nutritionLogsError = null,
+  tomorrowHint,
   manualForecastCalories,
   onManualForecastCaloriesChange,
   fuelingQuickAdd
@@ -51,13 +58,19 @@ export function TodayView({
         title={briefing.greeting}
         description={briefing.lead}
         action={
-          <Link
-            href="/coach"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
-          >
-            <MessageCircle className="h-4 w-4" aria-hidden="true" />
-            Coach fragen
-          </Link>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <CoachRecommendationButton
+              pageContext="today"
+              prompt="Gib mir eine kurze Coach-Empfehlung für den heutigen Tag: wichtigste Priorität, Fueling, Training und was noch fehlt. Keine Planänderung."
+            />
+            <Link
+              href="/coach"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Coach fragen
+            </Link>
+          </div>
         }
       />
 
@@ -109,11 +122,32 @@ export function TodayView({
         ))}
       </section>
 
-      {fuelingQuickAdd ? (
-        <div className="mb-6">
-          {fuelingQuickAdd}
+      <Panel className="mb-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Target className="h-5 w-5 text-coach-600" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-ink">Tagesfortschritt</h2>
         </div>
-      ) : null}
+        <div className="grid gap-3 md:grid-cols-3">
+          <BalanceRow
+            label="Kalorien"
+            value={`${formatNumber(nutritionSummary.intake.calories)} kcal`}
+            detail={`${formatNumber(Math.max(0, nutritionSummary.targets.caloriesMax - nutritionSummary.intake.calories))} kcal bis Zielobergrenze`}
+            progress={nutritionSummary.progress.calories}
+          />
+          <BalanceRow
+            label="Protein"
+            value={`${formatNumber(nutritionSummary.intake.proteinGrams)} / ${formatNumber(nutritionSummary.targets.proteinMin)} g`}
+            detail={`Rest ca. ${formatNumber(nutritionSummary.deltas.proteinRemaining)} g`}
+            progress={nutritionSummary.progress.protein}
+          />
+          <BalanceRow
+            label="Carbs"
+            value={`${formatNumber(nutritionSummary.intake.carbohydrateGrams)} / ${formatNumber(nutritionSummary.targets.carbsMin)} g`}
+            detail={`Rest ca. ${formatNumber(nutritionSummary.deltas.carbsRemaining)} g`}
+            progress={nutritionSummary.progress.carbs}
+          />
+        </div>
+      </Panel>
 
       <section className="mb-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
         <Panel>
@@ -142,6 +176,8 @@ export function TodayView({
                         <Pill tone={log.manuallyConfirmed ? "green" : log.source === "ai_estimate" ? "amber" : "blue"}>
                           {sourceLabel(log.source, log.manuallyConfirmed)}
                         </Pill>
+                        <Pill tone="neutral">{mealLogCategoryLabel(log.category)}</Pill>
+                        {log.isMainMeal ? <Pill tone="green">Hauptmahlzeit</Pill> : null}
                       </div>
                       <p className="mt-1 text-sm text-muted">
                         {log.time ? `${log.time} · ` : ""}{log.description ?? "ohne Beschreibung"}
@@ -208,6 +244,26 @@ export function TodayView({
                 : "Ohne harte Einheit kannst du die Kohlenhydrate flexibler halten, Protein bleibt der wichtigste Anker."}
             </p>
           </div>
+        </div>
+      </Panel>
+
+      {fuelingQuickAdd ? (
+        <div className="mb-6">
+          {fuelingQuickAdd}
+        </div>
+      ) : null}
+
+      <Panel className="mb-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-coach-600" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-ink">Coach-Empfehlungen</h2>
+        </div>
+        <div className="grid gap-2">
+          {createCoachRecommendations(briefing, nutritionSummary).map((recommendation) => (
+            <div key={recommendation} className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
+              {recommendation}
+            </div>
+          ))}
         </div>
       </Panel>
 
@@ -326,6 +382,43 @@ export function TodayView({
         </section>
       </div>
 
+      <Panel className="mt-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Sunrise className="h-5 w-5 text-coach-600" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-ink">Morgen</h2>
+        </div>
+        <p className="text-sm leading-6 text-muted">{tomorrowHint}</p>
+      </Panel>
+
+      <Panel className="mt-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Plus className="h-5 w-5 text-coach-600" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-ink">Quick Actions</h2>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <Link href="/fueling" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-3 text-sm font-semibold text-white">
+            <Utensils className="h-4 w-4" aria-hidden="true" />
+            Mahlzeit loggen
+          </Link>
+          <Link href="/training" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink">
+            <Dumbbell className="h-4 w-4" aria-hidden="true" />
+            Training hinzufügen
+          </Link>
+          <button type="button" disabled className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-muted opacity-70">
+            <ImagePlus className="h-4 w-4" aria-hidden="true" />
+            Foto analysieren
+          </button>
+          <Link href="/coach" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink">
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+            Coach fragen
+          </Link>
+          <Link href="/settings#strava" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink">
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            Strava sync
+          </Link>
+        </div>
+      </Panel>
+
       <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <Panel>
           <div className="mb-4 flex items-center gap-2">
@@ -425,4 +518,32 @@ function formatNumber(value: number): string {
 function formatSigned(value: number): string {
   const formatted = formatNumber(Math.abs(value));
   return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : formatted;
+}
+
+function mealLogCategoryLabel(category: MealLogCategory): string {
+  const labels: Record<MealLogCategory, string> = {
+    breakfast: "Frühstück",
+    lunch: "Mittagessen",
+    dinner: "Abendessen",
+    snack: "Snack",
+    drink: "Getränk"
+  };
+
+  return labels[category];
+}
+
+function createCoachRecommendations(briefing: DailyBriefing, nutritionSummary: DailyNutritionSummary): string[] {
+  const recommendations = [
+    nutritionSummary.deltas.proteinRemaining > 20
+      ? `Protein priorisieren: Plane noch eine einfache Proteinquelle ein, ca. ${formatNumber(nutritionSummary.deltas.proteinRemaining)} g fehlen bis zum Ziel.`
+      : "Protein ist gut abgedeckt. Halte den Rest des Tages eher unkompliziert und vermeide unnötiges Nachsteuern.",
+    nutritionSummary.deltas.carbsRemaining > 60
+      ? `Kohlenhydrate bewusst setzen: Es fehlen noch ca. ${formatNumber(nutritionSummary.deltas.carbsRemaining)} g, besonders relevant rund um Training oder Regeneration.`
+      : "Kohlenhydrate sind für heute solide abgedeckt. Weitere Carbs eher nach Hunger, Einheit und Abendplanung dosieren.",
+    briefing.workouts.length > 0
+      ? "Trainingstag: Vor der Einheit leicht verdaulich essen, danach Protein plus Kohlenhydrate einplanen."
+      : "Ohne geplante Einheit: Protein und Gemüse als Anker, Energieaufnahme entspannt am Hunger ausrichten."
+  ];
+
+  return recommendations;
 }

@@ -43,6 +43,7 @@ import type {
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
+import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 import { ExternalActivityList, useExternalActivities } from "@/features/activities/external-activities";
 
 const planningContexts: Array<{
@@ -217,13 +218,20 @@ export function PlanningView() {
         title="Woche vorbereiten"
         description="Rahmenbedingungen und Training festlegen. Fueling bleibt dynamisch im Tagesbriefing."
         action={
-          <Link
-            href={`/today?date=${selectedDay.date}`}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
-          >
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
-            Als Heute anzeigen
-          </Link>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <CoachRecommendationButton
+              pageContext="planning"
+              prompt="Gib mir eine kurze Planungsempfehlung für den aktiven Tag und die Woche: Alltag, Training, Familie, Fueling-Risiken. Keine Planänderung."
+              label="Coach-Empfehlung"
+            />
+            <Link
+              href={`/today?date=${selectedDay.date}`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              Als Heute anzeigen
+            </Link>
+          </div>
         }
       />
 
@@ -702,6 +710,7 @@ export function PlanningView() {
             title="Coach fragen"
             intro="Frag nach Einordnung oder Vorschlägen für den ausgewählten Tag. Für den vollen Coach-Bereich nutze die Coach-Navigation."
             compact
+            pageContext="planning"
           />
 
           <Panel>

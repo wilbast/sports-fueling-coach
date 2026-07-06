@@ -12,6 +12,7 @@ type CoachChatPanelProps = {
   title?: string;
   intro?: string;
   compact?: boolean;
+  pageContext?: "today" | "fueling" | "training" | "planning" | "insights" | "settings" | "coach";
 };
 
 const CHAT_RESET_STORAGE_KEY = "sports-fueling-coach:coach-chat-reset-at";
@@ -19,7 +20,8 @@ const CHAT_RESET_STORAGE_KEY = "sports-fueling-coach:coach-chat-reset-at";
 export function CoachChatPanel({
   title = "Coach fragen",
   intro = "Frag nach Training, Fueling, Rezepten, Regeneration oder Tagesstrategie.",
-  compact = false
+  compact = false,
+  pageContext = "coach"
 }: CoachChatPanelProps) {
   const { state, addMealEntry, addMealTemplate, applyCoachPlanChanges } = useAppState();
   const { addLog } = useNutritionLogs(state.selectedDate);
@@ -149,6 +151,7 @@ export function CoachChatPanel({
         body: JSON.stringify({
           message,
           threadId: "default",
+          pageContext,
           state: payloadState
         })
       });

@@ -9,8 +9,8 @@
 - Strava-Import live mit echten Credentials und produktiver Supabase-Migration verifizieren.
 - Automatischen Sync-Job für externe Quellen entwerfen.
 - Standardmahlzeiten und Rezepte vollständig aus `standard_meals`/`recipes` statt App-State verwalten.
-- Manuelle Korrekturmaske für KI-Nährwertschätzungen pro Meal Log ergänzen.
 - Coach-Verlauf um Thread-Auswahl und Löschen/Archivieren erweitern.
+- Coach-Empfehlungen aus Header-Aktionen optional als eigene Seitenpanels anzeigen, falls sie im engen Header zu dominant werden.
 
 ## P1
 
@@ -45,6 +45,10 @@
 - Strava OAuth, Synchronisation und providerneutrales Aktivitätsmodell umgesetzt.
 - Today Nutrition Status mit geloggten Mahlzeiten, Tagesbilanz und Protein-/Carb-Fortschritt umgesetzt.
 - Serverroute für AI-/Fallback-Nährwertschätzung und persistente Meal Logs umgesetzt.
+- Meal Logs im Fueling-Bereich bearbeitbar und löschbar gemacht.
+- Meal-Log-Kategorien und Hauptmahlzeit-Metadaten eingeführt.
+- Today Experience mit Tagesfortschritt, Coach-Empfehlungen, Morgenblick und Quick Actions geschärft.
+- Bereichskontext für Coach-Aufrufe und sichtbare Empfehlungen auf Hauptseiten ergänzt.
 
 ## P2
 

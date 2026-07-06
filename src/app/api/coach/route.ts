@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildCoachContext, type CoachContextSource } from "@/domain/coach/context-builder";
 import type { CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
-import type { MealLog } from "@/domain/nutrition/logs";
+import type { MealLog, MealLogCategory } from "@/domain/nutrition/logs";
 import type { DayBlockType, DayContext, DayPlan } from "@/domain/planning/types";
 import type { IsoDate } from "@/domain/shared";
 import type {
@@ -20,6 +20,7 @@ type CoachRequestBody = {
   message?: string;
   state?: CoachContextSource;
   threadId?: string;
+  pageContext?: "today" | "fueling" | "training" | "planning" | "insights" | "settings" | "coach";
 };
 
 type CoachChatHistoryMessage = {
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
       systemPrompt: createSystemPrompt(),
       userPayload: {
         ...buildCoachContext(message, coachState),
+        pageContext: body?.pageContext ?? "coach",
         conversationHistory: conversationHistory.map((item) => ({
           role: item.role,
           content: item.content,
@@ -270,7 +272,7 @@ async function loadNutritionLogsForCoach(userId: string, date: string): Promise<
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("meal_logs")
-    .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, created_at")
+    .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, metadata, created_at")
     .eq("user_id", userId)
     .eq("logged_date", date)
     .order("time_label", { ascending: true, nullsFirst: false });
@@ -280,24 +282,65 @@ async function loadNutritionLogsForCoach(userId: string, date: string): Promise<
     return [];
   }
 
-  return (data ?? []).map((row) => ({
-    id: String(row.id),
-    date: String(row.logged_date),
-    time: typeof row.time_label === "string" ? row.time_label : null,
-    name: String(row.name),
-    description: typeof row.description === "string" ? row.description : null,
-    source: row.source === "standard" || row.source === "recipe" || row.source === "free_text" || row.source === "ai_estimate" || row.source === "manual" ? row.source : "free_text",
-    confidence: row.confidence === "low" || row.confidence === "medium" || row.confidence === "high" || row.confidence === "manual" ? row.confidence : "medium",
-    values: {
-      calories: Number(row.calories ?? 0),
-      proteinGrams: Number(row.protein_grams ?? 0),
-      carbohydrateGrams: Number(row.carbohydrate_grams ?? 0),
-      fatGrams: row.fat_grams == null ? undefined : Number(row.fat_grams)
-    },
-    rationale: typeof row.estimate_rationale === "string" ? row.estimate_rationale : null,
-    manuallyConfirmed: Boolean(row.manually_confirmed),
-    createdAt: typeof row.created_at === "string" ? row.created_at : undefined
-  }));
+  return (data ?? []).map((row) => {
+    const metadata = isRecord(row.metadata) ? row.metadata : {};
+    const name = String(row.name);
+    const category = normalizeMealLogCategory(metadata.category, typeof row.time_label === "string" ? row.time_label : null, name);
+
+    return {
+      id: String(row.id),
+      date: String(row.logged_date),
+      time: typeof row.time_label === "string" ? row.time_label : null,
+      name,
+      description: typeof row.description === "string" ? row.description : null,
+      source: row.source === "standard" || row.source === "recipe" || row.source === "free_text" || row.source === "ai_estimate" || row.source === "manual" ? row.source : "free_text",
+      confidence: row.confidence === "low" || row.confidence === "medium" || row.confidence === "high" || row.confidence === "manual" ? row.confidence : "medium",
+      values: {
+        calories: Number(row.calories ?? 0),
+        proteinGrams: Number(row.protein_grams ?? 0),
+        carbohydrateGrams: Number(row.carbohydrate_grams ?? 0),
+        fatGrams: row.fat_grams == null ? undefined : Number(row.fat_grams)
+      },
+      rationale: typeof row.estimate_rationale === "string" ? row.estimate_rationale : null,
+      manuallyConfirmed: Boolean(row.manually_confirmed),
+      category,
+      isMainMeal: typeof metadata.isMainMeal === "boolean" ? metadata.isMainMeal : inferMealLogMainMeal(name, category),
+      createdAt: typeof row.created_at === "string" ? row.created_at : undefined
+    };
+  });
+}
+
+function normalizeMealLogCategory(value: unknown, time?: string | null, name?: string | null): MealLogCategory {
+  if (value === "breakfast" || value === "lunch" || value === "dinner" || value === "snack" || value === "drink") {
+    return value;
+  }
+
+  const text = String(name ?? "").toLowerCase();
+  if (text.includes("kaffee") || text.includes("wasser") || text.includes("bier") || text.includes("wein") || text.includes("drink")) {
+    return "drink";
+  }
+
+  const hour = Number.parseInt(String(time ?? "").slice(0, 2), 10);
+  if (Number.isFinite(hour)) {
+    if (hour < 10) return "breakfast";
+    if (hour < 15) return "lunch";
+    if (hour < 18) return "snack";
+    return "dinner";
+  }
+
+  return "snack";
+}
+
+function inferMealLogMainMeal(name: string, category: MealLogCategory): boolean {
+  if (category === "drink" || category === "snack") return false;
+  const text = name.toLowerCase();
+
+  return category === "lunch" ||
+    category === "dinner" ||
+    text.includes("bowl") ||
+    text.includes("pasta") ||
+    text.includes("reis") ||
+    text.includes("kartoff");
 }
 
 function isCoachContextSource(value: unknown): value is CoachContextSource {
@@ -329,6 +372,7 @@ function createSystemPrompt(): string {
     "Du erhältst einen serverseitig gebauten, strukturierten Coach-Kontext. Nutze nur diesen Kontext und fordere fehlende Details gezielt an.",
     "Es gibt drei Modi: coach, planning, change.",
     "Coach Mode ist der Standard und soll 80-90 Prozent der Gespräche abdecken: Beratung, Einschätzung, Alternativen, Motivation, Erklärung, Diskussion.",
+    "Du bekommst optional pageContext. Nutze ihn als Schwerpunkt: today=Tagespriorität, fueling=Ernährung/Makros/Timing, training=Training/Belastung/Regeneration, planning=Wochenplanung/Alltag/Verteilung, insights=Plan-vs-Ist/Learnings, settings=Datenbasis/Profilqualität, coach=ausgewogen.",
     "Im Zweifel IMMER mode=coach. Im Coach Mode dürfen changes und suggestion.changes leer sein. Keine Datenänderungen vorbereiten.",
     "Planning Mode nur, wenn der Nutzer ausdrücklich einen konkreten Plan oder konkrete Einheiten erstellt haben will.",
     "Im Planning Mode darfst du Vorschläge mit suggestion.changes als Draft liefern. Diese werden NICHT gespeichert, sondern nur zur Bestätigung angezeigt.",

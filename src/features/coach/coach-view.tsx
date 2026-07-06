@@ -54,7 +54,7 @@ export function CoachView() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.48fr]">
-        <CoachChatPanel />
+        <CoachChatPanel pageContext="coach" />
 
         <div className="grid content-start gap-6">
           <Panel>

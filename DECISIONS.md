@@ -249,3 +249,33 @@ Coach-Unterhaltungen werden für eingeloggte Nutzer in `coach_chat_messages` ges
 Begründung:
 
 Der Coach soll sich wie ein persönlicher Gesprächspartner anfühlen und Kontext behalten, ohne dem AI-Provider direkten Supabase-Zugriff zu geben. Die gespeicherte Historie verbessert Anschlussfähigkeit und Rückfragen, während RLS den Verlauf pro Nutzer schützt. Planänderungen bleiben trotzdem getrennt: Beratung und Vorschläge dürfen jederzeit entstehen, echte Änderungen passieren erst nach ausdrücklicher Bestätigung im Client.
+
+## ADR-026: Today ist der tägliche Coach, nicht nur ein Dashboard
+
+Entscheidung:
+
+Die Heute-Seite priorisiert Daily Briefing, Tagesziele, Tagesfortschritt, Aktivitäten, gegessene Mahlzeiten, Coach-Empfehlungen, Morgenblick und Quick Actions. Fueling bekommt dort einen direkten Quick-Add-Einstieg.
+
+Begründung:
+
+Der wichtigste Produktmoment ist morgens und im Tagesverlauf die schnelle Orientierung: Was ist geplant, was wurde gegessen, was fehlt noch und was empfiehlt der Coach als nächstes? Die Seite soll Handlungssicherheit geben, ohne zur Checkliste zu werden.
+
+## ADR-027: Meal Logs bekommen Kategorie und Hauptmahlzeit als Metadaten
+
+Entscheidung:
+
+`meal_logs` bleiben die persistente Quelle für gegessene Mahlzeiten. Kategorie (`Frühstück`, `Mittagessen`, `Abendessen`, `Snack`, `Getränk`) und `isMainMeal` werden als Metadaten gespeichert und bei älteren Logs serverseitig aus Uhrzeit und Name abgeleitet.
+
+Begründung:
+
+Diese Informationen verbessern Tagesbilanz, Coach-Kontext und spätere Plan-vs.-Ist-Auswertungen, ohne sofort eine zusätzliche Normalisierungsschicht erzwingen zu müssen.
+
+## ADR-028: Coach-Anfragen erhalten Page Context
+
+Entscheidung:
+
+Coach-Aufrufe können einen `pageContext` wie `today`, `fueling`, `training`, `planning`, `insights`, `settings` oder `coach` senden. Die API nutzt diesen Kontext ausschließlich zur Schwerpunktsetzung der Beratung, nicht als Berechtigung für automatische Änderungen.
+
+Begründung:
+
+Der Coach soll sich in jedem Bereich passend anfühlen: Fueling fragt anders als Training oder Insights. Gleichzeitig bleibt das Grundprinzip erhalten: Im Zweifel Beratung, keine automatische Planänderung.

@@ -81,6 +81,8 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - Fueling- und Rezeptvorschläge sind Teil der Coach-Antwort
 - Laufen unterscheidet Laufart und Fokus
 - Coach-Kontext wird serverseitig gebaut und enthält importierte externe Aktivitäten nur als strukturierte Zusammenfassung
+- Coach-Aufrufe können einen Bereichskontext wie `today`, `fueling`, `training`, `planning`, `insights` oder `settings` senden
+- Hauptseiten bieten sichtbare Coach-/KI-Empfehlungen, die beraten, aber keine Daten automatisch ändern
 - Migration: `supabase/004_coach_chat_history.sql`
 
 Beispiel für Vercel:
@@ -123,13 +125,21 @@ Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, OAuth-State-Secret
 ## Nutrition & Fueling
 
 - Geloggte Mahlzeiten werden für eingeloggte Nutzer in `meal_logs` gespeichert
+- Geloggte Mahlzeiten können im Fueling-Bereich bearbeitet und gelöscht werden
+- Meal Logs speichern Kategorie und Hauptmahlzeit in `metadata`; ältere Logs bekommen serverseitige Fallbacks aus Uhrzeit und Name
 - Standardmahlzeiten, Rezepte, Zutaten und KI-Schätzungen sind mit `standard_meals`, `recipes`, `recipe_ingredients` und `nutrition_estimates` vorbereitet
 - Migration: `supabase/003_nutrition.sql`
 - API-Routen:
-  - `GET/POST /api/nutrition/logs`
+  - `GET/POST/PATCH/DELETE /api/nutrition/logs`
   - `POST /api/nutrition/estimate`
 - AI-Schätzungen laufen ausschließlich serverseitig über `AI_PROVIDER`, `AI_MODEL` und `AI_API_KEY`
 - Die UI kennzeichnet Werte als Standard, Rezept, Freitext, KI-Schätzung oder manuell bestätigt
+
+## Today Experience
+
+- Die Heute-Seite ist der tägliche Coach-Einstieg mit Briefing, Tageszielen, Tagesfortschritt, Aktivitäten, Ernährung, Coach-Empfehlungen, Morgenblick und Quick Actions
+- Fueling Quick Add ist direkt auf Heute sichtbar
+- Tagesbilanz zeigt kcal Input, Tagesverbrauch, Zielbereich, Protein-/Carb-Fortschritt und was noch fehlt
 
 ## Architektur
 
