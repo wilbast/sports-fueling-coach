@@ -147,7 +147,7 @@ export function TodayView({
           <Target className="h-5 w-5 text-coach-600" aria-hidden="true" />
           <h2 className="text-lg font-semibold text-ink">Tagesfortschritt</h2>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <BalanceRow
             label="Kalorien"
             value={`${formatNumber(nutritionSummary.intake.calories)} kcal`}
@@ -171,12 +171,6 @@ export function TodayView({
             value={`${formatNumber(nutritionSummary.intake.fatGrams)} / ${formatNumber(fatTarget)} g`}
             detail={`Rest ca. ${formatNumber(Math.max(0, fatTarget - nutritionSummary.intake.fatGrams))} g`}
             progress={fatProgress}
-          />
-          <BalanceRow
-            label="Wasser"
-            value="0 / 2,5 l"
-            detail="Wasser-Logging folgt; heute transparent geschätzt"
-            progress={0}
           />
         </div>
       </Panel>

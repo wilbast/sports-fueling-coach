@@ -120,7 +120,7 @@ Weitere Bereiche:
 - Insights sind abgeleitet, aber noch nicht tief analysiert.
 - Es gibt noch keine automatisierten Unit-Tests.
 - Der Coach bietet übernehmbare Vorschläge, hat aber noch keine Undo-Historie.
-- Wasser, Schlaf, Krankheit, Alkohol und Regeneration sind noch keine echten Zeitreihen.
+- Schlaf, Krankheit, Alkohol und Regeneration sind noch keine echten Zeitreihen. Wasser wird bewusst nicht getrackt.
 - Tagesbewertung ist bewusst noch nicht aktiv, weil dafür mehr Ist-Daten nötig sind.
 - Alte Coach-Antworten werden als Textverlauf wiederhergestellt; frühere Vorschlagsbuttons werden nach Reload nicht rekonstruiert.
 - Strava-Synchronisation ist implementiert, aber ohne echte Strava-Credentials und produktive Supabase-Migration nicht live verifiziert.
