@@ -99,6 +99,7 @@ OPENAI_API_KEY=...
 - OAuth-Routen: `/api/integrations/strava/connect` und `/api/integrations/strava/callback`
 - Status-Route: `/api/integrations/strava/status`
 - manuelle Synchronisation: `/api/integrations/strava/sync`
+- automatischer Sync: `/api/cron/strava-sync`, ausgelöst durch Vercel Cron
 - Tokens werden ausschließlich serverseitig in `external_source_tokens` gespeichert
 - Aktivitäten werden in ein providerneutrales Domain-Modell unter `activities`, `activity_streams`, `equipment` und `sync_jobs` importiert
 - Strava ist nur der erste Adapter; das interne Modell ist für Garmin, Apple Health, Polar, Coros, Oura und ähnliche Quellen vorbereitet
@@ -112,6 +113,7 @@ STRAVA_CLIENT_SECRET=...
 STRAVA_REDIRECT_URI=https://deine-domain.de/api/integrations/strava/callback
 STRAVA_OAUTH_STATE_SECRET=...
 SUPABASE_SERVICE_ROLE_KEY=...
+CRON_SECRET=...
 ```
 
 Optionale Sync-Limits:
@@ -119,9 +121,12 @@ Optionale Sync-Limits:
 ```text
 STRAVA_SYNC_MAX_PAGES=50
 STRAVA_STREAM_SYNC_LIMIT=50
+STRAVA_CRON_MAX_CONNECTIONS=10
 ```
 
-Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, OAuth-State-Secret und Tokens dürfen nie im Client oder Repository landen.
+Vercel Cron triggert `/api/cron/strava-sync` alle 15 Minuten. Der Endpoint entscheidet serverseitig nach Berliner Uhrzeit: zwischen 10:00 und 22:00 Uhr wird alle 15 Minuten synchronisiert, nachts nur etwa stündlich. `CRON_SECRET` schützt den öffentlichen Cron-Endpoint; Vercel sendet den Wert als Bearer Token.
+
+Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, `CRON_SECRET`, OAuth-State-Secret und Tokens dürfen nie im Client oder Repository landen.
 
 ## Nutrition & Fueling
 

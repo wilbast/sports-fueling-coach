@@ -210,15 +210,15 @@ Begründung:
 
 Sports & Fueling Coach soll langfristig eine persönliche Gesundheitsplattform werden. Dafür darf die Fachlogik nicht wissen müssen, ob eine Aktivität von Strava, Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings kommt. Provideradapter sind nur Ingestion-Schichten. Coach, Insights und spätere Trainingsanalysen lesen ausschließlich aus Supabase und arbeiten mit normalisierten Aktivitätsdaten. Tokens bleiben serverseitig, RLS schützt nutzerbezogene Daten, und die Token-Tabelle ist nicht für normale authentifizierte Clients freigegeben.
 
-## ADR-022: Strava-Synchronisation startet manuell und de-duplizierend
+## ADR-022: Strava-Synchronisation läuft automatisch, aber rhythmisch gedrosselt
 
 Entscheidung:
 
-Nach dem OAuth-Callback startet die App eine initiale Synchronisation. Weitere Synchronisationen können in den Einstellungen manuell ausgelöst werden. Inkrementelle Läufe verwenden die zuletzt gespeicherte Aktivität als Zeitanker und speichern über eindeutige Provider-/Activity-IDs ohne Duplikate. Sync-Läufe schreiben Status, Zähler und Fehlermeldungen nach `sync_jobs`.
+Nach dem OAuth-Callback startet die App eine initiale Synchronisation. Weitere Synchronisationen können in den Einstellungen manuell ausgelöst werden. Zusätzlich triggert Vercel Cron `/api/cron/strava-sync` alle 15 Minuten. Der Endpoint entscheidet serverseitig nach `Europe/Berlin`: zwischen 10:00 und 22:00 Uhr darf alle 15 Minuten synchronisiert werden, nachts nur stündlich. Inkrementelle Läufe verwenden die zuletzt gespeicherte Aktivität als Zeitanker und speichern über eindeutige Provider-/Activity-IDs ohne Duplikate. Sync-Läufe schreiben Status, Zähler und Fehlermeldungen nach `sync_jobs`.
 
 Begründung:
 
-Ein manueller Sync ist für die Beta transparenter und einfacher zu debuggen als ein sofortiger Hintergrundjob. Die Tabellen- und Adapterstruktur ist trotzdem so gewählt, dass später ein geplanter Vercel Cron oder Supabase Edge Job denselben Sync-Service verwenden kann.
+Der Coach braucht Strava-Daten zeitnah nach Aktivitäten, aber dauerhaftes Polling wäre unnötig und würde Rate Limits belasten. Ein 15-Minuten-Cron mit serverseitiger Tag-/Nacht-Drossel ist einfach zu betreiben, robust gegenüber Sommer-/Winterzeit und bleibt mit Stravas 15-Minuten- und Tageslimits besser vereinbar. Der manuelle Sync bleibt als Debug- und Sofortaktion erhalten.
 
 ## ADR-023: Coach Mode ist der Standard
 

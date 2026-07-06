@@ -66,6 +66,30 @@ export type SyncResult = {
   lastSyncAt: string;
 };
 
+export type StravaCronSyncResult = {
+  shouldRun: boolean;
+  cadence: "day_15min" | "night_hourly";
+  localTime: string;
+  minMinutesBetweenSyncs: number;
+  checkedConnections: number;
+  processedConnections: number;
+  syncedConnections: number;
+  skippedConnections: number;
+  errorConnections: number;
+  results: Array<{
+    userId: string;
+    connectionId: string;
+    status: "synced" | "skipped" | "error";
+    reason?: string;
+    importedCount?: number;
+    updatedCount?: number;
+    skippedCount?: number;
+    activityCount?: number;
+    lastSyncAt?: string;
+    errorMessage?: string;
+  }>;
+};
+
 export async function getStravaIntegrationStatus(userId: string): Promise<IntegrationStatus> {
   if (!isServiceRoleConfigured()) {
     return {
@@ -237,6 +261,91 @@ export async function syncStravaActivities(userId: string, syncType: "initial" |
   }
 }
 
+export async function syncConnectedStravaActivitiesForCron(options: { force?: boolean; now?: Date } = {}): Promise<StravaCronSyncResult> {
+  if (!isServiceRoleConfigured()) {
+    throw new Error("Supabase Service Role ist nicht konfiguriert.");
+  }
+
+  const now = options.now ?? new Date();
+  const schedule = createStravaCronSchedule(now);
+  const supabase = createServiceRoleClient();
+
+  if (!schedule.shouldRun && !options.force) {
+    return {
+      ...schedule,
+      checkedConnections: 0,
+      processedConnections: 0,
+      syncedConnections: 0,
+      skippedConnections: 0,
+      errorConnections: 0,
+      results: []
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("external_connections")
+    .select("id,user_id,last_sync_at,status")
+    .eq("provider", "strava")
+    .eq("status", "connected");
+
+  if (error) {
+    throw new Error(`Strava-Verbindungen konnten nicht geladen werden: ${error.message}`);
+  }
+
+  const maxConnections = Number.parseInt(process.env.STRAVA_CRON_MAX_CONNECTIONS ?? "10", 10);
+  const connections = ((data ?? []) as Array<Pick<ExternalConnectionRow, "id" | "user_id" | "last_sync_at" | "status">>)
+    .sort((left, right) => String(left.last_sync_at ?? "").localeCompare(String(right.last_sync_at ?? "")))
+    .slice(0, Number.isFinite(maxConnections) && maxConnections > 0 ? maxConnections : 10);
+  const results: StravaCronSyncResult["results"] = [];
+
+  for (const connection of connections) {
+    const skipReason = options.force
+      ? null
+      : await getCronSkipReason(connection, schedule.minMinutesBetweenSyncs, now);
+
+    if (skipReason) {
+      results.push({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        status: "skipped",
+        reason: skipReason
+      });
+      continue;
+    }
+
+    try {
+      const syncResult = await syncStravaActivities(connection.user_id, "incremental");
+      results.push({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        status: "synced",
+        importedCount: syncResult.importedCount,
+        updatedCount: syncResult.updatedCount,
+        skippedCount: syncResult.skippedCount,
+        activityCount: syncResult.activityCount,
+        lastSyncAt: syncResult.lastSyncAt
+      });
+    } catch (syncError) {
+      results.push({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        status: "error",
+        errorMessage: syncError instanceof Error ? syncError.message : "Strava-Sync fehlgeschlagen."
+      });
+    }
+  }
+
+  return {
+    ...schedule,
+    checkedConnections: data?.length ?? 0,
+    processedConnections: connections.length,
+    syncedConnections: results.filter((result) => result.status === "synced").length,
+    skippedConnections: results.filter((result) => result.status === "skipped").length,
+    errorConnections: results.filter((result) => result.status === "error").length,
+    results
+  };
+}
+
 export async function loadRecentExternalActivitiesForCoach(userId: string) {
   if (!isServiceRoleConfigured()) return [];
 
@@ -253,6 +362,69 @@ export async function loadRecentExternalActivitiesForCoach(userId: string) {
     .limit(120);
 
   return data ?? [];
+}
+
+function createStravaCronSchedule(now: Date) {
+  const local = getBerlinTimeParts(now);
+  const isDayWindow = local.hour >= 10 && local.hour < 22;
+
+  return {
+    shouldRun: isDayWindow || local.minute < 15,
+    cadence: isDayWindow ? "day_15min" as const : "night_hourly" as const,
+    localTime: `${String(local.hour).padStart(2, "0")}:${String(local.minute).padStart(2, "0")}`,
+    minMinutesBetweenSyncs: isDayWindow ? 14 : 55
+  };
+}
+
+function getBerlinTimeParts(now: Date): { hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(now);
+  const part = (type: string) => Number.parseInt(parts.find((item) => item.type === type)?.value ?? "0", 10);
+
+  return {
+    hour: part("hour"),
+    minute: part("minute")
+  };
+}
+
+async function getCronSkipReason(
+  connection: Pick<ExternalConnectionRow, "id" | "user_id" | "last_sync_at">,
+  minMinutesBetweenSyncs: number,
+  now: Date
+): Promise<string | null> {
+  if (connection.last_sync_at) {
+    const lastSyncAgeMs = now.getTime() - new Date(connection.last_sync_at).getTime();
+    if (lastSyncAgeMs >= 0 && lastSyncAgeMs < minMinutesBetweenSyncs * 60 * 1000) {
+      return `last_sync_at ist jünger als ${minMinutesBetweenSyncs} Minuten`;
+    }
+  }
+
+  if (await hasRecentRunningSyncJob(connection.user_id, connection.id, now)) {
+    return "Sync-Job läuft bereits oder ist noch zu frisch";
+  }
+
+  return null;
+}
+
+async function hasRecentRunningSyncJob(userId: string, connectionId: string, now: Date): Promise<boolean> {
+  const supabase = createServiceRoleClient();
+  const since = new Date(now.getTime() - 25 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from("sync_jobs")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("provider", "strava")
+    .eq("connection_id", connectionId)
+    .eq("status", "running")
+    .gte("started_at", since)
+    .limit(1)
+    .maybeSingle();
+
+  return Boolean(data);
 }
 
 async function getConnection(userId: string): Promise<ExternalConnectionRow> {
