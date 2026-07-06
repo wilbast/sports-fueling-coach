@@ -69,7 +69,7 @@ export function StravaIntegrationPanel() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Synchronisation fehlgeschlagen.");
 
-      setSyncMessage(`${result.importedCount} neu importiert, ${result.updatedCount} aktualisiert.`);
+      setSyncMessage(`${result.importedCount} neu importiert, ${result.updatedCount} aktualisiert. Letzter Sync: ${result.lastSyncAt ? formatDateTime(result.lastSyncAt) : "gerade eben"}.`);
       await loadStatus();
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : "Synchronisation fehlgeschlagen.");
@@ -151,6 +151,17 @@ export function StravaIntegrationPanel() {
             </div>
           ) : null}
 
+          <div className="rounded-xl border border-line bg-white px-3 py-3 text-sm leading-6 text-muted">
+            <p>
+              <span className="font-semibold text-ink">Letzte Synchronisation:</span>{" "}
+              {status.lastSyncAt ? `${formatDateTime(status.lastSyncAt)} (${formatRelativeTime(status.lastSyncAt)})` : "noch nicht ausgeführt"}
+            </p>
+            <p className="mt-1">
+              Status: {status.lastSyncStatus ?? "unbekannt"}
+              {status.latestSyncJob?.completedAt ? ` · letzter Job beendet: ${formatDateTime(status.latestSyncJob.completedAt)}` : ""}
+            </p>
+          </div>
+
           <button
             type="button"
             onClick={syncActivities}
@@ -231,4 +242,16 @@ function formatDateTime(value: string): string {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function formatRelativeTime(value: string): string {
+  const diffMinutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+  if (diffMinutes < 1) return "gerade eben";
+  if (diffMinutes < 60) return `vor ${diffMinutes} Min.`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `vor ${diffHours} Std.`;
+
+  const diffDays = Math.round(diffHours / 24);
+  return `vor ${diffDays} Tagen`;
 }
