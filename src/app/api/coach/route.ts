@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
         }
       }
     };
-    await persistCoachExchange(user?.id, threadId, message, fallback);
+    await persistCoachExchange(user?.id, threadId, message, fallback, createChatMetadata(coachState, body?.pageContext ?? "coach", message));
     return NextResponse.json(fallback);
   }
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
         debug: aiClient.debug
       }
     };
-    await persistCoachExchange(user?.id, threadId, message, response);
+    await persistCoachExchange(user?.id, threadId, message, response, createChatMetadata(coachState, body?.pageContext ?? "coach", message));
 
     return NextResponse.json(response);
   }
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
         status: "configured" as const
       }
     };
-    await persistCoachExchange(user?.id, threadId, message, response);
+    await persistCoachExchange(user?.id, threadId, message, response, createChatMetadata(coachState, body?.pageContext ?? "coach", message));
 
     return NextResponse.json(response);
   } catch (error) {
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
         debug
       }
     };
-    await persistCoachExchange(user?.id, threadId, message, fallback);
+    await persistCoachExchange(user?.id, threadId, message, fallback, createChatMetadata(coachState, body?.pageContext ?? "coach", message));
     return NextResponse.json(fallback);
   }
 }
@@ -226,7 +226,8 @@ async function persistCoachExchange(
   userId: string | undefined,
   threadId: string,
   userMessage: string,
-  response: CoachPlanResponse
+  response: CoachPlanResponse,
+  metadata: Record<string, unknown>
 ): Promise<void> {
   if (!isSupabaseConfigured() || !userId) return;
 
@@ -239,7 +240,7 @@ async function persistCoachExchange(
         thread_id: threadId,
         role: "user",
         content: userMessage,
-        metadata: {}
+        metadata
       },
       {
         user_id: userId,
@@ -253,7 +254,8 @@ async function persistCoachExchange(
           changes: response.changes,
           questions: response.questions,
           confidence: response.confidence,
-          ai: response.ai
+          ai: response.ai,
+          ...metadata
         }
       }
     ]);
@@ -261,6 +263,21 @@ async function persistCoachExchange(
   if (error) {
     console.warn("[coach] chat exchange could not be persisted", { message: error.message });
   }
+}
+
+function createChatMetadata(state: CoachContextSource, pageContext: CoachPageContext, firstMessage: string) {
+  return {
+    selectedDate: state.selectedDate,
+    pageContext,
+    sessionTitle: summarizeSessionTitle(firstMessage)
+  };
+}
+
+function summarizeSessionTitle(message: string): string {
+  const cleaned = message.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "Coach-Chat";
+
+  return cleaned.length > 54 ? `${cleaned.slice(0, 51).trim()}...` : cleaned;
 }
 
 function normalizeThreadId(value: unknown): string {

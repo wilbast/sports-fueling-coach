@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Lightbulb, Loader2, MessageCircle, RotateCcw, SendHorizontal, Sparkles } from "lucide-react";
+import { CheckCircle2, History, Lightbulb, Loader2, MessageCircle, RotateCcw, SendHorizontal, Sparkles } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
 import type { CoachChatMessage, CoachMealDraft, CoachMode, CoachOutcome, CoachPlanChange, CoachPlanResponse, CoachSuggestion } from "@/domain/coach/types";
 import type { MealLogCategory } from "@/domain/nutrition/logs";
@@ -19,7 +19,16 @@ type CoachChatPanelProps = {
   initialMessage?: string;
 };
 
-const CHAT_RESET_STORAGE_KEY = "sports-fueling-coach:coach-chat-reset-at";
+type CoachChatSessionSummary = {
+  threadId: string;
+  selectedDate: string | null;
+  pageContext: string | null;
+  title: string;
+  preview: string;
+  messageCount: number;
+  startedAt?: string;
+  updatedAt?: string;
+};
 
 export function CoachChatPanel({
   title = "Coach fragen",
@@ -33,8 +42,11 @@ export function CoachChatPanel({
   const { addLog } = useNutritionLogs(state.selectedDate);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<CoachChatMessage[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState(() => createChatSessionId(threadId, pageContext, state.selectedDate));
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [sessions, setSessions] = useState<CoachChatSessionSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [appliedIds, setAppliedIds] = useState<string[]>([]);
@@ -57,48 +69,11 @@ export function CoachChatPanel({
   }, [visibleMessages.length, isLoadingHistory]);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadHistory() {
-      setIsLoadingHistory(true);
-
-      try {
-        const response = await fetch(`/api/coach?threadId=${encodeURIComponent(threadId)}`);
-        const result = await response.json() as { messages?: Array<{
-          id: string;
-          role: CoachChatMessage["role"];
-          content: string;
-          mode?: CoachMode;
-          createdAt: string;
-        }> };
-
-        if (active && response.ok) {
-          const resetAt = getLocalChatResetAt(threadId);
-          setMessages((result.messages ?? [])
-            .filter((message) => isAfterReset(message.createdAt, resetAt))
-            .map((message) => ({
-              id: message.id,
-              role: message.role,
-              content: message.content,
-              mode: message.mode,
-              createdAt: message.createdAt
-            })));
-        }
-      } catch {
-        if (active) {
-          setAiNotice("Chat-Historie konnte gerade nicht geladen werden. Du kannst trotzdem weiter chatten.");
-        }
-      } finally {
-        if (active) setIsLoadingHistory(false);
-      }
-    }
-
-    void loadHistory();
-
-    return () => {
-      active = false;
-    };
-  }, [threadId]);
+    startNewSession();
+    void loadSessionsForSelectedDate();
+    // A page/date change intentionally starts with an empty visible chat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, pageContext, state.selectedDate]);
 
   useEffect(() => {
     if (!initialMessage || input.trim() || appliedInitialMessage === initialMessage) return;
@@ -107,13 +82,65 @@ export function CoachChatPanel({
   }, [appliedInitialMessage, initialMessage, input]);
 
   function resetVisibleChat() {
-    const resetAt = new Date().toISOString();
-    window.localStorage.setItem(getChatResetStorageKey(threadId), resetAt);
+    startNewSession();
+    setAiNotice("Neue Chat-Session gestartet. Frühere Gespräche bleiben im Verlauf des Tages abrufbar.");
+  }
+
+  function startNewSession() {
+    setActiveThreadId(createChatSessionId(threadId, pageContext, state.selectedDate));
     setMessages([]);
     setPendingPlan(null);
     setAppliedIds([]);
     setError(null);
-    setAiNotice("Chat-Anzeige zurückgesetzt. Der Verlauf bleibt im Hintergrund gespeichert und kann weiter als Kontext dienen.");
+    setAiNotice(null);
+  }
+
+  async function loadSessionsForSelectedDate() {
+    setIsLoadingSessions(true);
+
+    try {
+      const response = await fetch(`/api/coach/history?date=${encodeURIComponent(state.selectedDate)}`);
+      const result = await response.json() as { sessions?: CoachChatSessionSummary[] };
+      if (response.ok) setSessions(result.sessions ?? []);
+    } catch {
+      setSessions([]);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }
+
+  async function openSession(sessionThreadId: string) {
+    setIsLoadingHistory(true);
+    setError(null);
+    setAiNotice(null);
+
+    try {
+      const response = await fetch(`/api/coach?threadId=${encodeURIComponent(sessionThreadId)}`);
+      const result = await response.json() as { messages?: Array<{
+        id: string;
+        role: CoachChatMessage["role"];
+        content: string;
+        mode?: CoachMode;
+        createdAt: string;
+      }> };
+
+      if (!response.ok) throw new Error("Session konnte nicht geladen werden.");
+
+      setActiveThreadId(sessionThreadId);
+      setMessages((result.messages ?? []).map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        mode: message.mode,
+        createdAt: message.createdAt
+      })));
+      setPendingPlan(null);
+      setAppliedIds([]);
+    } catch {
+      setError("Der gespeicherte Chat konnte gerade nicht geladen werden.");
+    } finally {
+      setIsLoadingHistory(false);
+    }
   }
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
@@ -148,7 +175,7 @@ export function CoachChatPanel({
       void persistLocalMessages([
         { role: "user", content: message },
         { role: "assistant", content: assistantMessage.content, mode: assistantMessage.mode }
-      ], threadId);
+      ], activeThreadId, state.selectedDate, pageContext);
       setMessages((current) => [
         ...current,
         {
@@ -174,7 +201,7 @@ export function CoachChatPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
-          threadId,
+          threadId: activeThreadId,
           pageContext,
           state: payloadState
         })
@@ -203,6 +230,7 @@ export function CoachChatPanel({
           questions: result.questions
         }
       ]);
+      void loadSessionsForSelectedDate();
     } catch {
       setError("Der Coach konnte gerade nicht antworten. Deine Planung wurde nicht verändert.");
     } finally {
@@ -232,7 +260,7 @@ export function CoachChatPanel({
     );
     void persistLocalMessages([
       { role: "assistant", content: assistantMessage.content, mode: assistantMessage.mode }
-    ], threadId);
+    ], activeThreadId, state.selectedDate, pageContext);
     setMessages((current) => [
       ...current,
       {
@@ -316,11 +344,40 @@ export function CoachChatPanel({
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-muted transition hover:bg-canvas hover:text-ink"
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            Reset
+            Neu
           </button>
           <Pill tone="blue">Beta</Pill>
         </div>
       </div>
+
+      <details className="mb-3 rounded-2xl border border-line bg-white px-3 py-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-ink">
+          <span className="inline-flex items-center gap-2">
+            <History className="h-4 w-4 text-coach-700" aria-hidden="true" />
+            Frühere Chats am aktiven Tag
+          </span>
+          <span className="text-xs font-medium text-muted">{isLoadingSessions ? "lädt..." : `${sessions.length}`}</span>
+        </summary>
+        <div className="mt-3 grid gap-2">
+          {sessions.length === 0 ? (
+            <p className="rounded-xl bg-canvas px-3 py-2 text-sm text-muted">
+              Noch keine gespeicherten Chats für diesen Tag.
+            </p>
+          ) : sessions.map((session) => (
+            <button
+              key={session.threadId}
+              type="button"
+              onClick={() => void openSession(session.threadId)}
+              className="rounded-xl border border-line px-3 py-3 text-left transition hover:border-coach-200 hover:bg-coach-50"
+            >
+              <span className="block text-sm font-semibold text-ink">{session.title}</span>
+              <span className="mt-1 block text-xs leading-5 text-muted">
+                {formatSessionTime(session.updatedAt)} · {session.messageCount} Nachrichten{session.preview ? ` · ${session.preview}` : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+      </details>
 
       <div className="rounded-2xl border border-line bg-white">
         <div className="border-b border-line px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
@@ -394,13 +451,16 @@ async function persistLocalMessages(messages: Array<{
   role: "user" | "assistant";
   content: string;
   mode?: CoachMode;
-}>, threadId: string) {
+}>, threadId: string, selectedDate: string, pageContext: NonNullable<CoachChatPanelProps["pageContext"]>) {
   try {
     await fetch("/api/coach/history", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         threadId,
+        selectedDate,
+        pageContext,
+        sessionTitle: messages.find((message) => message.role === "user")?.content ?? "Coach-Chat",
         messages
       })
     });
@@ -409,26 +469,19 @@ async function persistLocalMessages(messages: Array<{
   }
 }
 
-function getLocalChatResetAt(threadId: string): string | null {
-  try {
-    return window.localStorage.getItem(getChatResetStorageKey(threadId));
-  } catch {
-    return null;
-  }
+function createChatSessionId(baseThreadId: string, pageContext: NonNullable<CoachChatPanelProps["pageContext"]>, selectedDate: string): string {
+  return `${baseThreadId}-${pageContext}-${selectedDate}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function getChatResetStorageKey(threadId: string): string {
-  return `${CHAT_RESET_STORAGE_KEY}:${threadId}`;
-}
+function formatSessionTime(value: string | undefined): string {
+  if (!value) return "gerade";
 
-function isAfterReset(createdAt: string, resetAt: string | null): boolean {
-  if (!resetAt) return true;
-  const createdTime = Date.parse(createdAt);
-  const resetTime = Date.parse(resetAt);
-
-  if (!Number.isFinite(createdTime) || !Number.isFinite(resetTime)) return true;
-
-  return createdTime > resetTime;
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
 }
 
 function formatAiDebugNotice(ai: NonNullable<CoachPlanResponse["ai"]>): string {

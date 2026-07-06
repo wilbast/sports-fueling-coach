@@ -244,11 +244,11 @@ Fueling ist ein mehrfach täglicher Workflow und braucht andere Datenqualität a
 
 Entscheidung:
 
-Coach-Unterhaltungen werden für eingeloggte Nutzer in `coach_chat_messages` gespeichert und beim nächsten Öffnen wieder geladen. Die Coach-API erhält neben dem strukturierten Coach-Kontext auch die letzten Nachrichten als Gesprächsverlauf. OpenAI wird ausschließlich serverseitig über `OPENAI_API_KEY` oder `AI_API_KEY` genutzt. Wenn keine AI-Konfiguration vorhanden ist oder der Provider fehlschlägt, antwortet ein transparenter regelbasierter Fallback.
+Coach-Unterhaltungen werden für eingeloggte Nutzer in `coach_chat_messages` gespeichert, aber neue sichtbare Chatfenster starten bewusst leer. Jede geöffnete Unterhaltung bekommt eine eigene Session-ID; beim Seiten- oder Datumswechsel beginnt die UI eine neue Session. Frühere Tagesgespräche bleiben über eine Verlaufsliste am aktiven Tag abrufbar und können dort fortgesetzt werden. Die Coach-API erhält neben dem strukturierten Coach-Kontext nur den Verlauf der aktiv fortgesetzten Session. OpenAI wird ausschließlich serverseitig über `OPENAI_API_KEY` oder `AI_API_KEY` genutzt. Wenn keine AI-Konfiguration vorhanden ist oder der Provider fehlschlägt, antwortet ein transparenter regelbasierter Fallback.
 
 Begründung:
 
-Der Coach soll sich wie ein persönlicher Gesprächspartner anfühlen und Kontext behalten, ohne dem AI-Provider direkten Supabase-Zugriff zu geben. Die gespeicherte Historie verbessert Anschlussfähigkeit und Rückfragen, während RLS den Verlauf pro Nutzer schützt. Planänderungen bleiben trotzdem getrennt: Beratung und Vorschläge dürfen jederzeit entstehen, echte Änderungen passieren erst nach ausdrücklicher Bestätigung im Client.
+Der Coach soll sich wie ein persönlicher Gesprächspartner anfühlen, aber nicht jedes neue Öffnen mit altem Chatballast starten. Die gespeicherte Historie verbessert Anschlussfähigkeit und Rückfragen, während RLS den Verlauf pro Nutzer schützt. Der Nutzer entscheidet aktiv, ob er eine frühere Anfrage zu einem Tag wieder öffnet und fortsetzt. Planänderungen bleiben trotzdem getrennt: Beratung und Vorschläge dürfen jederzeit entstehen, echte Änderungen passieren erst nach ausdrücklicher Bestätigung im Client.
 
 ## ADR-026: Today ist der tägliche Coach, nicht nur ein Dashboard
 
