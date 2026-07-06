@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Beef, BookmarkPlus, History, Plus, Salad, Soup, Trash2, Utensils, Wheat } from "lucide-react";
+import { Beef, BookmarkPlus, History, Plus, Salad, Soup, Utensils, Wheat } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { MealLog } from "@/domain/nutrition/logs";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
@@ -11,13 +11,12 @@ import { useAppState } from "@/features/app-state/app-state-provider";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
 import { MealLogList } from "@/features/nutrition/meal-log-list";
-import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
+import { NUTRITION_LOGS_UPDATED_EVENT, loadLocalMealLogsForDate, useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
 const mealIcons = [Salad, Beef, Soup, Wheat];
-const NUTRITION_LOGS_UPDATED_EVENT = "sports-fueling-coach:nutrition-logs-updated";
 
 export function FuelingView() {
-  const { state, addMealTemplate, addMealEntry, addMealSlot, removeMealSlot, saveMealTemplateAsStandard } = useAppState();
+  const { state, addMealTemplate } = useAppState();
   const selectedDay = getDayPlanByDate(state.weekPlan, state.selectedDate);
   const standardMealTemplates = state.mealTemplates.filter((meal) => meal.isStandard !== false);
   const [name, setName] = useState("");
@@ -29,10 +28,7 @@ export function FuelingView() {
   const [addNewMealToDay, setAddNewMealToDay] = useState(true);
   const [newMealTime, setNewMealTime] = useState("12:30");
   const [newMealRole, setNewMealRole] = useState<MealPlanSlot["role"]>("lunch");
-  const [slotTemplateId, setSlotTemplateId] = useState(standardMealTemplates[0]?.id ?? "");
-  const [slotTime, setSlotTime] = useState("12:30");
-  const [slotRole, setSlotRole] = useState<MealPlanSlot["role"]>("lunch");
-  const selectedDayTotals = useMemo(() => calculateDayMealTotals(selectedDay.mealPlan, state.mealTemplates), [selectedDay.mealPlan, state.mealTemplates]);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const { logs: selectedDayLogs, isLoading: logsLoading, error: logsError, addLog, updateLog, deleteLog } = useNutritionLogs(selectedDay.date);
   const weeklyLogs = useWeekMealLogs(state.weekPlan.days.map((day) => day.date));
   const selectedDayLoggedTotals = useMemo(() => calculateMealLogTotals(selectedDayLogs), [selectedDayLogs]);
@@ -81,12 +77,17 @@ export function FuelingView() {
       });
 
       if (!savedLog) {
-        addMealEntry(selectedDay.date, template, slot, { saveAsStandard: saveMealAsStandard });
-      } else if (saveMealAsStandard) {
+        setStatusMessage("Die Mahlzeit konnte gerade nicht gespeichert werden. Es wurde kein Tagesplan-Ersatz angelegt.");
+        return;
+      }
+
+      if (saveMealAsStandard) {
         addMealTemplate(template);
       }
+      setStatusMessage(`${template.name} wurde für ${formatShortDate(selectedDay.date)} geloggt.`);
     } else if (saveMealAsStandard) {
       addMealTemplate(template);
+      setStatusMessage(`${template.name} wurde als Fuelingstandard gespeichert.`);
     } else {
       return;
     }
@@ -94,18 +95,6 @@ export function FuelingView() {
     setName("");
     setDescription("");
     setSaveMealAsStandard(true);
-  }
-
-  async function submitSlot(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!slotTemplateId || !slotTime) return;
-    const meal = standardMealTemplates.find((template) => template.id === slotTemplateId);
-    if (!meal) return;
-
-    await addStandardMealToDay(meal, {
-      time: slotTime,
-      role: slotRole
-    });
   }
 
   async function addStandardMealToDay(meal: MealTemplate, slot: Omit<MealPlanSlot, "mealTemplateId">) {
@@ -131,11 +120,11 @@ export function FuelingView() {
     });
 
     if (!savedLog) {
-      addMealSlot(selectedDay.date, {
-        ...slot,
-        mealTemplateId: meal.id
-      });
+      setStatusMessage(`${meal.name} konnte gerade nicht als Mahlzeit gespeichert werden.`);
+      return;
     }
+
+    setStatusMessage(`${meal.name} wurde für ${formatShortDate(selectedDay.date)} geloggt.`);
   }
 
   return (
@@ -155,16 +144,13 @@ export function FuelingView() {
 
       <WeekCalendar />
 
-      <section className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Panel>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Geplant</p>
-          <p className="mt-3 text-2xl font-semibold text-ink">{selectedDayTotals.calories}</p>
-          <p className="mt-2 text-sm text-muted">aus geplanten Mahlzeiten</p>
-        </Panel>
+      <section className="mb-6 grid gap-3 sm:grid-cols-2">
         <Panel>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Geloggt</p>
-          <p className="mt-3 text-2xl font-semibold text-ink">{selectedDayLoggedTotals.calories}</p>
-          <p className="mt-2 text-sm text-muted">{selectedDayLogs.length} Einträge am aktiven Tag</p>
+          <p className="mt-3 text-2xl font-semibold text-ink">{selectedDayLoggedTotals.calories} kcal</p>
+          <p className="mt-2 text-sm text-muted">
+            {selectedDayLogs.length} Einträge · {selectedDayLoggedTotals.protein} g Protein · {selectedDayLoggedTotals.carbs} g Carbs
+          </p>
         </Panel>
         <Panel>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Aktiver Tag</p>
@@ -172,6 +158,12 @@ export function FuelingView() {
           <p className="mt-2 text-sm text-muted">{selectedDay.focus}</p>
         </Panel>
       </section>
+
+      {statusMessage ? (
+        <div className="mb-6 rounded-xl border border-coach-100 bg-coach-50 px-3 py-3 text-sm font-medium text-coach-800">
+          {statusMessage}
+        </div>
+      ) : null}
 
       <div className="mb-6">
         <QuickFuelingPanel date={selectedDay.date} />
@@ -354,87 +346,6 @@ export function FuelingView() {
 
         <div className="grid gap-6 content-start">
           <Panel>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-ink">Tagesplan</h2>
-              <Pill tone="amber">{selectedDay.mealPlan.length} Mahlzeiten</Pill>
-            </div>
-
-            <div className="grid gap-3">
-              {selectedDay.mealPlan.map((slot, index) => {
-                const meal = state.mealTemplates.find((template) => template.id === slot.mealTemplateId);
-
-                return (
-                  <div key={`${slot.time}-${slot.mealTemplateId}-${index}`} className="flex items-start justify-between gap-3 rounded-xl border border-line px-3 py-3">
-                    <div>
-                      <p className="font-semibold text-ink">{meal?.name ?? "Flexible Mahlzeit"}</p>
-                      <p className="mt-1 text-sm text-muted">{slot.time} · {roleLabel(slot.role)}</p>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      {meal && meal.isStandard === false ? (
-                        <button
-                          type="button"
-                          onClick={() => saveMealTemplateAsStandard(meal.id)}
-                          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition hover:bg-canvas hover:text-coach-700"
-                          aria-label="Als Fuelingstandard speichern"
-                        >
-                          <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => removeMealSlot(selectedDay.date, index)}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition hover:bg-canvas hover:text-ink"
-                        aria-label="Mahlzeit entfernen"
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <form onSubmit={submitSlot} className="mt-5 grid gap-3 rounded-xl bg-canvas p-3">
-              <select
-                value={slotTemplateId}
-                onChange={(event) => setSlotTemplateId(event.target.value)}
-                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                aria-label="Mahlzeit auswählen"
-              >
-                {standardMealTemplates.map((meal) => (
-                  <option key={meal.id} value={meal.id}>{meal.name}</option>
-                ))}
-              </select>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  value={slotTime}
-                  onChange={(event) => setSlotTime(event.target.value)}
-                  type="time"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Zeit"
-                />
-                <select
-                  value={slotRole}
-                  onChange={(event) => setSlotRole(event.target.value as MealPlanSlot["role"])}
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Rolle"
-                >
-                  {(["breakfast", "lunch", "pre_workout", "post_workout", "dinner"] as MealPlanSlot["role"][]).map((role) => (
-                    <option key={role} value={role}>{roleLabel(role)}</option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="submit"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Zum Tag hinzufügen
-              </button>
-            </form>
-          </Panel>
-
-          <Panel>
             <h2 className="text-lg font-semibold text-ink">Fueling-Hinweis</h2>
             <p className="mt-3 text-sm leading-6 text-muted">
               {selectedDay.workouts.some((workout) => workout.sport === "running" && (workout.distanceKm ?? 0) >= 14)
@@ -448,25 +359,6 @@ export function FuelingView() {
       </section>
     </div>
   );
-}
-
-function calculateDayMealTotals(slots: MealPlanSlot[], mealTemplates: MealTemplate[]) {
-  const totals = slots.reduce((sum, slot) => {
-    const meal = mealTemplates.find((template) => template.id === slot.mealTemplateId);
-    if (!meal) return sum;
-
-    return {
-      caloriesMin: sum.caloriesMin + meal.estimatedCalories.min,
-      caloriesMax: sum.caloriesMax + meal.estimatedCalories.max,
-      proteinMin: sum.proteinMin + meal.estimatedProteinGrams.min,
-      proteinMax: sum.proteinMax + meal.estimatedProteinGrams.max
-    };
-  }, { caloriesMin: 0, caloriesMax: 0, proteinMin: 0, proteinMax: 0 });
-
-  return {
-    calories: `${formatRange(totals.caloriesMin, totals.caloriesMax)} kcal`,
-    protein: `${formatRange(totals.proteinMin, totals.proteinMax)} g`
-  };
 }
 
 function calculateMealLogTotals(logs: MealLog[]) {
@@ -496,9 +388,12 @@ function useWeekMealLogs(dates: string[]) {
       try {
         const results = await Promise.all(selectedDates.map(async (date) => {
           const response = await fetch(`/api/nutrition/logs?date=${encodeURIComponent(date)}`);
-          const result = await response.json() as { logs?: MealLog[] };
+          const result = await response.json() as { logs?: MealLog[]; source?: string };
 
-          return response.ok ? result.logs ?? [] : [];
+          if (!response.ok) return [];
+          if (result.source === "demo" || result.source === "anonymous") return loadLocalMealLogsForDate(date);
+
+          return result.logs ?? [];
         }));
 
         if (!cancelled) {

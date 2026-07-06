@@ -41,7 +41,7 @@ type ChatMessage = {
 };
 
 export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelProps) {
-  const { state, addMealSlot, addMealEntry, addMealTemplate } = useAppState();
+  const { state, addMealTemplate } = useAppState();
   const { addLog } = useNutritionLogs(date);
   const standards = state.mealTemplates.filter((meal) => meal.isStandard !== false);
   const [input, setInput] = useState("");
@@ -82,7 +82,11 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
     });
 
     if (!savedLog) {
-      addMealSlot(date, slot);
+      setMessages((current) => [
+        ...current,
+        createChatMessage("assistant", `${meal.name} konnte gerade nicht als Mahlzeit gespeichert werden. Bitte versuche es noch einmal.`)
+      ]);
+      return;
     }
 
     setMessages((current) => [
@@ -126,8 +130,11 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
       });
 
       if (!savedLog) {
-        addMealEntry(date, draft.template, draft.slot, { saveAsStandard: draft.saveAsStandard });
-      } else if (draft.saveAsStandard) {
+        setMessages((current) => [...current, createChatMessage("assistant", "Ich konnte die Mahlzeit gerade nicht speichern. Der Entwurf bleibt stehen, du kannst es gleich noch einmal versuchen.")]);
+        return;
+      }
+
+      if (draft.saveAsStandard) {
         addMealTemplate(draft.template);
       }
       setMessages((current) => [...current, createChatMessage("assistant", `${draft.template.name} ist für heute gespeichert.`)]);

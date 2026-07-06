@@ -113,7 +113,7 @@ export async function POST(request: Request) {
       name,
       description: body.description?.trim() || null,
       source: normalizeSource(body.source),
-      source_id: body.sourceId ?? null,
+      source_id: normalizeUuid(body.sourceId),
       calories: normalizeNumber(values.calories),
       protein_grams: normalizeNumber(values.proteinGrams),
       carbohydrate_grams: normalizeNumber(values.carbohydrateGrams),
@@ -169,7 +169,7 @@ export async function PATCH(request: Request) {
       name,
       description: body.description?.trim() || null,
       source: normalizeSource(body.source),
-      source_id: body.sourceId ?? null,
+      source_id: normalizeUuid(body.sourceId),
       calories: normalizeNumber(values.calories),
       protein_grams: normalizeNumber(values.proteinGrams),
       carbohydrate_grams: normalizeNumber(values.carbohydrateGrams),
@@ -273,6 +273,15 @@ function normalizeConfidence(value: unknown): NutritionConfidence {
 function normalizeNumber(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? "").replace(",", "."));
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+}
+
+function normalizeUuid(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmedValue = value.trim();
+
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmedValue)
+    ? trimmedValue
+    : null;
 }
 
 function normalizeCategory(value: unknown, time?: string | null, name?: string | null): MealLogCategory {

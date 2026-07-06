@@ -28,7 +28,7 @@ export function CoachChatPanel({
   threadId = "default",
   initialMessage
 }: CoachChatPanelProps) {
-  const { state, addMealEntry, addMealTemplate, applyCoachPlanChanges } = useAppState();
+  const { state, addMealTemplate, applyCoachPlanChanges } = useAppState();
   const { addLog } = useNutritionLogs(state.selectedDate);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<CoachChatMessage[]>([]);
@@ -129,10 +129,21 @@ export function CoachChatPanel({
     setMessages((current) => [...current, userMessage]);
 
     if (isConfirmationMessage(message) && pendingPlan?.changes.length) {
-      await applyConfirmedChanges(pendingPlan.changes);
+      const applied = await applyConfirmedChanges(pendingPlan.changes);
+      if (!applied) {
+        setIsSending(false);
+        return;
+      }
       setAppliedIds((current) => [...current, pendingPlan.id]);
       setPendingPlan(null);
-      const assistantMessage = createMessage("assistant", "Passt, ich habe den bestätigten Vorschlag in deinen Wochenplan übernommen.", "change");
+      const hasMealChanges = pendingPlan.changes.some((change) => change.type === "add_meal");
+      const assistantMessage = createMessage(
+        "assistant",
+        hasMealChanges
+          ? "Passt, ich habe das bestätigte Fueling dem Tag hinzugefügt."
+          : "Passt, ich habe den bestätigten Vorschlag in deinen Wochenplan übernommen.",
+        "change"
+      );
       void persistLocalMessages([
         { role: "user", content: message },
         { role: "assistant", content: assistantMessage.content, mode: assistantMessage.mode }
@@ -143,8 +154,8 @@ export function CoachChatPanel({
           ...assistantMessage,
           outcomes: [{
             type: "plan_change",
-            domain: "planning",
-            summary: "Bestätigter Coach-Vorschlag wurde übernommen.",
+            domain: hasMealChanges ? "fueling" : "planning",
+            summary: hasMealChanges ? "Bestätigtes Fueling wurde geloggt." : "Bestätigter Coach-Vorschlag wurde übernommen.",
             planChange: null
           }],
           changes: [],
@@ -201,7 +212,9 @@ export function CoachChatPanel({
   async function applyChanges(changes: CoachPlanChange[], id: string, options?: { saveMealAsStandard?: boolean; standardOnly?: boolean }) {
     if (changes.length === 0 || appliedIds.includes(id)) return;
 
-    await applyConfirmedChanges(changes, options);
+    const applied = await applyConfirmedChanges(changes, options);
+    if (!applied) return;
+
     setAppliedIds((current) => [...current, id]);
     setPendingPlan(null);
     const hasMealChanges = changes.some((change) => change.type === "add_meal");
@@ -236,9 +249,10 @@ export function CoachChatPanel({
     ]);
   }
 
-  async function applyConfirmedChanges(changes: CoachPlanChange[], options?: { saveMealAsStandard?: boolean; standardOnly?: boolean }) {
+  async function applyConfirmedChanges(changes: CoachPlanChange[], options?: { saveMealAsStandard?: boolean; standardOnly?: boolean }): Promise<boolean> {
     const planChanges = changes.filter((change) => change.type !== "add_meal");
     const mealChanges = changes.filter((change): change is Extract<CoachPlanChange, { type: "add_meal" }> => change.type === "add_meal");
+    let allChangesApplied = true;
 
     if (planChanges.length > 0) {
       applyCoachPlanChanges(planChanges);
@@ -272,12 +286,12 @@ export function CoachChatPanel({
       }
 
       if (!savedLog) {
-        addMealEntry(change.date, template, {
-          time: change.meal.time,
-          role: change.meal.role
-        }, { saveAsStandard });
+        setError(`${change.meal.name} konnte gerade nicht als Mahlzeit gespeichert werden. Ich habe den Plan nicht heimlich verändert.`);
+        allChangesApplied = false;
       }
     }
+
+    return allChangesApplied;
   }
 
   return (
