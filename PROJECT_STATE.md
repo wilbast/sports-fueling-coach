@@ -99,7 +99,7 @@ Weitere Bereiche:
 - KI: providerunabhängige serverseitige AI-Schicht, aktueller Startprovider OpenAI, Fallback regelbasiert
 - Coach-Modi: `coach`, `planning`, `change`; Planänderungen werden erst nach Bestätigung angewendet
 - Coach-Historie: `coach_chat_messages` speichert User-/Coach-Nachrichten RLS-geschützt pro Nutzer und Thread
-- Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale, manuelle und automatische Vercel-Cron-Synchronisation, providerneutrale Aktivitätstabellen
+- Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale, manuelle und tägliche Vercel-Hobby-Cron-Synchronisation, providerneutrale Aktivitätstabellen
 - Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `equipment`, `sync_jobs`
 - Coach-Kontext: externe Aktivitäten werden serverseitig aus Supabase geladen und strukturiert zusammengefasst; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
 - Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros

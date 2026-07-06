@@ -214,11 +214,11 @@ Sports & Fueling Coach soll langfristig eine persönliche Gesundheitsplattform w
 
 Entscheidung:
 
-Nach dem OAuth-Callback startet die App eine initiale Synchronisation. Weitere Synchronisationen können in den Einstellungen manuell ausgelöst werden. Zusätzlich triggert Vercel Cron `/api/cron/strava-sync` alle 15 Minuten. Der Endpoint entscheidet serverseitig nach `Europe/Berlin`: zwischen 10:00 und 22:00 Uhr darf alle 15 Minuten synchronisiert werden, nachts nur stündlich. Inkrementelle Läufe verwenden die zuletzt gespeicherte Aktivität als Zeitanker und speichern über eindeutige Provider-/Activity-IDs ohne Duplikate. Sync-Läufe schreiben Status, Zähler und Fehlermeldungen nach `sync_jobs`.
+Nach dem OAuth-Callback startet die App eine initiale Synchronisation. Weitere Synchronisationen können in den Einstellungen manuell ausgelöst werden. Zusätzlich triggert Vercel Cron auf Hobby `/api/cron/strava-sync` einmal täglich. Der Endpoint unterstützt trotzdem häufigere Aufrufe und entscheidet serverseitig nach `Europe/Berlin`: zwischen 10:00 und 22:00 Uhr darf höchstens etwa alle 15 Minuten synchronisiert werden, nachts nur stündlich. Inkrementelle Läufe verwenden die zuletzt gespeicherte Aktivität als Zeitanker und speichern über eindeutige Provider-/Activity-IDs ohne Duplikate. Sync-Läufe schreiben Status, Zähler und Fehlermeldungen nach `sync_jobs`.
 
 Begründung:
 
-Der Coach braucht Strava-Daten zeitnah nach Aktivitäten, aber dauerhaftes Polling wäre unnötig und würde Rate Limits belasten. Ein 15-Minuten-Cron mit serverseitiger Tag-/Nacht-Drossel ist einfach zu betreiben, robust gegenüber Sommer-/Winterzeit und bleibt mit Stravas 15-Minuten- und Tageslimits besser vereinbar. Der manuelle Sync bleibt als Debug- und Sofortaktion erhalten.
+Der Coach braucht Strava-Daten zeitnah nach Aktivitäten, aber Vercel Hobby erlaubt keine mehrmals täglichen Cronjobs. Für die Beta ist ein täglicher automatischer Basissync plus manueller Sofort-Sync deployment-sicher. Die serverseitige Tag-/Nacht-Drossel bleibt vorbereitet, damit ein späterer Vercel-Pro-Plan, externer Scheduler oder Strava-Webhook ohne neue Sync-Architektur häufiger triggern kann.
 
 ## ADR-023: Coach Mode ist der Standard
 

@@ -124,7 +124,7 @@ STRAVA_STREAM_SYNC_LIMIT=50
 STRAVA_CRON_MAX_CONNECTIONS=10
 ```
 
-Vercel Cron triggert `/api/cron/strava-sync` alle 15 Minuten. Der Endpoint entscheidet serverseitig nach Berliner Uhrzeit: zwischen 10:00 und 22:00 Uhr wird alle 15 Minuten synchronisiert, nachts nur etwa stündlich. `CRON_SECRET` schützt den öffentlichen Cron-Endpoint; Vercel sendet den Wert als Bearer Token.
+Vercel Hobby erlaubt nur einen Cron-Lauf pro Tag. Deshalb triggert `vercel.json` `/api/cron/strava-sync` täglich um `04:00 UTC`. Der Endpoint ist trotzdem so gebaut, dass er bei einem späteren Pro-Plan oder externen Scheduler auch häufigere Aufrufe serverseitig drosseln kann: zwischen 10:00 und 22:00 Uhr maximal etwa alle 15 Minuten, nachts etwa stündlich. `CRON_SECRET` schützt den öffentlichen Cron-Endpoint; Vercel sendet den Wert als Bearer Token.
 
 Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, `CRON_SECRET`, OAuth-State-Secret und Tokens dürfen nie im Client oder Repository landen.
 
