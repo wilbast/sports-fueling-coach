@@ -110,7 +110,7 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
         return;
       }
 
-      const loggedTime = estimateMealLogTime(draft.template, selectedDay);
+      const loggedTime = draft.slot.time;
       const savedLog = await addLog({
         date,
         time: loggedTime,
@@ -203,6 +203,16 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
     });
   }
 
+  function updateDraftTime(value: string) {
+    setDraft((current) => current ? {
+      ...current,
+      slot: {
+        ...current.slot,
+        time: value
+      }
+    } : current);
+  }
+
   return (
     <Panel>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -268,6 +278,15 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
               <div>
                 <span className="font-semibold text-ink">Entwurf:</span> {draft.template.name} · {draft.slot.time} · {roleLabel(draft.slot.role)}
               </div>
+              <label className="mt-3 grid gap-1 text-xs font-semibold text-ink">
+                Uhrzeit
+                <input
+                  type="time"
+                  value={draft.slot.time}
+                  onChange={(event) => updateDraftTime(event.target.value)}
+                  className="min-h-10 rounded-lg border border-line bg-white px-2 text-sm font-normal text-ink outline-none focus:border-coach-400"
+                />
+              </label>
               <div className="mt-3 grid gap-2 sm:grid-cols-4">
                 <NutritionDraftInput
                   label="kcal"

@@ -26,6 +26,7 @@ export function FuelingView() {
   const [protein, setProtein] = useState("35");
   const [tags, setTags] = useState("standard, protein");
   const [mealCategory, setMealCategory] = useState<MealTemplate["category"]>("main");
+  const [manualMealTime, setManualMealTime] = useState("");
   const [saveMealAsStandard, setSaveMealAsStandard] = useState(true);
   const [addNewMealToDay, setAddNewMealToDay] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -51,9 +52,9 @@ export function FuelingView() {
       category: mealCategory,
       tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean)
     };
+    const loggedTime = manualMealTime || estimateMealLogTime(template, selectedDay);
 
     if (addNewMealToDay) {
-      const loggedTime = estimateMealLogTime(template, selectedDay);
       const slot = {
         time: loggedTime,
         role: mealCategoryToRole(mealCategory ?? "main")
@@ -97,11 +98,12 @@ export function FuelingView() {
     setName("");
     setDescription("");
     setMealCategory("main");
+    setManualMealTime("");
     setSaveMealAsStandard(true);
   }
 
   async function addStandardMealToDay(meal: MealTemplate, slot: Omit<MealPlanSlot, "mealTemplateId">) {
-    const loggedTime = estimateMealLogTime(meal, selectedDay);
+    const loggedTime = slot.time;
     const category = inferMealCategory(meal);
     const savedLog = await addLog({
       date: selectedDay.date,
@@ -311,9 +313,25 @@ export function FuelingView() {
                   ))}
                 </select>
                 <div className="flex min-h-11 items-center rounded-xl border border-line bg-white px-3 text-sm text-muted">
-                  Zeit wird beim Speichern geschätzt
+                  Zeitvorschlag aus Kategorie und Training
                 </div>
               </div>
+              {addNewMealToDay ? (
+                <label className="grid gap-2 text-sm font-semibold text-ink">
+                  Uhrzeit
+                  <input
+                    type="time"
+                    value={manualMealTime || estimateMealLogTime({
+                      name: name || "Neue Mahlzeit",
+                      description,
+                      tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+                      category: mealCategory
+                    }, selectedDay)}
+                    onChange={(event) => setManualMealTime(event.target.value)}
+                    className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                  />
+                </label>
+              ) : null}
               <div className="grid gap-2">
                 <label className="flex items-center gap-2 rounded-xl bg-canvas px-3 py-3 text-sm font-semibold text-ink">
                   <input
