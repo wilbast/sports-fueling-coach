@@ -105,42 +105,12 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
     setMessages((current) => [...current, createChatMessage("user", message)]);
 
     if (isSaveMessage(message)) {
-      if (!draft) {
-        setMessages((current) => [...current, createChatMessage("assistant", "Ich habe noch keinen Fueling-Entwurf. Schreib mir kurz, was du gegessen oder geplant hast.")]);
-        return;
-      }
-
-      const loggedTime = draft.slot.time;
-      const savedLog = await addLog({
-        date,
-        time: loggedTime,
-        name: draft.template.name,
-        description: draft.template.description,
-        source: draft.source,
-        values: {
-          calories: midpoint(draft.template.caloriesMin, draft.template.caloriesMax),
-          proteinGrams: midpoint(draft.template.proteinMin, draft.template.proteinMax),
-          carbohydrateGrams: draft.template.carbsGrams,
-          fatGrams: draft.template.fatGrams
-        },
-        confidence: draft.confidence,
-        rationale: draft.rationale,
-        manuallyConfirmed: false,
-        rawInput: draft.template.description,
-        category: mealRoleToLogCategory(draft.slot.role),
-        isMainMeal: false
-      });
-
-      if (!savedLog) {
-        setMessages((current) => [...current, createChatMessage("assistant", "Ich konnte die Mahlzeit gerade nicht speichern. Der Entwurf bleibt stehen, du kannst es gleich noch einmal versuchen.")]);
-        return;
-      }
-
-      if (draft.saveAsStandard) {
-        addMealTemplate(draft.template);
-      }
-      setMessages((current) => [...current, createChatMessage("assistant", `${draft.template.name} ist um ${loggedTime} für heute gespeichert.`)]);
-      setDraft(null);
+      setMessages((current) => [
+        ...current,
+        createChatMessage("assistant", draft
+          ? "Nutze den Button „Zum Tag hinzufügen“, dann übernehme ich den Entwurf."
+          : "Ich habe noch keinen Fueling-Entwurf. Schreib mir kurz, was du gegessen oder geplant hast.")
+      ]);
       return;
     }
 
@@ -152,9 +122,45 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
       ...current,
       createChatMessage(
         "assistant",
-        `Ich würde das als ${nextDraft.template.name} um ${nextDraft.slot.time} speichern: ca. ${midpoint(nextDraft.template.caloriesMin, nextDraft.template.caloriesMax)} kcal, ${midpoint(nextDraft.template.proteinMin, nextDraft.template.proteinMax)} g Protein, ${nextDraft.template.carbsGrams} g Kohlenhydrate, ${nextDraft.template.fatGrams} g Fett. ${confidenceLabel(nextDraft.confidence)}. Schreib "speichern", wenn das passt.`
+        `Ich würde das als ${nextDraft.template.name} um ${nextDraft.slot.time} vormerken: ca. ${midpoint(nextDraft.template.caloriesMin, nextDraft.template.caloriesMax)} kcal, ${midpoint(nextDraft.template.proteinMin, nextDraft.template.proteinMax)} g Protein, ${nextDraft.template.carbsGrams} g Kohlenhydrate, ${nextDraft.template.fatGrams} g Fett. ${confidenceLabel(nextDraft.confidence)}. Wenn das passt, übernimm es mit dem Button.`
       )
     ]);
+  }
+
+  async function saveDraftToDay() {
+    if (!draft || isEstimating) return;
+
+    const loggedTime = draft.slot.time;
+    const savedLog = await addLog({
+      date,
+      time: loggedTime,
+      name: draft.template.name,
+      description: draft.template.description,
+      source: draft.source,
+      values: {
+        calories: midpoint(draft.template.caloriesMin, draft.template.caloriesMax),
+        proteinGrams: midpoint(draft.template.proteinMin, draft.template.proteinMax),
+        carbohydrateGrams: draft.template.carbsGrams,
+        fatGrams: draft.template.fatGrams
+      },
+      confidence: draft.confidence,
+      rationale: draft.rationale,
+      manuallyConfirmed: false,
+      rawInput: draft.template.description,
+      category: mealRoleToLogCategory(draft.slot.role),
+      isMainMeal: false
+    });
+
+    if (!savedLog) {
+      setMessages((current) => [...current, createChatMessage("assistant", "Ich konnte die Mahlzeit gerade nicht speichern. Der Entwurf bleibt stehen, du kannst es gleich noch einmal versuchen.")]);
+      return;
+    }
+
+    if (draft.saveAsStandard) {
+      addMealTemplate(draft.template);
+    }
+    setMessages((current) => [...current, createChatMessage("assistant", `${draft.template.name} ist um ${loggedTime} für heute gespeichert.`)]);
+    setDraft(null);
   }
 
   function updateDraftValue(field: "calories" | "protein" | "carbs" | "fat", value: string) {
@@ -318,6 +324,15 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
                 />
                 Als Standardmahlzeit speichern
               </label>
+              <button
+                type="button"
+                onClick={() => void saveDraftToDay()}
+                disabled={isEstimating}
+                className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-coach-600 px-3 text-sm font-semibold text-white transition hover:bg-coach-500 disabled:cursor-not-allowed disabled:bg-muted"
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                Zum Tag hinzufügen
+              </button>
             </div>
           ) : null}
 
@@ -325,7 +340,7 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder={draft ? "speichern" : "Was hast du gegessen oder geplant?"}
+              placeholder={draft ? "Noch etwas ergänzen oder korrigieren?" : "Was hast du gegessen oder geplant?"}
               className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
               aria-label="Fueling per Chat hinzufügen"
             />
@@ -336,10 +351,8 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
             >
               {isEstimating
                 ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                : draft && isSaveMessage(input)
-                  ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                  : <SendHorizontal className="h-4 w-4" aria-hidden="true" />}
-              {isEstimating ? "Schätzt" : draft && isSaveMessage(input) ? "Speichern" : "Senden"}
+                : <SendHorizontal className="h-4 w-4" aria-hidden="true" />}
+              {isEstimating ? "Schätzt" : "Senden"}
             </button>
           </form>
         </div>
