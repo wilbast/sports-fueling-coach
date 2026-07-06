@@ -36,7 +36,7 @@ export function InsightsView() {
           <CoachRecommendationButton
             pageContext="insights"
             prompt="Gib mir eine kurze Auswertung der aktuellen Plan-vs-Ist-Daten: wichtigste Abweichung, Lernpunkt und nächste sinnvolle Anpassung. Keine Planänderung."
-            label="KI-Empfehlung"
+            label="Coach-Empfehlung"
           />
         }
       />

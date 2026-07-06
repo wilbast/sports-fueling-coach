@@ -144,7 +144,7 @@ export function FuelingView() {
           <CoachRecommendationButton
             pageContext="fueling"
             prompt="Gib mir eine kurze Fueling-Empfehlung für den aktiven Tag: bisher gegessen, Zielwerte, Training und was als nächstes sinnvoll wäre. Keine Planänderung."
-            label="KI-Empfehlung"
+            label="Coach-Empfehlung"
           />
         }
       />
