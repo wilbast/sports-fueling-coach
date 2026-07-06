@@ -107,6 +107,7 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
     today: selectedDay ? summarizeDay(selectedDay, mealTemplates) : null,
     tomorrow: intent.needsTomorrow && tomorrow ? summarizeDay(tomorrow, mealTemplates) : null,
     currentWeek: summarizeWeek(source.weekPlan, mealTemplates),
+    raceReadiness: createRaceReadinessAssessment(source.weekPlan, source.profile, source.goals, source.externalActivities ?? [], source.selectedDate),
     plannedWorkouts: summarizeWorkouts(source.weekPlan.days.flatMap((day) => day.workouts)),
     loggedMealsToday: {
       status: nutritionLogsToday.length > 0 ? "available_from_supabase" : "empty",
@@ -216,7 +217,9 @@ function inferCoachContextIntent(message: string): CoachIntent {
     lower.includes("historie") ||
     lower.includes("letzte wochen") ||
     lower.includes("wettkampf") ||
-    lower.includes("entwicklung");
+    lower.includes("entwicklung") ||
+    (domain === "training" && (isRecommendation || isAdvice)) ||
+    (domain === "planning" && (isRecommendation || isAdvice));
 
   return {
     mode,
@@ -378,6 +381,87 @@ function summarizeWeek(weekPlan: WeekPlan, mealTemplates: MealTemplate[]) {
   };
 }
 
+function createRaceReadinessAssessment(
+  weekPlan: WeekPlan,
+  profile: UserProfile,
+  goals: UserGoals,
+  externalActivities: CoachExternalActivitySummary[],
+  selectedDate: string
+) {
+  const raceGoal = profile.raceGoal ?? goals.raceGoal ?? null;
+  const plannedWorkouts = weekPlan.days.flatMap((day) => day.workouts).filter((workout) => workout.status !== "cancelled");
+  const plannedRunningWorkouts = plannedWorkouts.filter((workout) => workout.sport === "running");
+  const plannedRunningKm = sumRunningKm(plannedRunningWorkouts);
+  const plannedLongRunKm = roundTo(Math.max(0, ...plannedRunningWorkouts.map((workout) => workout.distanceKm ?? 0)), 0.1);
+  const plannedHardRuns = plannedRunningWorkouts.filter((workout) => workout.intensity === "hard" || workout.runningFocus === "threshold" || workout.runningFocus === "vo2max").length;
+  const last14Days = summarizeExternalRunningWindow(externalActivities, selectedDate, 14);
+  const last28Days = summarizeExternalRunningWindow(externalActivities, selectedDate, 28);
+  const last56Days = summarizeExternalRunningWindow(externalActivities, selectedDate, 56);
+  const raceDemand = raceGoal ? createRaceDemand(raceGoal.distanceKm, daysBetween(selectedDate, raceGoal.date)) : null;
+  const flags: string[] = [];
+
+  if (raceDemand) {
+    if (plannedRunningWorkouts.length < raceDemand.minWeeklyRuns) {
+      flags.push(`Geplante Laufanzahl ist niedrig: ${plannedRunningWorkouts.length} Läufe statt mindestens ${raceDemand.minWeeklyRuns}.`);
+    }
+
+    if (plannedRunningKm < raceDemand.recommendedWeeklyKm.min) {
+      flags.push(`Geplanter Laufumfang ist wahrscheinlich zu gering: ${plannedRunningKm} km statt grob ${raceDemand.recommendedWeeklyKm.min}-${raceDemand.recommendedWeeklyKm.max} km.`);
+    }
+
+    if (plannedLongRunKm < raceDemand.minLongRunKm) {
+      flags.push(`Langer Lauf fehlt oder ist kurz: längster Lauf ${plannedLongRunKm} km, sinnvoll wären aktuell mindestens ca. ${raceDemand.minLongRunKm} km.`);
+    }
+
+    if (plannedHardRuns > raceDemand.maxHardRuns) {
+      flags.push(`Zu viele harte Laufeinheiten für eine stabile Woche: ${plannedHardRuns} hart statt maximal ${raceDemand.maxHardRuns}.`);
+    }
+
+    if (last28Days.runningKm > 0 && plannedRunningKm > last28Days.averageWeeklyRunningKm * 1.25) {
+      flags.push("Der geplante Umfang liegt deutlich über dem letzten 28-Tage-Schnitt. Progression vorsichtig dosieren.");
+    }
+  }
+
+  return {
+    status: raceGoal ? "available" : "no_race_goal",
+    raceGoal: raceGoal ? {
+      ...raceGoal,
+      daysUntilRace: daysBetween(selectedDate, raceGoal.date),
+      targetPacePerKm: formatPace(parseRaceTargetPaceSeconds(raceGoal.targetTime, raceGoal.distanceKm))
+    } : null,
+    currentPlanningWeek: {
+      startsOn: weekPlan.startsOn,
+      runningWorkoutCount: plannedRunningWorkouts.length,
+      runningKm: plannedRunningKm,
+      longestRunKm: plannedLongRunKm,
+      hardRunCount: plannedHardRuns,
+      qualityRunCount: plannedRunningWorkouts.filter((workout) => workout.runningType === "tempo_run" || workout.runningType === "intervals" || workout.runningType === "fartlek").length,
+      nonRunningWorkoutCount: plannedWorkouts.length - plannedRunningWorkouts.length,
+      runningSessions: summarizeWorkouts(plannedRunningWorkouts)
+    },
+    recentActualRunning: {
+      last14Days,
+      last28Days,
+      last56Days,
+      source: externalActivities.length > 0 ? "external_activities_from_supabase" : "no_external_activity_data"
+    },
+    recommendedFrame: raceDemand,
+    riskLevel: raceDemand && flags.length >= 2 ? "high" : raceDemand && flags.length === 1 ? "medium" : raceDemand ? "low" : "unknown",
+    flags,
+    assessment: raceGoal
+      ? flags.length > 0
+        ? "Die aktuelle Laufwoche passt noch nicht sauber zum Wettkampfziel. Der Coach soll das in Empfehlungen aktiv und ehrlich ansprechen."
+        : "Die aktuelle Laufwoche wirkt grob passend zum Wettkampfziel. Der Coach soll trotzdem Belastung, Regeneration und Progression prüfen."
+      : "Kein Wettkampfziel vorhanden. Empfehlungen sollten allgemeiner bleiben.",
+    coachGuidance: [
+      "Bei Trainings- oder Wochenempfehlungen immer das Wettkampfziel, die aktuelle Planungswoche und die letzten echten Aktivitäten gemeinsam bewerten.",
+      "Wenn Laufanzahl, Wochenkilometer oder langer Lauf unter dem empfohlenen Rahmen liegen, sprich das explizit an und schlage eine realistische Verbesserung vor.",
+      "Nicht nur bestätigen, was geplant ist. Als Coach ehrlich bewerten, ob der Plan zum Ziel passt.",
+      "Planänderungen nur als Vorschlag formulieren, nicht automatisch speichern."
+    ]
+  };
+}
+
 function summarizeWorkouts(workouts: WorkoutPlan[]) {
   return workouts.map((workout) => ({
     id: workout.id,
@@ -438,6 +522,128 @@ function categorizeNutritionLogsByCurrentTime(
     plannedMeals: allMeals.filter((log) => log.consumptionStatus === "planned"),
     allMeals
   };
+}
+
+function summarizeExternalRunningWindow(activities: CoachExternalActivitySummary[], selectedDate: string, days: number) {
+  const selected = parseDateAtNoon(selectedDate);
+  const since = new Date(selected);
+  since.setDate(since.getDate() - days + 1);
+  const runningActivities = activities
+    .filter((activity) => isRunningActivity(activity))
+    .filter((activity) => {
+      const date = parseDateAtNoon(activity.start_date);
+      return date >= since && date <= selected;
+    });
+  const totalDistanceKm = roundTo(runningActivities.reduce((sum, activity) => sum + ((activity.distance_meters ?? 0) / 1000), 0), 0.1);
+  const totalMovingSeconds = runningActivities.reduce((sum, activity) => sum + (activity.moving_time_seconds ?? 0), 0);
+  const longestRunKm = roundTo(Math.max(0, ...runningActivities.map((activity) => (activity.distance_meters ?? 0) / 1000)), 0.1);
+  const averageWeeklyRunningKm = roundTo(totalDistanceKm / Math.max(1, days / 7), 0.1);
+
+  return {
+    days,
+    activityCount: runningActivities.length,
+    runningKm: totalDistanceKm,
+    averageWeeklyRunningKm,
+    longestRunKm,
+    totalMovingHours: roundTo(totalMovingSeconds / 3600, 0.1),
+    averagePacePerKm: formatPace(totalDistanceKm > 0 && totalMovingSeconds > 0 ? totalMovingSeconds / totalDistanceKm : null),
+    hardSignalCount: runningActivities.filter((activity) => (activity.relative_effort ?? 0) >= 60 || (activity.training_load ?? 0) >= 60).length,
+    recentRuns: runningActivities.slice(0, 8).map((activity) => ({
+      name: activity.name,
+      date: activity.start_date,
+      distanceKm: roundTo((activity.distance_meters ?? 0) / 1000, 0.1),
+      movingTimeMinutes: activity.moving_time_seconds ? Math.round(activity.moving_time_seconds / 60) : null,
+      averagePacePerKm: formatPace(activity.average_pace_seconds_per_km ?? null),
+      averageHeartrate: activity.average_heartrate,
+      relativeEffort: activity.relative_effort
+    }))
+  };
+}
+
+function createRaceDemand(distanceKm: number, daysUntilRace: number | null) {
+  if (distanceKm >= 35) {
+    return {
+      raceType: "marathon_or_longer",
+      minWeeklyRuns: 4,
+      recommendedWeeklyKm: { min: 45, max: 70, unit: "km" },
+      minLongRunKm: daysUntilRace != null && daysUntilRace < 56 ? 26 : 22,
+      maxHardRuns: 2,
+      note: "Marathonvorbereitung braucht stabilen Umfang, langen Lauf und kontrollierte Intensitäten."
+    };
+  }
+
+  if (distanceKm >= 18) {
+    return {
+      raceType: "half_marathon",
+      minWeeklyRuns: 3,
+      recommendedWeeklyKm: { min: 35, max: 50, unit: "km" },
+      minLongRunKm: daysUntilRace != null && daysUntilRace < 56 ? 16 : 14,
+      maxHardRuns: 2,
+      note: "Halbmarathonziel: 3 Läufe pro Woche, ein langer Lauf und eine gezielte Qualitätseinheit sind meist die Unterkante."
+    };
+  }
+
+  if (distanceKm >= 9) {
+    return {
+      raceType: "ten_k",
+      minWeeklyRuns: 3,
+      recommendedWeeklyKm: { min: 25, max: 40, unit: "km" },
+      minLongRunKm: 10,
+      maxHardRuns: 2,
+      note: "10-km-Ziel: regelmäßiger Umfang plus Schwelle/VO2max, aber mit genug lockeren Kilometern."
+    };
+  }
+
+  return {
+    raceType: "short_race",
+    minWeeklyRuns: 2,
+    recommendedWeeklyKm: { min: 18, max: 30, unit: "km" },
+    minLongRunKm: Math.max(6, Math.round(distanceKm * 1.5)),
+    maxHardRuns: 2,
+    note: "Kurzes Rennen: Konsistenz und Qualität zählen, Umfang bleibt moderat."
+  };
+}
+
+function isRunningActivity(activity: CoachExternalActivitySummary): boolean {
+  const sport = activity.sport_type?.toLowerCase() ?? "";
+  return sport.includes("run") || sport.includes("lauf");
+}
+
+function parseRaceTargetPaceSeconds(targetTime: string, distanceKm: number): number | null {
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0) return null;
+
+  const parts = targetTime.split(":").map((part) => Number.parseInt(part, 10));
+  if (parts.some((part) => !Number.isFinite(part))) return null;
+
+  const totalSeconds = parts.length === 3
+    ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+    : parts.length === 2
+      ? parts[0] * 60 + parts[1]
+      : null;
+
+  return totalSeconds ? totalSeconds / distanceKm : null;
+}
+
+function formatPace(secondsPerKm: number | null): string | null {
+  if (!secondsPerKm || !Number.isFinite(secondsPerKm)) return null;
+
+  const rounded = Math.round(secondsPerKm);
+  const minutes = Math.floor(rounded / 60);
+  const seconds = rounded % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, "0")} min/km`;
+}
+
+function daysBetween(fromDate: string, toDate: string): number | null {
+  const from = parseDateAtNoon(fromDate);
+  const to = parseDateAtNoon(toDate);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+
+  return Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function parseDateAtNoon(value: string | undefined): Date {
+  return new Date(`${String(value ?? "").slice(0, 10)}T12:00:00.000Z`);
 }
 
 function getMealConsumptionStatus(

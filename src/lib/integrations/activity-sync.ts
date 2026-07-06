@@ -242,7 +242,7 @@ export async function loadRecentExternalActivitiesForCoach(userId: string) {
 
   const supabase = createServiceRoleClient();
   const since = new Date();
-  since.setDate(since.getDate() - 21);
+  since.setDate(since.getDate() - 56);
 
   const { data } = await supabase
     .from("activities")
@@ -250,7 +250,7 @@ export async function loadRecentExternalActivitiesForCoach(userId: string) {
     .eq("user_id", userId)
     .gte("start_date", since.toISOString())
     .order("start_date", { ascending: false })
-    .limit(40);
+    .limit(120);
 
   return data ?? [];
 }
