@@ -59,7 +59,7 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     <TodayView
       selectedDate={activeDate}
       briefing={briefing}
-      calendar={<WeekCalendar />}
+      calendar={<WeekCalendar variant="compact" />}
       externalActivities={activitiesByDate[activeDate] ?? []}
       externalActivitiesLoading={activitiesLoading}
       externalActivitiesError={activitiesError}

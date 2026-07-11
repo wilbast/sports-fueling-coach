@@ -11,7 +11,8 @@ export function CoachView() {
   const { state } = useAppState();
   const selectedDay = getDayPlanByDate(state.weekPlan, state.selectedDate);
   const plannedWorkouts = state.weekPlan.days.flatMap((day) => day.workouts);
-  const plannedMeals = state.weekPlan.days.flatMap((day) => day.mealPlan);
+  const selectedDayWorkouts = selectedDay.workouts.filter((workout) => workout.status !== "cancelled");
+  const selectedDayMeals = selectedDay.mealPlan;
 
   return (
     <div>
@@ -20,6 +21,8 @@ export function CoachView() {
         title="Fragen, einordnen, übernehmen"
         description="Der Coach nutzt Profil, Ziele, Training, Fueling, Standards und aktuelle Planung für konkrete Empfehlungen."
       />
+
+      <WeekCalendar variant="compact" />
 
       <section className="mb-6 grid gap-3 md:grid-cols-3">
         <Panel>
@@ -36,7 +39,7 @@ export function CoachView() {
             <Dumbbell className="mt-1 h-5 w-5 text-coach-600" aria-hidden="true" />
             <div>
               <p className="font-semibold text-ink">Trainingskontext</p>
-              <p className="mt-1 text-sm text-muted">{plannedWorkouts.length} Einheiten in der Woche</p>
+              <p className="mt-1 text-sm text-muted">{selectedDayWorkouts.length} Einheiten am aktiven Tag</p>
             </div>
           </div>
         </Panel>
@@ -45,7 +48,7 @@ export function CoachView() {
             <Utensils className="mt-1 h-5 w-5 text-coach-600" aria-hidden="true" />
             <div>
               <p className="font-semibold text-ink">Fueling-Kontext</p>
-              <p className="mt-1 text-sm text-muted">{plannedMeals.length} Mahlzeiten geplant · {state.mealTemplates.length} Standards</p>
+              <p className="mt-1 text-sm text-muted">{selectedDayMeals.length} Mahlzeiten geplant · {state.mealTemplates.length} Standards</p>
             </div>
           </div>
         </Panel>
@@ -57,7 +60,7 @@ export function CoachView() {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Wocheninformationen</p>
             <h2 className="mt-1 text-lg font-semibold text-ink">Coach-Kontext der Woche</h2>
           </div>
-          <Pill tone="blue">{plannedWorkouts.length} Einheiten</Pill>
+          <Pill tone="blue">{plannedWorkouts.length} Wocheneinheiten</Pill>
         </summary>
 
         <div className="mt-5">

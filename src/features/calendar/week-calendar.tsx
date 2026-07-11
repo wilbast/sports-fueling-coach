@@ -8,24 +8,35 @@ import { useAppState } from "@/features/app-state/app-state-provider";
 
 type WeekCalendarProps = {
   className?: string;
+  variant?: "full" | "compact";
 };
 
-export function WeekCalendar({ className }: WeekCalendarProps) {
+export function WeekCalendar({ className, variant = "full" }: WeekCalendarProps) {
   const { state, setSelectedDate, goToPreviousWeek, goToNextWeek } = useAppState();
   const weekStart = state.weekPlan.startsOn;
   const previousWeekStart = addWeeks(weekStart, -1);
   const nextWeekStart = addWeeks(weekStart, 1);
+  const isCompact = variant === "compact";
 
   return (
-    <section className={clsx("mb-6 rounded-2xl border border-line bg-white p-3 shadow-soft sm:p-4", className)}>
+    <section className={clsx(
+      "mb-6 rounded-2xl border border-line bg-white shadow-soft",
+      isCompact ? "p-3" : "p-3 sm:p-4",
+      className
+    )}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-coach-50 text-coach-700">
-            <CalendarDays className="h-5 w-5" aria-hidden="true" />
+          <div className={clsx(
+            "flex shrink-0 items-center justify-center rounded-full bg-coach-50 text-coach-700",
+            isCompact ? "h-9 w-9" : "h-10 w-10"
+          )}>
+            <CalendarDays className={isCompact ? "h-4 w-4" : "h-5 w-5"} aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-ink">{state.weekPlan.label}</p>
-            <p className="truncate text-xs text-muted">{state.weekPlan.templateName}</p>
+            <p className="truncate text-sm font-semibold text-ink">{isCompact ? "Tag auswählen" : state.weekPlan.label}</p>
+            <p className="truncate text-xs text-muted">
+              {isCompact ? formatSelectedDate(state.selectedDate) : state.weekPlan.templateName}
+            </p>
           </div>
         </div>
 
@@ -70,6 +81,7 @@ export function WeekCalendar({ className }: WeekCalendarProps) {
             day={day}
             isSelected={day.date === state.selectedDate}
             isToday={day.date === todayIsoDate()}
+            compact={isCompact}
             onSelect={() => setSelectedDate(day.date)}
           />
         ))}
@@ -82,10 +94,11 @@ type DayButtonProps = {
   day: DayPlan;
   isSelected: boolean;
   isToday: boolean;
+  compact: boolean;
   onSelect: () => void;
 };
 
-function DayButton({ day, isSelected, isToday, onSelect }: DayButtonProps) {
+function DayButton({ day, isSelected, isToday, compact, onSelect }: DayButtonProps) {
   const hasWorkouts = day.workouts.length > 0;
   const hasMeals = day.mealPlan.length > 0;
 
@@ -94,7 +107,8 @@ function DayButton({ day, isSelected, isToday, onSelect }: DayButtonProps) {
       type="button"
       onClick={onSelect}
       className={clsx(
-        "min-h-[88px] rounded-xl border px-1.5 py-2 text-left transition sm:min-h-[96px] sm:px-2",
+        "rounded-xl border px-1.5 py-2 text-left transition sm:px-2",
+        compact ? "min-h-[58px] sm:min-h-[64px]" : "min-h-[88px] sm:min-h-[96px]",
         isSelected
           ? "border-coach-300 bg-coach-50 text-coach-800"
           : "border-line bg-canvas text-ink hover:border-coach-200 hover:bg-white"
@@ -106,11 +120,13 @@ function DayButton({ day, isSelected, isToday, onSelect }: DayButtonProps) {
       <span className="mt-1 block text-center text-lg font-semibold leading-none">
         {formatDayNumber(day.date)}
       </span>
-      <span className="mt-2 flex justify-center gap-1">
-        <span className={clsx("h-1.5 w-1.5 rounded-full", hasWorkouts ? "bg-coach-600" : "bg-line")} />
-        <span className={clsx("h-1.5 w-1.5 rounded-full", hasMeals ? "bg-amber-500" : "bg-line")} />
-      </span>
-      {isToday ? (
+      {compact ? null : (
+        <span className="mt-2 flex justify-center gap-1">
+          <span className={clsx("h-1.5 w-1.5 rounded-full", hasWorkouts ? "bg-coach-600" : "bg-line")} />
+          <span className={clsx("h-1.5 w-1.5 rounded-full", hasMeals ? "bg-amber-500" : "bg-line")} />
+        </span>
+      )}
+      {isToday && !compact ? (
         <span className="mt-2 block truncate text-center text-[10px] font-semibold text-coach-700">
           heute
         </span>
@@ -136,6 +152,11 @@ function formatWeekday(date: string): string {
 
 function formatDayNumber(date: string): string {
   return new Intl.DateTimeFormat("de-DE", { day: "2-digit" }).format(new Date(`${date}T12:00:00`));
+}
+
+function formatSelectedDate(date: string): string {
+  return new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })
+    .format(new Date(`${date}T12:00:00`));
 }
 
 function formatCompactDate(date: string): string {

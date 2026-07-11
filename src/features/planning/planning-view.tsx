@@ -235,6 +235,8 @@ export function PlanningView() {
         }
       />
 
+      <WeekCalendar variant="compact" />
+
       <div className="flex flex-col">
         <details className="order-2 rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3">

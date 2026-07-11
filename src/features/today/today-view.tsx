@@ -111,6 +111,8 @@ export function TodayView({
         carbsRemaining={nutritionSummary.deltas.carbsRemaining}
       />
 
+      {calendar}
+
       <section className="mb-6 rounded-3xl bg-ink p-5 text-white shadow-soft sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -156,22 +158,6 @@ export function TodayView({
           />
         ))}
       </section>
-
-      {calendar ? (
-        <details className="mb-6 rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Wocheninformationen</p>
-              <h2 className="mt-1 text-lg font-semibold text-ink">Datum und Wochenkontext</h2>
-            </div>
-            <Pill tone="blue">{briefing.dateLabel}</Pill>
-          </summary>
-
-          <div className="mt-5">
-            {calendar}
-          </div>
-        </details>
-      ) : null}
 
       <Panel className="mb-6">
         <div className="mb-4 flex items-center gap-2">

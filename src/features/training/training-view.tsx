@@ -132,6 +132,8 @@ export function TrainingView() {
         hardSessionCount={trainingOverview.remainingHardSessionCount}
       />
 
+      <WeekCalendar variant="compact" />
+
       <section className="mb-6 grid gap-6 lg:grid-cols-[1fr_0.82fr]">
         <div>
           <SelectedTrainingDay
@@ -299,12 +301,14 @@ export function TrainingView() {
           <Panel>
             <h2 className="text-lg font-semibold text-ink">Coach-Einordnung</h2>
             <p className="mt-3 text-sm leading-6 text-muted">
-              {trainingOverview.projectedRunningKm >= 35
-                ? "Die Laufwoche ist anspruchsvoll. Harte Defizite und zusätzliche Beinbelastung wären jetzt teuer."
-                : "Die Woche ist moderat. Zusätzliche Einheiten sollten trotzdem nur einen klaren Zweck haben."}
+              {selectedDayActivities.length > 0
+                ? "Für den aktiven Tag zählt jetzt die erledigte Belastung. Fueling und Regeneration sollten sich daran orientieren."
+                : selectedRemainingWorkouts.length > 0
+                  ? "Für den aktiven Tag ist noch Training offen. Platziere Energie und Protein um diese Einheit herum."
+                  : "Für den aktiven Tag ist kein offenes Training geplant. Nutze den Tag eher für Erholung, Alltag und sauberes Protein."}
             </p>
             <p className="mt-3 rounded-xl bg-canvas px-3 py-2 text-xs leading-5 text-muted">
-              Grundlage: {roundOne(trainingOverview.completedRunningKm)} km erledigt plus {roundOne(trainingOverview.remainingRunningKm)} km Restplan.
+              Grundlage: {selectedDayActivities.length} durchgeführte Aktivität(en) und {selectedRemainingWorkouts.length} offene Einheit(en) am ausgewählten Tag.
             </p>
           </Panel>
         </div>

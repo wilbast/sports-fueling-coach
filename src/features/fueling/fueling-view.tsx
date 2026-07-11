@@ -160,6 +160,8 @@ export function FuelingView() {
         carbsRemaining={Math.max(0, estimateCarbsTarget(selectedDay.workouts.length) - selectedDayLoggedTotals.carbs)}
       />
 
+      <WeekCalendar variant="compact" />
+
       <section className="mb-6 grid gap-3 sm:grid-cols-2">
         <Panel>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Geloggt</p>

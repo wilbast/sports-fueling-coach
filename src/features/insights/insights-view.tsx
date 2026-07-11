@@ -43,6 +43,8 @@ export function InsightsView() {
         }
       />
 
+      <WeekCalendar variant="compact" />
+
       <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <InsightCard label="Aktiver Tag" value={formatLongDate(selectedDay.date)} detail={selectedDay.focus} />
         <InsightCard
@@ -81,9 +83,8 @@ export function InsightsView() {
             <InsightCard label="Trainingsbelastung" value={insights.trainingLoad} detail={`${insights.runningKm} km Laufen geplant`} />
           </section>
         </div>
-      </details>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Panel className="lg:col-span-2">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-ink">Tage im Vergleich</h2>
@@ -178,7 +179,8 @@ export function InsightsView() {
             Aktuell ist nur der Profilwert verfügbar. Ein echter Trend braucht regelmäßige Gewichtseinträge als normalisierte Historie.
           </p>
         </Panel>
-      </div>
+        </div>
+      </details>
     </div>
   );
 }
