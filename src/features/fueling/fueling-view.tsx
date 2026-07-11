@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Beef, BookmarkPlus, History, Plus, Salad, Soup, Utensils, Wheat } from "lucide-react";
+import { Beef, BookmarkPlus, History, MessageCircle, Plus, Salad, Soup, Utensils, Wheat } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { MealLog } from "@/domain/nutrition/logs";
 import { estimateMealLogTime, inferMealCategory, mealCategoryOptions, mealCategoryToRole } from "@/domain/nutrition/meal-timing";
@@ -9,6 +9,7 @@ import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 import { TimedCoachBriefing } from "@/features/coach/timed-coach-briefing";
 import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
@@ -142,11 +143,20 @@ export function FuelingView() {
         title="Mahlzeiten und Standards"
         description="Grobe Planung über Standardmahlzeiten, Portionen, Makros und Trainingszeitpunkt."
         action={
-          <CoachRecommendationButton
-            pageContext="fueling"
-            prompt="Gib mir eine kurze Fueling-Empfehlung für den aktiven Tag: bisher gegessen, Zielwerte, Training und was als nächstes sinnvoll wäre. Keine Planänderung."
-            label="Coach-Empfehlung"
-          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <CoachRecommendationButton
+              pageContext="fueling"
+              prompt="Gib mir eine kurze Fueling-Empfehlung für den aktiven Tag: bisher gegessen, Zielwerte, Training und was als nächstes sinnvoll wäre. Keine Planänderung."
+              label="Coach-Empfehlung"
+            />
+            <a
+              href="#coach"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Coach fragen
+            </a>
+          </div>
         }
       />
 
@@ -389,6 +399,13 @@ export function FuelingView() {
         </div>
 
         <div className="grid gap-6 content-start">
+          <CoachChatPanel
+            title="Coach fragen"
+            intro="Frag nach Mahlzeiten, Snacks, Rezeptideen oder Fueling-Timing für den ausgewählten Tag."
+            compact
+            pageContext="fueling"
+          />
+
           <Panel>
             <h2 className="text-lg font-semibold text-ink">Fueling-Hinweis</h2>
             <p className="mt-3 text-sm leading-6 text-muted">

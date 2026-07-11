@@ -86,13 +86,13 @@ export function TodayView({
               pageContext="today"
               prompt="Gib mir eine kurze Coach-Empfehlung für den heutigen Tag: wichtigste Priorität, Fueling, Training und was noch fehlt. Keine Planänderung."
             />
-            <Link
-              href="/coach"
+            <a
+              href="#coach"
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
             >
               <MessageCircle className="h-4 w-4" aria-hidden="true" />
               Coach fragen
-            </Link>
+            </a>
           </div>
         }
       />
@@ -396,6 +396,15 @@ export function TodayView({
         </div>
       </Panel>
 
+      <div className="mb-6">
+        <CoachChatPanel
+          title="Coach fragen"
+          intro="Frag nach Training, Fueling, Tagesbilanz, Rezeptideen oder einer konkreten Entscheidung für den ausgewählten Tag."
+          compact
+          pageContext="today"
+        />
+      </div>
+
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -454,10 +463,10 @@ export function TodayView({
             <ImagePlus className="h-4 w-4" aria-hidden="true" />
             Foto analysieren
           </button>
-          <Link href="/coach" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink">
+          <a href="#coach" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink">
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
             Coach fragen
-          </Link>
+          </a>
           <Link href="/settings#strava" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink">
             <ShieldCheck className="h-4 w-4" aria-hidden="true" />
             Strava sync

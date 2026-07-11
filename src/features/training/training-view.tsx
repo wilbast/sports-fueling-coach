@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Bike, BookmarkPlus, CircleDot, Dumbbell, Footprints, Plus, Waves, X, Zap } from "lucide-react";
+import { Bike, BookmarkPlus, CircleDot, Dumbbell, Footprints, MessageCircle, Plus, Waves, X, Zap } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import {
@@ -23,6 +23,7 @@ import type {
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { ExternalActivityList, type ExternalActivitySummary, useExternalActivities } from "@/features/activities/external-activities";
+import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 import { TimedCoachBriefing } from "@/features/coach/timed-coach-briefing";
 
@@ -113,11 +114,20 @@ export function TrainingView() {
         title="Training planen"
         description="Geplante Einheiten liefern den Kontext für Energie, Protein, Kohlenhydrate und Erholung."
         action={
-          <CoachRecommendationButton
-            pageContext="training"
-            prompt="Gib mir eine kurze Trainingsempfehlung für den aktiven Tag und die Woche: Belastung, Regeneration, Laufqualität und Fueling. Keine Planänderung."
-            label="Coach-Empfehlung"
-          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <CoachRecommendationButton
+              pageContext="training"
+              prompt="Gib mir eine kurze Trainingsempfehlung für den aktiven Tag und die Woche: Belastung, Regeneration, Laufqualität und Fueling. Keine Planänderung."
+              label="Coach-Empfehlung"
+            />
+            <a
+              href="#coach"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Coach fragen
+            </a>
+          </div>
         }
       />
 
@@ -311,6 +321,13 @@ export function TrainingView() {
               Grundlage: {selectedDayActivities.length} durchgeführte Aktivität(en) und {selectedRemainingWorkouts.length} offene Einheit(en) am ausgewählten Tag.
             </p>
           </Panel>
+
+          <CoachChatPanel
+            title="Coach fragen"
+            intro="Frag nach Training, Regeneration, Wochenumfang oder Fueling für den ausgewählten Tag."
+            compact
+            pageContext="training"
+          />
         </div>
       </section>
 

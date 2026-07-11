@@ -11,6 +11,7 @@ import {
   HeartHandshake,
   Home,
   Layers3,
+  MessageCircle,
   Plane,
   Plus,
   Sparkles,
@@ -224,9 +225,16 @@ export function PlanningView() {
               prompt="Gib mir eine kurze Planungsempfehlung für den aktiven Tag und die Woche: Alltag, Training, Familie, Fueling-Risiken. Keine Planänderung."
               label="Coach-Empfehlung"
             />
+            <a
+              href="#coach"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Coach fragen
+            </a>
             <Link
               href={`/today?date=${selectedDay.date}`}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500 sm:col-span-2"
             >
               <Sparkles className="h-4 w-4" aria-hidden="true" />
               Als Heute anzeigen

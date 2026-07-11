@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, BarChart3, Info, Target } from "lucide-react";
+import { ArrowDownRight, BarChart3, Info, MessageCircle, Target } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { createDailyBriefing } from "@/domain/briefing/create-daily-briefing";
 import { createDailyNutritionSummary, type MealLog } from "@/domain/nutrition/logs";
@@ -12,6 +12,7 @@ import { useExternalActivities } from "@/features/activities/external-activities
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import type { AppState } from "@/features/app-state/app-state-provider";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 
 export function InsightsView() {
@@ -35,11 +36,20 @@ export function InsightsView() {
         title="Plan vs. Ist"
         description="Training, Fueling und Zielwerte werden pro Tag und Woche gegenübergestellt."
         action={
-          <CoachRecommendationButton
-            pageContext="insights"
-            prompt="Gib mir eine kurze Auswertung der aktuellen Plan-vs-Ist-Daten: wichtigste Abweichung, Lernpunkt und nächste sinnvolle Anpassung. Keine Planänderung."
-            label="Coach-Empfehlung"
-          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <CoachRecommendationButton
+              pageContext="insights"
+              prompt="Gib mir eine kurze Auswertung der aktuellen Plan-vs-Ist-Daten: wichtigste Abweichung, Lernpunkt und nächste sinnvolle Anpassung. Keine Planänderung."
+              label="Coach-Empfehlung"
+            />
+            <a
+              href="#coach"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Coach fragen
+            </a>
+          </div>
         }
       />
 
@@ -63,6 +73,15 @@ export function InsightsView() {
           detail={`von ca. ${selectedDayInsight?.proteinTarget ?? 0} g Ziel`}
         />
       </section>
+
+      <div className="mb-6">
+        <CoachChatPanel
+          title="Coach fragen"
+          intro="Frag nach Einordnung deiner Tageswerte, Abweichungen oder der nächsten sinnvollen Anpassung."
+          compact
+          pageContext="insights"
+        />
+      </div>
 
       <details className="rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">

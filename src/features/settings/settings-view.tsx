@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { BriefcaseBusiness, Flame, RotateCcw, ShieldCheck, UserRound, UsersRound } from "lucide-react";
+import { BriefcaseBusiness, Flame, MessageCircle, RotateCcw, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { PerformanceStrategy, RaceGoal, WeightStrategy } from "@/domain/goals/types";
 import type { FamilyProfile, JobProfile } from "@/domain/profile/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { SignOutButton } from "@/features/auth/sign-out-button";
+import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 import { StravaIntegrationPanel } from "@/features/integrations/strava-integration-panel";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -54,10 +55,17 @@ export function SettingsView() {
               prompt="Prüfe mein Profil und meine Einstellungen kurz: Welche Angaben fehlen für bessere Coach-Empfehlungen? Keine Änderung speichern."
               label="Profil prüfen"
             />
+            <a
+              href="#coach"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-coach-100 hover:text-coach-700"
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Coach fragen
+            </a>
             <button
               type="button"
               onClick={saveSettings}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500 sm:col-span-2"
             >
               {saveLabel}
             </button>
@@ -382,6 +390,13 @@ export function SettingsView() {
         </div>
 
         <div className="grid gap-6 content-start">
+          <CoachChatPanel
+            title="Coach fragen"
+            intro="Frag nach fehlenden Profilangaben, Zielkonflikten oder sinnvollen Einstellungen für bessere Empfehlungen."
+            compact
+            pageContext="settings"
+          />
+
           <Panel>
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-ink">Wettkampfziel</h2>
