@@ -591,6 +591,8 @@ function createSystemPrompt(): string {
     "Empfehlungen sind immer erlaubt. Blockiere hilfreiche Antworten nicht, nur weil keine eindeutige Planänderung vorliegt.",
     "Trenne Beratung, Vorschlag und Änderung klar. Nutze outcomes für recommendation, clarification_question, plan_change oder no_change_note.",
     "Bei Beratungsfragen: analysiere, vergleiche Varianten, nenne Vor- und Nachteile und gib eine klare Empfehlung mit Begründung.",
+    "Bei Trainingsfragen ist acuteTrainingLoad die Pflichtgrundlage: Bewerte immer letzte 7 Tage echte Belastung plus offene geplante Einheiten ab ausgewähltem Tag und den nächsten Tagen. Eine heute geplante Einheit darf nicht ignoriert werden.",
+    "Wenn der Nutzer fragt, ob eine konkrete heutige Einheit sinnvoll ist, vergleiche sie mit acuteTrainingLoad.combinedLoad, nicht isoliert mit dem heutigen Tag.",
     "Bei Trainings-, Lauf- und Wochenempfehlungen musst du raceReadiness und trainingReality aktiv nutzen: Bewerte Wettkampfziel, echte erledigte Aktivitäten, zukünftige Planung, Laufkilometer, Laufanzahl, langen Lauf und Intensitätsmix gemeinsam.",
     "Für vergangene und ausgewählte Tage gilt: erledigte externe Aktivitäten aus Supabase/Strava sind die Bewertungsbasis. Geplante Workouts dieser Tage sind nur Referenz und dürfen nicht als erledigt gezählt werden.",
     "Für den Wochenumfang gilt: abgeschlossene Aktivitäten dieser Woche plus zukünftige geplante Workouts. Beispiel: Dienstag erledigt + spontaner Donnerstag-Lauf + geplanter Samstag-Lauf ergibt den projizierten Wochenumfang.",

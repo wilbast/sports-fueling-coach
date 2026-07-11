@@ -471,7 +471,8 @@ function SelectedTrainingDay({
 }: SelectedTrainingDayProps) {
   const isPast = date < overviewDate;
   const hasCompleted = activities.length > 0 || completedManualWorkouts.length > 0;
-  const hasOpenPlan = remainingWorkouts.length > 0;
+  const plannedDayWorkouts = [...remainingWorkouts, ...referenceWorkouts];
+  const hasOpenPlan = plannedDayWorkouts.length > 0;
 
   return (
     <Panel>
@@ -483,7 +484,7 @@ function SelectedTrainingDay({
         </div>
         <div className="flex flex-wrap gap-2">
           <Pill tone={hasCompleted ? "amber" : "neutral"}>{activities.length + completedManualWorkouts.length} erledigt</Pill>
-          <Pill tone={hasOpenPlan ? "blue" : "neutral"}>{remainingWorkouts.length} geplant</Pill>
+          <Pill tone={hasOpenPlan ? "blue" : "neutral"}>{plannedDayWorkouts.length} geplant</Pill>
         </div>
       </div>
 
@@ -517,15 +518,15 @@ function SelectedTrainingDay({
 
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="font-semibold text-ink">Noch geplant</h3>
-            <Pill tone={remainingWorkouts.length > 0 ? "blue" : "neutral"}>{remainingWorkouts.length} offen</Pill>
+            <h3 className="font-semibold text-ink">Geplanter Tagesplan</h3>
+            <Pill tone={plannedDayWorkouts.length > 0 ? "blue" : "neutral"}>{plannedDayWorkouts.length} Einheiten</Pill>
           </div>
           <div className="grid gap-3">
-            {remainingWorkouts.length === 0 ? (
+            {plannedDayWorkouts.length === 0 ? (
               <div className="rounded-xl bg-canvas px-3 py-3 text-sm text-muted">
-                {isPast ? "Kein offener Plan mehr für diesen Tag." : "Kein offenes Training geplant."}
+                {isPast ? "Kein geplanter Tagesplan vorhanden." : "Kein Training geplant."}
               </div>
-            ) : remainingWorkouts.map((workout) => (
+            ) : plannedDayWorkouts.map((workout) => (
               <WorkoutRow
                 key={workout.id}
                 workout={workout}
@@ -536,20 +537,6 @@ function SelectedTrainingDay({
             ))}
           </div>
         </section>
-
-        {referenceWorkouts.length > 0 ? (
-          <section className="rounded-xl bg-canvas px-3 py-3">
-            <h3 className="text-sm font-semibold text-ink">Plan-Referenz</h3>
-            <div className="mt-3 grid gap-2">
-              {referenceWorkouts.map((workout) => (
-                <div key={workout.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
-                  <span className="text-sm font-medium text-ink">{workout.title}</span>
-                  <Pill tone="neutral">{statusLabels[workout.status]}</Pill>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
       </div>
     </Panel>
   );

@@ -83,6 +83,7 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
   const actualActivitiesForSelectedDay = selectedDay
     ? getActivitiesOnDate(externalActivities, selectedDay.date)
     : [];
+  const acuteTrainingLoad = createAcuteTrainingLoad(allDays, externalActivities, source.selectedDate);
   const todayMeals = selectedDay ? hydrateMeals(selectedDay.mealPlan, mealTemplates) : [];
   const nutritionLogsToday = source.nutritionLogsToday ?? [];
   const timedNutritionLogsToday = categorizeNutritionLogsByCurrentTime(nutritionLogsToday, source.selectedDate, coachNow);
@@ -126,6 +127,7 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
     activeGoals: source.goals,
     today: selectedDay ? summarizeDay(selectedDay, mealTemplates, actualActivitiesForSelectedDay) : null,
     tomorrow: intent.needsTomorrow && tomorrow ? summarizeDay(tomorrow, mealTemplates, getActivitiesOnDate(externalActivities, tomorrow.date)) : null,
+    acuteTrainingLoad,
     currentWeek: summarizeWeek(source.weekPlan, mealTemplates, externalActivities, source.selectedDate),
     trainingReality: summarizeWeeklyTrainingReality(source.weekPlan, externalActivities, source.selectedDate),
     raceReadiness: createRaceReadinessAssessment(source.weekPlan, source.profile, source.goals, externalActivities, source.selectedDate),
@@ -443,17 +445,27 @@ function summarizeWeeklyTrainingReality(
       return date >= weekStart && date <= weekEnd && date <= selectedDate;
     })
     .sort((left, right) => getActivityDateKey(left).localeCompare(getActivityDateKey(right)));
+  const actualActivityDates = new Set(actualActivities.map(getActivityDateKey));
+  const completedManualWorkouts = weekPlan.days
+    .flatMap((day) => day.workouts)
+    .filter((workout) => workout.status !== "cancelled")
+    .filter((workout) => workout.status === "completed")
+    .filter((workout) => workout.date <= selectedDate)
+    .filter((workout) => !actualActivityDates.has(workout.date));
   const futurePlannedWorkouts = weekPlan.days
     .flatMap((day) => day.workouts)
     .filter((workout) => workout.status !== "cancelled")
-    .filter((workout) => workout.date > selectedDate);
+    .filter((workout) => workout.status !== "completed")
+    .filter((workout) => workout.date > selectedDate || (workout.date === selectedDate && !actualActivityDates.has(workout.date)));
   const pastPlannedWorkoutsNotCounted = weekPlan.days
     .flatMap((day) => day.workouts)
     .filter((workout) => workout.status !== "cancelled")
-    .filter((workout) => workout.date <= selectedDate);
+    .filter((workout) => workout.status !== "completed")
+    .filter((workout) => workout.date < selectedDate || (workout.date === selectedDate && actualActivityDates.has(workout.date)));
   const actualRunningActivities = actualActivities.filter(isRunningActivity);
+  const completedManualRunningWorkouts = completedManualWorkouts.filter((workout) => workout.sport === "running");
   const futureRunningWorkouts = futurePlannedWorkouts.filter((workout) => workout.sport === "running");
-  const actualRunningKm = sumActivityDistanceKm(actualRunningActivities);
+  const actualRunningKm = roundTo(sumActivityDistanceKm(actualRunningActivities) + sumRunningKm(completedManualRunningWorkouts), 0.1);
   const futurePlannedRunningKm = sumRunningKm(futureRunningWorkouts);
 
   return {
@@ -463,13 +475,20 @@ function summarizeWeeklyTrainingReality(
     rule: "Für vergangene und ausgewählte Tage zählen erledigte externe Aktivitäten aus Supabase. Für zukünftige Tage zählen geplante Workouts. Vergangene geplante Workouts werden nicht als erledigt gewertet.",
     actualCompletedThisWeek: {
       activityCount: actualActivities.length,
+      manualWorkoutCount: completedManualWorkouts.length,
       runningActivityCount: actualRunningActivities.length,
+      manualRunningWorkoutCount: completedManualRunningWorkouts.length,
       runningKm: actualRunningKm,
       totalCalories: roundTo(actualActivities.reduce((sum, activity) => sum + (activity.calories ?? 0), 0), 1),
-      bySport: countBy(actualActivities.map((activity) => normalizeActivitySport(activity))),
-      activities: summarizeActualActivities(actualActivities)
+      bySport: countBy([
+        ...actualActivities.map((activity) => normalizeActivitySport(activity)),
+        ...completedManualWorkouts.map((workout) => workout.sport)
+      ]),
+      activities: summarizeActualActivities(actualActivities),
+      manuallyCompletedWorkouts: summarizeWorkouts(completedManualWorkouts)
     },
     futurePlannedThisWeek: {
+      rule: "Enthält zukünftige geplante Einheiten plus die offene geplante Einheit am ausgewählten Tag, solange an diesem Tag noch keine externe Aktivität als erledigt vorliegt.",
       workoutCount: futurePlannedWorkouts.length,
       runningWorkoutCount: futureRunningWorkouts.length,
       runningKm: futurePlannedRunningKm,
@@ -477,21 +496,102 @@ function summarizeWeeklyTrainingReality(
       workouts: summarizeWorkouts(futurePlannedWorkouts)
     },
     projectedWeek: {
-      runningSessionCount: actualRunningActivities.length + futureRunningWorkouts.length,
+      runningSessionCount: actualRunningActivities.length + completedManualRunningWorkouts.length + futureRunningWorkouts.length,
       runningKm: roundTo(actualRunningKm + futurePlannedRunningKm, 0.1),
       longestRunKm: roundTo(Math.max(
         0,
         ...actualRunningActivities.map(activityDistanceKm),
+        ...completedManualRunningWorkouts.map((workout) => workout.distanceKm ?? 0),
         ...futureRunningWorkouts.map((workout) => workout.distanceKm ?? 0)
       ), 0.1),
-      hardRunCount: actualRunningActivities.filter(isHardActualActivity).length + futureRunningWorkouts.filter(isHardRunningWorkout).length,
-      totalTrainingCount: actualActivities.length + futurePlannedWorkouts.length,
+      hardRunCount: actualRunningActivities.filter(isHardActualActivity).length + completedManualRunningWorkouts.filter(isHardRunningWorkout).length + futureRunningWorkouts.filter(isHardRunningWorkout).length,
+      totalTrainingCount: actualActivities.length + completedManualWorkouts.length + futurePlannedWorkouts.length,
       bySport: countBy([
         ...actualActivities.map((activity) => normalizeActivitySport(activity)),
+        ...completedManualWorkouts.map((workout) => workout.sport),
         ...futurePlannedWorkouts.map((workout) => workout.sport)
       ])
     },
     plannedPastNotCountedAsDone: summarizeWorkouts(pastPlannedWorkoutsNotCounted)
+  };
+}
+
+function createAcuteTrainingLoad(
+  allDays: DayPlan[],
+  externalActivities: CoachExternalActivitySummary[],
+  selectedDate: string
+) {
+  const lookbackStart = addIsoDays(selectedDate, -6);
+  const lookaheadEnd = addIsoDays(selectedDate, 6);
+  const recentActivities = externalActivities
+    .filter((activity) => {
+      const date = getActivityDateKey(activity);
+      return date >= lookbackStart && date <= selectedDate;
+    })
+    .sort((left, right) => getActivityDateKey(left).localeCompare(getActivityDateKey(right)));
+  const recentRunningActivities = recentActivities.filter(isRunningActivity);
+  const actualActivityDates = new Set(recentActivities.map(getActivityDateKey));
+  const completedManualWorkouts = allDays
+    .flatMap((day) => day.workouts)
+    .filter((workout) => workout.status === "completed")
+    .filter((workout) => workout.date >= lookbackStart && workout.date <= selectedDate)
+    .filter((workout) => !actualActivityDates.has(workout.date));
+  const completedManualRunningWorkouts = completedManualWorkouts.filter((workout) => workout.sport === "running");
+  const upcomingPlannedWorkouts = allDays
+    .flatMap((day) => day.workouts)
+    .filter((workout) => workout.status !== "cancelled")
+    .filter((workout) => workout.status !== "completed")
+    .filter((workout) => workout.date >= selectedDate && workout.date <= lookaheadEnd)
+    .filter((workout) => workout.date !== selectedDate || !actualActivityDates.has(workout.date));
+  const upcomingRunningWorkouts = upcomingPlannedWorkouts.filter((workout) => workout.sport === "running");
+  const actualRunningKm = roundTo(sumActivityDistanceKm(recentRunningActivities) + sumRunningKm(completedManualRunningWorkouts), 0.1);
+  const plannedRunningKm = sumRunningKm(upcomingRunningWorkouts);
+
+  return {
+    selectedDate,
+    rule: "Primäre Coach-Bewertung für Trainingsfragen: akute Ist-Belastung der letzten 7 Tage plus offene geplante Einheiten ab ausgewähltem Tag und den nächsten 6 Tagen. Eine heute geplante Einheit zählt, solange sie nicht durch eine externe Aktivität am selben Tag ersetzt wurde.",
+    last7DaysActual: {
+      from: lookbackStart,
+      to: selectedDate,
+      activityCount: recentActivities.length,
+      manualWorkoutCount: completedManualWorkouts.length,
+      runningSessionCount: recentRunningActivities.length + completedManualRunningWorkouts.length,
+      runningKm: actualRunningKm,
+      totalCalories: roundTo(recentActivities.reduce((sum, activity) => sum + (activity.calories ?? 0), 0), 1),
+      hardSignalCount: recentActivities.filter(isHardActualActivity).length + completedManualRunningWorkouts.filter(isHardRunningWorkout).length,
+      bySport: countBy([
+        ...recentActivities.map((activity) => normalizeActivitySport(activity)),
+        ...completedManualWorkouts.map((workout) => workout.sport)
+      ]),
+      activities: summarizeActualActivities(recentActivities),
+      manuallyCompletedWorkouts: summarizeWorkouts(completedManualWorkouts)
+    },
+    upcomingPlan: {
+      from: selectedDate,
+      to: lookaheadEnd,
+      workoutCount: upcomingPlannedWorkouts.length,
+      runningWorkoutCount: upcomingRunningWorkouts.length,
+      runningKm: plannedRunningKm,
+      hardRunCount: upcomingRunningWorkouts.filter(isHardRunningWorkout).length,
+      workouts: summarizeWorkouts(upcomingPlannedWorkouts)
+    },
+    combinedLoad: {
+      runningSessionCount: recentRunningActivities.length + completedManualRunningWorkouts.length + upcomingRunningWorkouts.length,
+      runningKm: roundTo(actualRunningKm + plannedRunningKm, 0.1),
+      longestRunKm: roundTo(Math.max(
+        0,
+        ...recentRunningActivities.map(activityDistanceKm),
+        ...completedManualRunningWorkouts.map((workout) => workout.distanceKm ?? 0),
+        ...upcomingRunningWorkouts.map((workout) => workout.distanceKm ?? 0)
+      ), 0.1),
+      hardRunCount: recentActivities.filter(isHardActualActivity).length + completedManualRunningWorkouts.filter(isHardRunningWorkout).length + upcomingRunningWorkouts.filter(isHardRunningWorkout).length,
+      totalTrainingCount: recentActivities.length + completedManualWorkouts.length + upcomingPlannedWorkouts.length
+    },
+    coachGuidance: [
+      "Nutze combinedLoad für Aussagen wie 'zu viel', 'zu wenig' oder 'im Rahmen'.",
+      "Bewerte nicht nur die einzelne heutige Einheit isoliert.",
+      "Wenn combinedLoad.runningKm im empfohlenen Rahmen liegt, warne nicht pauschal vor dem Lauf; bewerte stattdessen Intensität, Erholung und Fueling."
+    ]
   };
 }
 
@@ -849,6 +949,13 @@ function daysBetween(fromDate: string, toDate: string): number | null {
 
 function parseDateAtNoon(value: string | undefined): Date {
   return new Date(`${String(value ?? "").slice(0, 10)}T12:00:00.000Z`);
+}
+
+function addIsoDays(value: string, days: number): string {
+  const date = parseDateAtNoon(value);
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return date.toISOString().slice(0, 10);
 }
 
 function getMealConsumptionStatus(
