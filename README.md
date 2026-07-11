@@ -104,8 +104,10 @@ OPENAI_API_KEY=...
 - automatischer Sync: `/api/cron/strava-sync`, ausgelöst durch Vercel Cron
 - Tokens werden ausschließlich serverseitig in `external_source_tokens` gespeichert
 - Aktivitäten werden in ein providerneutrales Domain-Modell unter `activities`, `activity_streams`, `equipment` und `sync_jobs` importiert
+- persönliche Trainingszonen aus Strava landen in `training_zones`; Aktivitäts-Zonenverteilungen landen in `activity_zones`
+- der Coach nutzt Zonen nur aus Supabase: erledigte Aktivitäten werden über tatsächliche Zonenverteilung bewertet, geplante Einheiten über persönliche HF-/Power-Zonen eingeordnet
 - Strava ist nur der erste Adapter; das interne Modell ist für Garmin, Apple Health, Polar, Coros, Oura und ähnliche Quellen vorbereitet
-- Migration: `supabase/002_external_activity_sources.sql`
+- Migrationen: `supabase/002_external_activity_sources.sql` und `supabase/005_training_zones.sql`
 
 Benötigte Env Vars:
 
@@ -123,6 +125,7 @@ Optionale Sync-Limits:
 ```text
 STRAVA_SYNC_MAX_PAGES=50
 STRAVA_STREAM_SYNC_LIMIT=50
+STRAVA_ACTIVITY_ZONE_SYNC_LIMIT=50
 STRAVA_CRON_MAX_CONNECTIONS=10
 ```
 

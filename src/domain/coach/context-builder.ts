@@ -8,6 +8,7 @@ import { describeWorkoutType } from "@/domain/training/catalog";
 import type { WorkoutPlan } from "@/domain/training/types";
 
 export type CoachExternalActivitySummary = {
+  id?: string;
   source_provider?: string;
   source_activity_id?: string;
   name?: string;
@@ -45,6 +46,36 @@ export type CoachExternalActivitySummary = {
   is_private?: boolean | null;
   is_manual?: boolean | null;
   gear_name?: string | null;
+  zone_summaries?: CoachActivityZoneSummary[];
+};
+
+export type CoachActivityZoneSummary = {
+  zoneType: string;
+  score: number | null;
+  sensorBased: boolean | null;
+  customZones: boolean | null;
+  points: number | null;
+  distribution: CoachZoneDistributionBucket[];
+  importedAt: string | null;
+};
+
+export type CoachTrainingZoneSummary = {
+  sourceProvider: string;
+  zoneType: string;
+  sportType: string | null;
+  customZones: boolean | null;
+  zones: CoachZoneRange[];
+  importedAt: string | null;
+};
+
+type CoachZoneRange = {
+  zone?: number | null;
+  min?: number | null;
+  max?: number | null;
+};
+
+type CoachZoneDistributionBucket = CoachZoneRange & {
+  timeSeconds?: number | null;
 };
 
 export type CoachContextSource = {
@@ -56,6 +87,7 @@ export type CoachContextSource = {
   mealTemplates?: MealTemplate[];
   standards?: AppStandards;
   externalActivities?: CoachExternalActivitySummary[];
+  trainingZones?: CoachTrainingZoneSummary[];
   nutritionLogsToday?: MealLog[];
 };
 
@@ -163,7 +195,8 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
     recentWeightTrend: summarizeWeightTrend(source.profile),
     recentNutrition: summarizeNutritionWindow(last14Days, mealTemplates),
     externalActivities: summarizeExternalActivities(externalActivities, intent),
-    strava: summarizeStravaStatus(externalActivities),
+    athleteTrainingZones: summarizeTrainingZones(source.trainingZones ?? []),
+    strava: summarizeStravaStatus(externalActivities, source.trainingZones ?? []),
     relevantStandards: summarizeRelevantStandards(source.standards, source.mealTemplates, intent),
     deepContext: intent.needsDeepContext
       ? createDeepContext(weekPlans, source.profile, mealTemplates)
@@ -213,18 +246,78 @@ function summarizeExternalActivities(activities: CoachExternalActivitySummary[],
       isPrivate: activity.is_private,
       isManual: activity.is_manual,
       deviceName: activity.device_name,
-      gearName: activity.gear_name
+      gearName: activity.gear_name,
+      zoneSummaries: summarizeActivityZoneSummaries(activity.zone_summaries ?? [])
     }))
   };
 }
 
-function summarizeStravaStatus(activities: CoachExternalActivitySummary[]) {
+function summarizeTrainingZones(trainingZones: CoachTrainingZoneSummary[]) {
+  return {
+    status: trainingZones.length > 0 ? "available_from_supabase" : "empty",
+    source: "server_side_context_builder",
+    rule: "Persönliche Zonen sind Referenzen für geplante Intensitäten. Aktivitäts-Zonenverteilungen zeigen die tatsächliche Belastung erledigter Einheiten.",
+    guidance: [
+      "Nutze Herzfrequenz- oder Power-Zonen für die Einschätzung von locker, Grundlage, Schwelle und VO2max.",
+      "Wenn Zonen fehlen, transparent als Schätzung anhand Pace, Puls, Relative Effort und Trainingsziel formulieren.",
+      "Geplante Einheiten nicht als erledigt zählen; Zonen dienen bei geplanten Einheiten nur als Intensitätsziel."
+    ],
+    zones: trainingZones.map((zone) => ({
+      provider: zone.sourceProvider,
+      zoneType: zone.zoneType,
+      sportType: zone.sportType,
+      customZones: zone.customZones,
+      importedAt: zone.importedAt,
+      ranges: zone.zones.map((range, index) => ({
+        zone: range.zone ?? index + 1,
+        min: range.min ?? null,
+        max: range.max ?? null
+      }))
+    }))
+  };
+}
+
+function summarizeActivityZoneSummaries(zones: CoachActivityZoneSummary[]) {
+  return zones.map((zone) => {
+    const totalSeconds = zone.distribution.reduce((sum, bucket) => sum + (bucket.timeSeconds ?? 0), 0);
+    const peakBucket = zone.distribution.reduce<CoachZoneDistributionBucket | null>((peak, bucket) => {
+      if (!peak || (bucket.timeSeconds ?? 0) > (peak.timeSeconds ?? 0)) return bucket;
+      return peak;
+    }, null);
+
+    return {
+      zoneType: zone.zoneType,
+      score: zone.score,
+      sensorBased: zone.sensorBased,
+      customZones: zone.customZones,
+      points: zone.points,
+      totalMinutesWithZoneData: Math.round(totalSeconds / 60),
+      dominantZone: peakBucket ? {
+        zone: peakBucket.zone ?? null,
+        minutes: Math.round((peakBucket.timeSeconds ?? 0) / 60),
+        min: peakBucket.min ?? null,
+        max: peakBucket.max ?? null
+      } : null,
+      distribution: zone.distribution.map((bucket, index) => ({
+        zone: bucket.zone ?? index + 1,
+        minutes: Math.round((bucket.timeSeconds ?? 0) / 60),
+        min: bucket.min ?? null,
+        max: bucket.max ?? null
+      }))
+    };
+  });
+}
+
+function summarizeStravaStatus(activities: CoachExternalActivitySummary[], trainingZones: CoachTrainingZoneSummary[]) {
   const stravaActivities = activities.filter((activity) => activity.source_provider === "strava");
+  const stravaTrainingZones = trainingZones.filter((zone) => zone.sourceProvider === "strava");
 
   return {
     status: stravaActivities.length > 0 ? "available_from_supabase" : "not_available_in_context_window",
+    trainingZonesStatus: stravaTrainingZones.length > 0 ? "available_from_supabase" : "empty_or_not_synced",
+    activityZoneSummaryStatus: stravaActivities.some((activity) => (activity.zone_summaries?.length ?? 0) > 0) ? "available_from_supabase" : "empty_or_not_available",
     relevantActivities: stravaActivities.slice(0, 14),
-    note: "Der Coach greift nicht auf Strava zu; diese Aktivitäten wurden vorher in Supabase importiert und serverseitig zusammengefasst."
+    note: "Der Coach greift nicht auf Strava zu; Aktivitäten und Zonen wurden vorher in Supabase importiert und serverseitig zusammengefasst."
   };
 }
 
@@ -659,7 +752,8 @@ function summarizeActualActivities(activities: CoachExternalActivitySummary[]) {
       commute: activity.is_commute,
       private: activity.is_private,
       manual: activity.is_manual
-    }
+    },
+    zoneSummaries: summarizeActivityZoneSummaries(activity.zone_summaries ?? [])
   }));
 }
 

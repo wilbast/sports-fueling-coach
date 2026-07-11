@@ -11,7 +11,7 @@ import type {
   WorkoutIntensity
 } from "@/domain/training/types";
 import { getAiErrorDebug, resolveAiJsonClient } from "@/lib/ai/server";
-import { loadRecentExternalActivitiesForCoach } from "@/lib/integrations/activity-sync";
+import { loadRecentExternalActivitiesForCoach, loadTrainingZonesForCoach } from "@/lib/integrations/activity-sync";
 import { createClient as createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -366,12 +366,14 @@ async function resolveCoachSourceState(requestState: CoachContextSource, userId?
     const storedState = data?.state;
 
     const externalActivities = await loadRecentExternalActivitiesForCoach(userId);
+    const trainingZones = await loadTrainingZonesForCoach(userId);
     const nutritionLogsToday = await loadNutritionLogsForCoach(userId, requestState.selectedDate);
 
     if (isCoachContextSource(storedState)) {
       return {
         ...normalizeCoachSourceState(storedState, requestState),
         externalActivities,
+        trainingZones,
         nutritionLogsToday
       };
     }
@@ -379,6 +381,7 @@ async function resolveCoachSourceState(requestState: CoachContextSource, userId?
     return {
       ...requestState,
       externalActivities,
+      trainingZones,
       nutritionLogsToday
     };
   } catch {
@@ -595,6 +598,8 @@ function createSystemPrompt(): string {
     "Wenn der Nutzer fragt, ob eine konkrete heutige Einheit sinnvoll ist, vergleiche sie mit acuteTrainingLoad.combinedLoad, nicht isoliert mit dem heutigen Tag.",
     "Bei Trainings-, Lauf- und Wochenempfehlungen musst du raceReadiness und trainingReality aktiv nutzen: Bewerte Wettkampfziel, echte erledigte Aktivitäten, zukünftige Planung, Laufkilometer, Laufanzahl, langen Lauf und Intensitätsmix gemeinsam.",
     "Wichtig: HIIT/Freeletics zählt als zusätzliche Kraft-/Metabolikbelastung mit Regenerationskosten. Es ist KEIN Lauf-Intervalltraining, kein VO2max-Lauf und darf nicht in hardRunCount, qualityRunCount oder Laufumfang eingerechnet werden.",
+    "Nutze athleteTrainingZones und activity.zoneSummaries, wenn vorhanden: erledigte Aktivitäten über tatsächliche Zeit in HF-/Power-Zonen bewerten, geplante Einheiten gegen persönliche Zonen als Zielkorridor einordnen.",
+    "Für geplante Läufe gilt grob: recovery/easy/base überwiegend niedrige Zonen, threshold/Tempodauerlauf nahe Schwelle, intervals/VO2max in hohen Zonen. Formuliere vorsichtig, wenn nur Strava-Zonen ohne exakte Schwellenlogik vorliegen.",
     "Für vergangene und ausgewählte Tage gilt: erledigte externe Aktivitäten aus Supabase/Strava sind die Bewertungsbasis. Geplante Workouts dieser Tage sind nur Referenz und dürfen nicht als erledigt gezählt werden.",
     "Für den Wochenumfang gilt: abgeschlossene Aktivitäten dieser Woche plus zukünftige geplante Workouts. Beispiel: Dienstag erledigt + spontaner Donnerstag-Lauf + geplanter Samstag-Lauf ergibt den projizierten Wochenumfang.",
     "Nutze bei Strava-Aktivitäten alle verfügbaren Kriterien aus dem Kontext: Distanz, Dauer, Pace/Geschwindigkeit, Herzfrequenz, Leistung, Kadenz, Höhenmeter, Kalorien, Relative Effort, Training Load, Indoor/Outdoor, Gerät und Schuhe.",

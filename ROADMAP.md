@@ -123,8 +123,9 @@ Umgesetzt:
 - de-duplizierende Upserts nach Provider und Activity-ID
 - providerneutrales Aktivitätsmodell
 - optionale Streams für spätere Tiefenanalysen
+- persönliche Strava-Zonen und Aktivitäts-Zonenverteilungen
 - Sync-Jobs mit Status, Zählern und Fehlermeldungen
-- Coach-Kontext lädt relevante externe Aktivitäten aus Supabase
+- Coach-Kontext lädt relevante externe Aktivitäten und Trainingszonen aus Supabase
 - Architektur für Garmin, Apple Health, Health Connect, Polar, Coros, Oura und Withings vorbereitet
 
 ## Sprint 9: Today Nutrition Status und AI Fueling Evaluation

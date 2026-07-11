@@ -22,7 +22,7 @@
 - Trainingseinheiten stärker typisieren: Standard, Qualität, Long Run, Kraft, Spielsport.
 - Insights textlich besser erklären und nach Risiko priorisieren.
 - Lokale Datenexport-/Import-Option prüfen.
-- Aktivitätsanalysen aus realen Strava-Daten ableiten: Belastung, Umfang, Pace- und HF-Trends.
+- Aktivitätsanalysen aus realen Strava-Daten und Zonen ableiten: Belastung, Umfang, Pace-, HF- und Power-Trends.
 - Equipment-Ansicht für Schuhe und Geräte ergänzen.
 - Weitere Provideradapter vorbereiten: Garmin, Apple Health, Health Connect.
 
@@ -46,6 +46,7 @@
 - Context Builder für strukturierte Coach-Kontexte umgesetzt.
 - Persistente Coach-Chat-Historie mit Supabase RLS umgesetzt.
 - Strava OAuth, Synchronisation und providerneutrales Aktivitätsmodell umgesetzt.
+- Strava-Zonenimport für persönliche Trainingszonen und Aktivitäts-Zonenverteilungen umgesetzt.
 - Today Nutrition Status mit geloggten Mahlzeiten, Tagesbilanz und Protein-/Carb-Fortschritt umgesetzt.
 - Serverroute für AI-/Fallback-Nährwertschätzung und persistente Meal Logs umgesetzt.
 - Meal Logs im Fueling-Bereich bearbeitbar und löschbar gemacht.

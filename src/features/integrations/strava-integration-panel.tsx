@@ -19,6 +19,9 @@ type StravaStatus = {
   lastSyncStatus?: string;
   lastSyncError?: string;
   activityCount: number;
+  trainingZoneCount?: number;
+  activityZoneCount?: number;
+  latestZoneSyncAt?: string;
   latestActivityAt?: string;
   latestSyncJob?: {
     status: string;
@@ -69,7 +72,10 @@ export function StravaIntegrationPanel() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Synchronisation fehlgeschlagen.");
 
-      setSyncMessage(`${result.importedCount} neu importiert, ${result.updatedCount} aktualisiert. Letzter Sync: ${result.lastSyncAt ? formatDateTime(result.lastSyncAt) : "gerade eben"}.`);
+      const zoneText = typeof result.trainingZoneCount === "number" || typeof result.activityZoneCount === "number"
+        ? ` Zonen: ${result.trainingZoneCount ?? 0} persönliche, ${result.activityZoneCount ?? 0} Aktivitäts-Zonen.`
+        : "";
+      setSyncMessage(`${result.importedCount} neu importiert, ${result.updatedCount} aktualisiert.${zoneText} Letzter Sync: ${result.lastSyncAt ? formatDateTime(result.lastSyncAt) : "gerade eben"}.`);
       await loadStatus();
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : "Synchronisation fehlgeschlagen.");
@@ -121,9 +127,10 @@ export function StravaIntegrationPanel() {
         </div>
       ) : status.connected ? (
         <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <StatusCard label="Athlet" value={status.athlete?.name ?? status.athlete?.id ?? "verbunden"} />
             <StatusCard label="Aktivitäten" value={String(status.activityCount)} />
+            <StatusCard label="Zonen" value={`${status.trainingZoneCount ?? 0} / ${status.activityZoneCount ?? 0}`} />
             <StatusCard label="Letzter Sync" value={status.lastSyncAt ? formatDateTime(status.lastSyncAt) : "noch keiner"} />
           </div>
 
@@ -159,6 +166,10 @@ export function StravaIntegrationPanel() {
             <p className="mt-1">
               Status: {status.lastSyncStatus ?? "unbekannt"}
               {status.latestSyncJob?.completedAt ? ` · letzter Job beendet: ${formatDateTime(status.latestSyncJob.completedAt)}` : ""}
+            </p>
+            <p className="mt-1">
+              Zonen: {status.trainingZoneCount ?? 0} persönliche Zonentypen · {status.activityZoneCount ?? 0} Aktivitäts-Zonen
+              {status.latestZoneSyncAt ? ` · zuletzt importiert: ${formatDateTime(status.latestZoneSyncAt)}` : ""}
             </p>
           </div>
 

@@ -74,6 +74,37 @@ type StravaStream = {
   resolution?: string;
 };
 
+export type StravaZoneBucket = {
+  min?: number;
+  max?: number;
+  time?: number;
+};
+
+export type StravaZoneRange = {
+  min?: number;
+  max?: number;
+};
+
+export type StravaAthleteZoneSet = {
+  custom_zones?: boolean;
+  zones?: StravaZoneRange[];
+};
+
+export type StravaAthleteZones = Record<string, unknown> & {
+  heart_rate?: StravaAthleteZoneSet;
+  power?: StravaAthleteZoneSet;
+};
+
+export type StravaActivityZone = Record<string, unknown> & {
+  type?: string;
+  score?: number;
+  sensor_based?: boolean;
+  custom_zones?: boolean;
+  max?: number;
+  points?: number;
+  distribution_buckets?: StravaZoneBucket[];
+};
+
 export function getStravaConfig(): StravaConfig | null {
   const clientId = process.env.STRAVA_CLIENT_ID?.trim();
   const clientSecret = process.env.STRAVA_CLIENT_SECRET?.trim();
@@ -177,6 +208,26 @@ export async function getStravaActivityStreams(input: {
       originalSize: stream.original_size,
       resolution: stream.resolution
     }));
+}
+
+export async function getStravaAthleteZones(input: {
+  accessToken: string;
+}): Promise<StravaAthleteZones> {
+  const url = new URL(`${STRAVA_API_BASE_URL}/athlete/zones`);
+
+  return stravaGet<StravaAthleteZones>(url, input.accessToken);
+}
+
+export async function getStravaActivityZones(input: {
+  accessToken: string;
+  activityId: number | string;
+}): Promise<StravaActivityZone[]> {
+  const url = new URL(`${STRAVA_API_BASE_URL}/activities/${input.activityId}/zones`);
+
+  const zones = await stravaGet<unknown>(url, input.accessToken);
+  if (!Array.isArray(zones)) return [];
+
+  return zones as StravaActivityZone[];
 }
 
 export function mapStravaActivity(activity: StravaActivity, userId: string): ExternalActivity {

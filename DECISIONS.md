@@ -204,11 +204,11 @@ Der Coach braucht ausreichend Kontext, aber nicht maximale Rohdaten. Der Builder
 
 Entscheidung:
 
-Strava wird als erster Adapter implementiert, aber nicht als isoliertes Produktmodell. OAuth-Verbindungen liegen in `external_connections`, Secrets und Refresh Tokens in `external_source_tokens`, Aktivitäten in `activities`, optionale Zeitreihen in `activity_streams`, Ausrüstung in `equipment` und Synchronisationsläufe in `sync_jobs`. Die App mappt Strava-Daten beim Import auf ein gemeinsames Aktivitätsmodell mit `source_provider` und `source_activity_id`.
+Strava wird als erster Adapter implementiert, aber nicht als isoliertes Produktmodell. OAuth-Verbindungen liegen in `external_connections`, Secrets und Refresh Tokens in `external_source_tokens`, Aktivitäten in `activities`, optionale Zeitreihen in `activity_streams`, persönliche Zonen in `training_zones`, Aktivitäts-Zonenverteilungen in `activity_zones`, Ausrüstung in `equipment` und Synchronisationsläufe in `sync_jobs`. Die App mappt Strava-Daten beim Import auf ein gemeinsames Aktivitätsmodell mit `source_provider` und `source_activity_id`.
 
 Begründung:
 
-Sports & Fueling Coach soll langfristig eine persönliche Gesundheitsplattform werden. Dafür darf die Fachlogik nicht wissen müssen, ob eine Aktivität von Strava, Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings kommt. Provideradapter sind nur Ingestion-Schichten. Coach, Insights und spätere Trainingsanalysen lesen ausschließlich aus Supabase und arbeiten mit normalisierten Aktivitätsdaten. Tokens bleiben serverseitig, RLS schützt nutzerbezogene Daten, und die Token-Tabelle ist nicht für normale authentifizierte Clients freigegeben.
+Sports & Fueling Coach soll langfristig eine persönliche Gesundheitsplattform werden. Dafür darf die Fachlogik nicht wissen müssen, ob eine Aktivität von Strava, Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings kommt. Provideradapter sind nur Ingestion-Schichten. Coach, Insights und spätere Trainingsanalysen lesen ausschließlich aus Supabase und arbeiten mit normalisierten Aktivitätsdaten. Trainingszonen sind Teil dieser persönlichen Wissensbasis: erledigte Aktivitäten können über tatsächliche Zeit in HF-/Power-Zonen bewertet werden, geplante Einheiten über persönliche Zielbereiche. Tokens bleiben serverseitig, RLS schützt nutzerbezogene Daten, und die Token-Tabelle ist nicht für normale authentifizierte Clients freigegeben.
 
 ## ADR-022: Strava-Synchronisation läuft automatisch nachts
 

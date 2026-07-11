@@ -27,6 +27,8 @@ export async function GET() {
       connected: false,
       provider: "strava",
       activityCount: 0,
+      trainingZoneCount: 0,
+      activityZoneCount: 0,
       missingEnv,
       diagnostics
     });
@@ -42,6 +44,8 @@ export async function GET() {
       connected: false,
       provider: "strava",
       activityCount: 0,
+      trainingZoneCount: 0,
+      activityZoneCount: 0,
       missingEnv: getMissingSupabaseEnvVars(),
       diagnostics
     });
@@ -76,6 +80,8 @@ export async function GET() {
       provider: "strava",
       status: "error",
       activityCount: 0,
+      trainingZoneCount: 0,
+      activityZoneCount: 0,
       lastSyncError: "Strava-Status konnte serverseitig nicht geladen werden. Details stehen in den Vercel Runtime Logs.",
       diagnostics
     });

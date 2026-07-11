@@ -2,10 +2,14 @@ import { createServiceRoleClient, isServiceRoleConfigured } from "@/lib/supabase
 import {
   getStravaActivity,
   getStravaActivityStreams,
+  getStravaActivityZones,
+  getStravaAthleteZones,
   listStravaActivities,
   mapStravaActivity,
   mapStravaEquipment,
-  refreshStravaToken
+  refreshStravaToken,
+  type StravaActivityZone,
+  type StravaAthleteZoneSet
 } from "@/lib/integrations/strava";
 
 type ExternalConnectionRow = {
@@ -45,6 +49,9 @@ export type IntegrationStatus = {
   lastSyncStatus?: string;
   lastSyncError?: string;
   activityCount: number;
+  trainingZoneCount: number;
+  activityZoneCount: number;
+  latestZoneSyncAt?: string;
   latestActivityAt?: string;
   latestSyncJob?: {
     status: string;
@@ -63,6 +70,8 @@ export type SyncResult = {
   updatedCount: number;
   skippedCount: number;
   activityCount: number;
+  trainingZoneCount: number;
+  activityZoneCount: number;
   lastSyncAt: string;
 };
 
@@ -96,7 +105,9 @@ export async function getStravaIntegrationStatus(userId: string): Promise<Integr
       configured: false,
       connected: false,
       provider: "strava",
-      activityCount: 0
+      activityCount: 0,
+      trainingZoneCount: 0,
+      activityZoneCount: 0
     };
   }
 
@@ -128,10 +139,29 @@ export async function getStravaIntegrationStatus(userId: string): Promise<Integr
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  const { count: trainingZoneCount } = await supabase
+    .from("training_zones")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("source_provider", "strava");
+  const { count: activityZoneCount } = await supabase
+    .from("activity_zones")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("source_provider", "strava");
+  const { data: latestZone } = await supabase
+    .from("training_zones")
+    .select("imported_at")
+    .eq("user_id", userId)
+    .eq("source_provider", "strava")
+    .order("imported_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   const typedConnection = connection as ExternalConnectionRow | null;
   const typedLatestActivity = latestActivity as { start_date?: string } | null;
   const typedLatestSyncJob = latestSyncJob as Record<string, unknown> | null;
+  const typedLatestZone = latestZone as { imported_at?: string } | null;
 
   return {
     configured: true,
@@ -147,6 +177,9 @@ export async function getStravaIntegrationStatus(userId: string): Promise<Integr
     lastSyncStatus: typedConnection?.last_sync_status ?? undefined,
     lastSyncError: typedConnection?.last_sync_error ?? undefined,
     activityCount: count ?? 0,
+    trainingZoneCount: trainingZoneCount ?? 0,
+    activityZoneCount: activityZoneCount ?? 0,
+    latestZoneSyncAt: typedLatestZone?.imported_at,
     latestActivityAt: typedLatestActivity?.start_date,
     latestSyncJob: typedLatestSyncJob ? {
       status: String(typedLatestSyncJob.status),
@@ -171,10 +204,16 @@ export async function syncStravaActivities(userId: string, syncType: "initial" |
     const after = syncType === "initial" ? undefined : await getIncrementalAfterTimestamp(userId);
     const maxPages = Number.parseInt(process.env.STRAVA_SYNC_MAX_PAGES ?? "50", 10);
     const streamLimit = Number.parseInt(process.env.STRAVA_STREAM_SYNC_LIMIT ?? "50", 10);
+    const activityZoneLimit = Number.parseInt(process.env.STRAVA_ACTIVITY_ZONE_SYNC_LIMIT ?? "50", 10);
     let importedCount = 0;
     let updatedCount = 0;
     let skippedCount = 0;
     let streamCount = 0;
+    let activityZoneCount = 0;
+    let activityZoneRequestCount = 0;
+    let activityZonesUnavailable = false;
+
+    const trainingZoneCount = await syncAthleteZones(connection.id, userId, accessToken);
 
     for (let page = 1; page <= maxPages; page += 1) {
       const activities = await listStravaActivities({
@@ -203,6 +242,13 @@ export async function syncStravaActivities(userId: string, syncType: "initial" |
         if (streamCount < streamLimit) {
           await syncStreams(activityId, userId, mapped.sourceActivityId, accessToken);
           streamCount += 1;
+        }
+
+        if (!activityZonesUnavailable && activityZoneRequestCount < activityZoneLimit) {
+          const zoneSyncResult = await syncActivityZones(activityId, userId, mapped.sourceActivityId, accessToken);
+          activityZoneRequestCount += 1;
+          if (zoneSyncResult === null) activityZonesUnavailable = true;
+          else activityZoneCount += zoneSyncResult;
         }
 
         if (wasExisting) updatedCount += 1;
@@ -237,6 +283,8 @@ export async function syncStravaActivities(userId: string, syncType: "initial" |
       updatedCount,
       skippedCount,
       activityCount: count ?? importedCount + updatedCount,
+      trainingZoneCount,
+      activityZoneCount,
       lastSyncAt
     };
   } catch (error) {
@@ -355,13 +403,79 @@ export async function loadRecentExternalActivitiesForCoach(userId: string) {
 
   const { data } = await supabase
     .from("activities")
-    .select("source_provider,source_activity_id,name,description,sport_type,workout_type,start_date,start_date_local,timezone,utc_offset,distance_meters,moving_time_seconds,elapsed_time_seconds,elevation_gain_meters,calories,average_speed_mps,max_speed_mps,average_pace_seconds_per_km,max_pace_seconds_per_km,average_heartrate,max_heartrate,average_watts,max_watts,weighted_average_watts,normalized_power,average_cadence,max_cadence,relative_effort,training_load,temperature_celsius,device_name,gear_id,gear_name,is_private,is_commute,is_indoor,is_manual")
+    .select("id,source_provider,source_activity_id,name,description,sport_type,workout_type,start_date,start_date_local,timezone,utc_offset,distance_meters,moving_time_seconds,elapsed_time_seconds,elevation_gain_meters,calories,average_speed_mps,max_speed_mps,average_pace_seconds_per_km,max_pace_seconds_per_km,average_heartrate,max_heartrate,average_watts,max_watts,weighted_average_watts,normalized_power,average_cadence,max_cadence,relative_effort,training_load,temperature_celsius,device_name,gear_id,gear_name,is_private,is_commute,is_indoor,is_manual")
     .eq("user_id", userId)
     .gte("start_date", since.toISOString())
     .order("start_date", { ascending: false })
     .limit(120);
 
-  return data ?? [];
+  const activities = (data ?? []) as Array<Record<string, unknown> & { id: string }>;
+  const activityIds = activities.map((activity) => activity.id).filter(Boolean);
+
+  if (activityIds.length === 0) return activities;
+
+  const { data: zoneRows } = await supabase
+    .from("activity_zones")
+    .select("activity_id,zone_type,score,sensor_based,custom_zones,points,distribution_buckets,imported_at")
+    .eq("user_id", userId)
+    .in("activity_id", activityIds);
+  const zonesByActivityId = ((zoneRows ?? []) as Array<Record<string, unknown> & { activity_id: string }>).reduce<Record<string, Record<string, unknown>[]>>((groups, zone) => {
+    groups[zone.activity_id] = [...(groups[zone.activity_id] ?? []), zone];
+    return groups;
+  }, {});
+
+  return activities.map((activity) => ({
+    ...activity,
+    zone_summaries: summarizeActivityZonesForCoach(zonesByActivityId[activity.id] ?? [])
+  }));
+}
+
+export async function loadTrainingZonesForCoach(userId: string) {
+  if (!isServiceRoleConfigured()) return [];
+
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("training_zones")
+    .select("source_provider,zone_type,sport_type,custom_zones,zones,imported_at")
+    .eq("user_id", userId)
+    .order("imported_at", { ascending: false })
+    .limit(12);
+
+  return (data ?? []).map((zone) => ({
+    sourceProvider: String(zone.source_provider ?? "unknown"),
+    zoneType: String(zone.zone_type ?? "unknown"),
+    sportType: typeof zone.sport_type === "string" ? zone.sport_type : null,
+    customZones: typeof zone.custom_zones === "boolean" ? zone.custom_zones : null,
+    zones: Array.isArray(zone.zones) ? zone.zones : [],
+    importedAt: typeof zone.imported_at === "string" ? zone.imported_at : null
+  }));
+}
+
+function summarizeActivityZonesForCoach(zones: Array<Record<string, unknown>>) {
+  return zones.map((zone) => ({
+    zoneType: String(zone.zone_type ?? "unknown"),
+    score: optionalNumber(zone.score) ?? null,
+    sensorBased: typeof zone.sensor_based === "boolean" ? zone.sensor_based : null,
+    customZones: typeof zone.custom_zones === "boolean" ? zone.custom_zones : null,
+    points: optionalNumber(zone.points) ?? null,
+    distribution: summarizeZoneDistribution(zone.distribution_buckets),
+    importedAt: typeof zone.imported_at === "string" ? zone.imported_at : null
+  }));
+}
+
+function summarizeZoneDistribution(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value.map((bucket, index) => {
+    const item = bucket && typeof bucket === "object" ? bucket as Record<string, unknown> : {};
+
+    return {
+      zone: optionalNumber(item.zone) ?? index + 1,
+      min: optionalNumber(item.min) ?? null,
+      max: optionalNumber(item.max) ?? null,
+      timeSeconds: optionalNumber(item.timeSeconds ?? item.time) ?? 0
+    };
+  });
 }
 
 function createStravaCronSchedule(now: Date) {
@@ -573,6 +687,161 @@ async function syncStreams(activityId: string, userId: string, sourceActivityId:
     })),
     { onConflict: "activity_id,stream_type" }
   );
+}
+
+async function syncAthleteZones(connectionId: string, userId: string, accessToken: string): Promise<number> {
+  const supabase = createServiceRoleClient();
+  const zones = await getStravaAthleteZones({ accessToken }).catch((error) => {
+    console.warn("[strava-zones] athlete zones unavailable", {
+      message: error instanceof Error ? error.message : "unknown"
+    });
+    return null;
+  });
+
+  if (!zones) return 0;
+
+  const rows = normalizeAthleteZoneRows(zones, connectionId, userId);
+  if (rows.length === 0) return 0;
+
+  const { error } = await supabase
+    .from("training_zones")
+    .upsert(rows, { onConflict: "user_id,source_provider,zone_type" });
+
+  if (error) {
+    console.warn("[strava-zones] athlete zones could not be stored", { message: error.message });
+    return 0;
+  }
+
+  return rows.length;
+}
+
+async function syncActivityZones(activityId: string, userId: string, sourceActivityId: string, accessToken: string): Promise<number | null> {
+  const supabase = createServiceRoleClient();
+  const zones = await getStravaActivityZones({ accessToken, activityId: sourceActivityId }).catch((error) => {
+    const message = error instanceof Error ? error.message : "unknown";
+    console.warn("[strava-zones] activity zones unavailable", {
+      sourceActivityId,
+      message
+    });
+    return isPermanentZoneSyncFailure(message) ? null : [];
+  });
+
+  if (zones === null) return null;
+  if (zones.length === 0) return 0;
+
+  const rows = zones
+    .map((zone) => normalizeActivityZoneRow(zone, activityId, userId, sourceActivityId))
+    .filter((row): row is NonNullable<ReturnType<typeof normalizeActivityZoneRow>> => Boolean(row));
+
+  if (rows.length === 0) return 0;
+
+  const { error } = await supabase
+    .from("activity_zones")
+    .upsert(rows, { onConflict: "activity_id,zone_type" });
+
+  if (error) {
+    console.warn("[strava-zones] activity zones could not be stored", {
+      sourceActivityId,
+      message: error.message
+    });
+    return 0;
+  }
+
+  return rows.length;
+}
+
+function isPermanentZoneSyncFailure(message: string): boolean {
+  return message.includes("(401)") || message.includes("(403)") || message.includes("(429)");
+}
+
+function normalizeAthleteZoneRows(zones: Record<string, unknown>, connectionId: string, userId: string) {
+  const importedAt = new Date().toISOString();
+  const entries: Array<{ sourceKey: string; zoneType: string; value: StravaAthleteZoneSet }> = [];
+
+  for (const sourceKey of Object.keys(zones)) {
+    const value = zones[sourceKey];
+    if (!isAthleteZoneSet(value)) continue;
+
+    entries.push({
+      sourceKey,
+      zoneType: normalizeZoneType(sourceKey),
+      value
+    });
+  }
+
+  return entries
+    .filter((entry) => entry.value.zones?.length)
+    .map((entry) => ({
+      user_id: userId,
+      source_provider: "strava",
+      source_connection_id: connectionId,
+      zone_type: entry.zoneType,
+      sport_type: null,
+      custom_zones: typeof entry.value.custom_zones === "boolean" ? entry.value.custom_zones : null,
+      zones: (entry.value.zones ?? []).map((zone, index) => ({
+        zone: index + 1,
+        min: optionalNumber(zone.min),
+        max: optionalNumber(zone.max)
+      })),
+      raw: {
+        sourceKey: entry.sourceKey,
+        ...entry.value
+      },
+      imported_at: importedAt
+    }));
+}
+
+function normalizeActivityZoneRow(zone: StravaActivityZone, activityId: string, userId: string, sourceActivityId: string) {
+  const zoneType = normalizeZoneType(String(zone.type ?? ""));
+  if (!zoneType || zoneType === "unknown") return null;
+
+  return {
+    activity_id: activityId,
+    user_id: userId,
+    source_provider: "strava",
+    source_activity_id: sourceActivityId,
+    zone_type: zoneType,
+    score: optionalNumber(zone.score) ?? null,
+    sensor_based: typeof zone.sensor_based === "boolean" ? zone.sensor_based : null,
+    custom_zones: typeof zone.custom_zones === "boolean" ? zone.custom_zones : null,
+    points: optionalNumber(zone.points) ?? null,
+    distribution_buckets: Array.isArray(zone.distribution_buckets)
+      ? zone.distribution_buckets.map((bucket, index) => ({
+        zone: index + 1,
+        min: optionalNumber(bucket.min),
+        max: optionalNumber(bucket.max),
+        timeSeconds: optionalNumber(bucket.time) ?? 0
+      }))
+      : [],
+    raw: zone,
+    imported_at: new Date().toISOString()
+  };
+}
+
+function isAthleteZoneSet(value: unknown): value is StravaAthleteZoneSet {
+  if (!value || typeof value !== "object") return false;
+
+  return Array.isArray((value as StravaAthleteZoneSet).zones);
+}
+
+function normalizeZoneType(value: string): string {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+  if (normalized === "heart_rate" || normalized === "heartrate" || normalized === "hr") return "heartrate";
+  if (normalized.includes("power") || normalized === "watts") return "power";
+  if (normalized.includes("pace")) return "pace";
+
+  return normalized || "unknown";
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
 }
 
 async function createSyncJob(userId: string, connectionId: string, syncType: string) {
