@@ -95,6 +95,7 @@ type AppStateContextValue = {
   saveWorkoutAsStandard: (date: string, workoutId: string) => void;
   removeWorkoutStandard: (templateId: string) => void;
   applyWorkoutStandard: (date: string, templateId: string) => void;
+  updateWorkout: (date: string, workoutId: string, workout: WorkoutDraft) => void;
   updateWorkoutStatus: (date: string, workoutId: string, status: WorkoutStatus) => void;
   removeWorkout: (date: string, workoutId: string) => void;
   addMealSlot: (date: string, slot: MealPlanSlot) => void;
@@ -412,6 +413,25 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         }
       }));
     },
+    updateWorkout: (date, workoutId, workout) => {
+      setState((current) => updateDay(current, date, (day) => {
+        const previousWorkout = day.workouts.find((item) => item.id === workoutId);
+        if (!previousWorkout) return day;
+
+        const nextWorkout: WorkoutPlan = {
+          ...previousWorkout,
+          ...workout,
+          id: previousWorkout.id,
+          date: previousWorkout.date
+        };
+
+        return {
+          ...day,
+          workouts: day.workouts.map((item) => item.id === workoutId ? nextWorkout : item),
+          blocks: updateWorkoutBlocks(day.blocks, previousWorkout, nextWorkout)
+        };
+      }));
+    },
     updateWorkoutStatus: (date, workoutId, status) => {
       setState((current) => updateDay(current, date, (day) => ({
         ...day,
@@ -419,10 +439,17 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
       })));
     },
     removeWorkout: (date, workoutId) => {
-      setState((current) => updateDay(current, date, (day) => ({
-        ...day,
-        workouts: day.workouts.filter((workout) => workout.id !== workoutId)
-      })));
+      setState((current) => updateDay(current, date, (day) => {
+        const workout = day.workouts.find((item) => item.id === workoutId);
+
+        return {
+          ...day,
+          workouts: day.workouts.filter((item) => item.id !== workoutId),
+          blocks: workout
+            ? day.blocks.filter((block) => !(block.type === "training" && block.label === workout.title))
+            : day.blocks
+        };
+      }));
     },
     addMealSlot: (date, slot) => {
       setState((current) => updateDay(current, date, (day) => ({
@@ -1158,6 +1185,23 @@ function createWorkoutBlock(workout: Pick<WorkoutPlan, "sport" | "title">): DayB
       ? "Fueling und Kohlenhydrate rund um den Lauf einplanen"
       : "Protein und Erholung passend zur Einheit sichern"
   };
+}
+
+function updateWorkoutBlocks(blocks: DayBlock[], previousWorkout: WorkoutPlan, nextWorkout: WorkoutPlan): DayBlock[] {
+  const nextBlock = createWorkoutBlock(nextWorkout);
+  let replaced = false;
+  const nextBlocks = blocks.map((block) => {
+    if (block.type !== "training" || block.label !== previousWorkout.title || replaced) return block;
+
+    replaced = true;
+    return {
+      ...block,
+      label: nextBlock.label,
+      impact: nextBlock.impact
+    };
+  });
+
+  return replaced ? nextBlocks : [...nextBlocks, nextBlock];
 }
 
 function inferExtraInfoBlockType(label: string): DayBlock["type"] {

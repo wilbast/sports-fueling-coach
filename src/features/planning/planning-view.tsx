@@ -12,6 +12,7 @@ import {
   Home,
   Layers3,
   MessageCircle,
+  Pencil,
   Plane,
   Plus,
   Sparkles,
@@ -39,6 +40,7 @@ import type {
   RunningWorkoutType,
   SportType,
   WorkoutIntensity,
+  WorkoutPlan,
   WorkoutStatus
 } from "@/domain/training/types";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
@@ -104,6 +106,7 @@ export function PlanningView() {
     addWorkout,
     saveWorkoutAsStandard: saveExistingWorkoutAsStandard,
     applyWorkoutStandard,
+    updateWorkout,
     updateWorkoutStatus,
     removeWorkout,
     saveCurrentWeekAsStandard,
@@ -122,6 +125,7 @@ export function PlanningView() {
   const [runningType, setRunningType] = useState<RunningWorkoutType>("easy_run");
   const [runningFocus, setRunningFocus] = useState<RunningFocus>("base");
   const [saveWorkoutAsStandard, setSaveWorkoutAsStandard] = useState(false);
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
   const [selectedWorkoutStandardId, setSelectedWorkoutStandardId] = useState(state.standards.workouts[0]?.id ?? "");
   const [selectedPlanningStandardId, setSelectedPlanningStandardId] = useState(state.standards.planning[0]?.id ?? "");
   const [planningStandardName, setPlanningStandardName] = useState("");
@@ -149,25 +153,62 @@ export function PlanningView() {
     }
   }, [selectedWeekTemplateId, selectedWorkoutStandardId, state.standards.weeks, state.standards.workouts]);
 
+  useEffect(() => {
+    if (editingWorkoutId && !selectedDay.workouts.some((workout) => workout.id === editingWorkoutId)) {
+      setEditingWorkoutId(null);
+    }
+  }, [editingWorkoutId, selectedDay.workouts]);
+
   function submitWorkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const title = workoutTitle.trim();
     if (!title) return;
 
-    addWorkout(selectedDay.date, {
+    const draft = {
       sport,
       title,
       startTime: startTime || undefined,
       durationMinutes: parseOptionalNumber(durationMinutes),
       distanceKm: sport === "running" ? parseOptionalNumber(distanceKm) : undefined,
-      status: "planned",
+      status: "planned" as WorkoutStatus,
       intensity,
       runningType: sport === "running" ? runningType : undefined,
       runningFocus: sport === "running" ? runningFocus : undefined,
       description: createWorkoutDescription(sport, intensity, runningType, runningFocus)
-    }, { saveAsStandard: saveWorkoutAsStandard });
+    };
+
+    if (editingWorkoutId) {
+      updateWorkout(selectedDay.date, editingWorkoutId, draft);
+    } else {
+      addWorkout(selectedDay.date, draft, { saveAsStandard: saveWorkoutAsStandard });
+    }
+
+    resetWorkoutForm();
+  }
+
+  function startEditingWorkout(workout: WorkoutPlan) {
+    setEditingWorkoutId(workout.id);
+    setWorkoutTitle(workout.title);
+    setSport(workout.sport);
+    setStartTime(workout.startTime ?? "");
+    setDurationMinutes(workout.durationMinutes ? String(workout.durationMinutes) : "");
+    setDistanceKm(workout.distanceKm ? String(workout.distanceKm).replace(".", ",") : "");
+    setIntensity(workout.intensity);
+    setRunningType(workout.runningType ?? "easy_run");
+    setRunningFocus(workout.runningFocus ?? "base");
+    setSaveWorkoutAsStandard(false);
+  }
+
+  function resetWorkoutForm() {
+    setEditingWorkoutId(null);
     setWorkoutTitle("");
     setDistanceKm("");
+    setStartTime("18:00");
+    setDurationMinutes("45");
+    setSport("running");
+    setIntensity("easy");
+    setRunningType("easy_run");
+    setRunningFocus("base");
     setSaveWorkoutAsStandard(false);
   }
 
@@ -563,6 +604,14 @@ export function PlanningView() {
                     ))}
                     <button
                       type="button"
+                      onClick={() => startEditingWorkout(workout)}
+                      className="flex min-h-9 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-muted transition hover:border-coach-100 hover:text-coach-700"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => saveExistingWorkoutAsStandard(selectedDay.date, workout.id)}
                       className="flex min-h-9 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-muted transition hover:border-coach-100 hover:text-coach-700"
                     >
@@ -583,6 +632,23 @@ export function PlanningView() {
             </div>
 
             <form onSubmit={submitWorkout} className="mt-5 grid gap-3 rounded-xl bg-canvas p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-ink">{editingWorkoutId ? "Einheit bearbeiten" : "Einheit hinzufügen"}</h3>
+                  {editingWorkoutId ? (
+                    <p className="mt-1 text-xs leading-5 text-muted">Speichert die Änderung direkt für diesen Tag.</p>
+                  ) : null}
+                </div>
+                {editingWorkoutId ? (
+                  <button
+                    type="button"
+                    onClick={resetWorkoutForm}
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-white px-3 text-xs font-semibold text-muted transition hover:border-coach-100 hover:text-ink"
+                  >
+                    Abbrechen
+                  </button>
+                ) : null}
+              </div>
               <input
                 value={workoutTitle}
                 onChange={(event) => setWorkoutTitle(event.target.value)}
@@ -664,6 +730,7 @@ export function PlanningView() {
                   type="checkbox"
                   checked={saveWorkoutAsStandard}
                   onChange={(event) => setSaveWorkoutAsStandard(event.target.checked)}
+                  disabled={Boolean(editingWorkoutId)}
                   className="h-4 w-4 rounded border-line text-coach-600"
                 />
                 Als Trainingsstandard speichern
@@ -672,8 +739,8 @@ export function PlanningView() {
                 type="submit"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Einheit hinzufügen
+                {editingWorkoutId ? <Pencil className="h-4 w-4" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+                {editingWorkoutId ? "Änderungen speichern" : "Einheit hinzufügen"}
               </button>
             </form>
           </Panel>

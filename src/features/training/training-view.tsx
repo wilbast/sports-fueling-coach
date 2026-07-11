@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Bike, BookmarkPlus, CircleDot, Dumbbell, Footprints, MessageCircle, Plus, Waves, X, Zap } from "lucide-react";
+import { Bike, BookmarkPlus, CircleDot, Dumbbell, Footprints, MessageCircle, Pencil, Plus, Waves, X, Zap } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import {
@@ -41,6 +41,7 @@ export function TrainingView() {
     addWorkout,
     applyWorkoutStandard,
     saveWorkoutAsStandard,
+    updateWorkout,
     updateWorkoutStatus,
     removeWorkout
   } = useAppState();
@@ -55,6 +56,7 @@ export function TrainingView() {
   const [runningFocus, setRunningFocus] = useState<RunningFocus>("base");
   const [saveAsStandard, setSaveAsStandard] = useState(false);
   const [selectedStandardId, setSelectedStandardId] = useState(state.standards.workouts[0]?.id ?? "");
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
   const weekStart = state.weekPlan.days[0]?.date ?? state.weekPlan.startsOn;
   const weekEnd = state.weekPlan.days[state.weekPlan.days.length - 1]?.date ?? state.weekPlan.startsOn;
   const today = getBerlinDate();
@@ -84,25 +86,66 @@ export function TrainingView() {
     }
   }, [selectedStandardId, state.standards.workouts]);
 
+  useEffect(() => {
+    if (editingWorkoutId && !selectedDay.workouts.some((workout) => workout.id === editingWorkoutId)) {
+      setEditingWorkoutId(null);
+    }
+  }, [editingWorkoutId, selectedDay.workouts]);
+
   function submitWorkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
 
-    addWorkout(selectedDay.date, {
+    const draft = {
       sport,
       title: trimmedTitle,
       startTime: startTime || undefined,
       durationMinutes: parseOptionalNumber(durationMinutes),
       distanceKm: sport === "running" ? parseOptionalNumber(distanceKm) : undefined,
-      status: "planned",
+      status: "planned" as WorkoutStatus,
       intensity,
       runningType: sport === "running" ? runningType : undefined,
       runningFocus: sport === "running" ? runningFocus : undefined,
       description: createDescription(sport, intensity, runningType, runningFocus)
-    }, { saveAsStandard });
+    };
+
+    if (editingWorkoutId) {
+      updateWorkout(selectedDay.date, editingWorkoutId, draft);
+    } else {
+      addWorkout(selectedDay.date, draft, { saveAsStandard });
+    }
+
+    resetWorkoutForm();
+  }
+
+  function startEditingWorkout(date: string, workout: WorkoutPlan) {
+    if (date !== selectedDay.date) {
+      setSelectedDate(date);
+    }
+
+    setEditingWorkoutId(workout.id);
+    setTitle(workout.title);
+    setSport(workout.sport);
+    setStartTime(workout.startTime ?? "");
+    setDurationMinutes(workout.durationMinutes ? String(workout.durationMinutes) : "");
+    setDistanceKm(workout.distanceKm ? String(workout.distanceKm).replace(".", ",") : "");
+    setIntensity(workout.intensity);
+    setRunningType(workout.runningType ?? "easy_run");
+    setRunningFocus(workout.runningFocus ?? "base");
+    setSaveAsStandard(false);
+  }
+
+  function resetWorkoutForm() {
+    setEditingWorkoutId(null);
     setTitle("");
     setDistanceKm("");
+    setStartTime("18:00");
+    setDurationMinutes("45");
+    setSport("running");
+    setIntensity("easy");
+    setRunningType("easy_run");
+    setRunningFocus("base");
     setSaveAsStandard(false);
   }
 
@@ -157,6 +200,7 @@ export function TrainingView() {
             overviewDate={overviewDate}
             onStatus={(workoutId, status) => updateWorkoutStatus(selectedDay.date, workoutId, status)}
             onSaveAsStandard={(workoutId) => saveWorkoutAsStandard(selectedDay.date, workoutId)}
+            onEdit={(workout) => startEditingWorkout(selectedDay.date, workout)}
             onRemove={(workoutId) => removeWorkout(selectedDay.date, workoutId)}
           />
         </div>
@@ -210,7 +254,23 @@ export function TrainingView() {
           </Panel>
 
           <Panel>
-            <h2 className="text-lg font-semibold text-ink">Einheit hinzufügen</h2>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-ink">{editingWorkoutId ? "Einheit bearbeiten" : "Einheit hinzufügen"}</h2>
+                {editingWorkoutId ? (
+                  <p className="mt-1 text-sm text-muted">Änderungen werden direkt für den ausgewählten Tag gespeichert.</p>
+                ) : null}
+              </div>
+              {editingWorkoutId ? (
+                <button
+                  type="button"
+                  onClick={resetWorkoutForm}
+                  className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-white px-3 text-xs font-semibold text-muted transition hover:border-coach-100 hover:text-ink"
+                >
+                  Abbrechen
+                </button>
+              ) : null}
+            </div>
             <form onSubmit={submitWorkout} className="mt-4 grid gap-3">
               <input
                 value={title}
@@ -293,6 +353,7 @@ export function TrainingView() {
                   type="checkbox"
                   checked={saveAsStandard}
                   onChange={(event) => setSaveAsStandard(event.target.checked)}
+                  disabled={Boolean(editingWorkoutId)}
                   className="h-4 w-4 rounded border-line text-coach-600"
                 />
                 Als Trainingsstandard speichern
@@ -301,8 +362,8 @@ export function TrainingView() {
                 type="submit"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
               >
-                {saveAsStandard ? <BookmarkPlus className="h-4 w-4" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-                Hinzufügen
+                {editingWorkoutId ? <Pencil className="h-4 w-4" aria-hidden="true" /> : saveAsStandard ? <BookmarkPlus className="h-4 w-4" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+                {editingWorkoutId ? "Änderungen speichern" : "Hinzufügen"}
               </button>
             </form>
           </Panel>
@@ -412,6 +473,7 @@ export function TrainingView() {
                         compact
                         onStatus={(status) => updateWorkoutStatus(day.date, workout.id, status)}
                         onSaveAsStandard={() => saveWorkoutAsStandard(day.date, workout.id)}
+                        onEdit={() => startEditingWorkout(day.date, workout)}
                         onRemove={() => removeWorkout(day.date, workout.id)}
                       />
                     ))}
@@ -425,6 +487,7 @@ export function TrainingView() {
                         compact
                         onStatus={(status) => updateWorkoutStatus(day.date, workout.id, status)}
                         onSaveAsStandard={() => saveWorkoutAsStandard(day.date, workout.id)}
+                        onEdit={() => startEditingWorkout(day.date, workout)}
                         onRemove={() => removeWorkout(day.date, workout.id)}
                       />
                     ))}
@@ -451,6 +514,7 @@ type SelectedTrainingDayProps = {
   overviewDate: string;
   onStatus: (workoutId: string, status: WorkoutStatus) => void;
   onSaveAsStandard: (workoutId: string) => void;
+  onEdit: (workout: WorkoutPlan) => void;
   onRemove: (workoutId: string) => void;
 };
 
@@ -466,6 +530,7 @@ function SelectedTrainingDay({
   overviewDate,
   onStatus,
   onSaveAsStandard,
+  onEdit,
   onRemove
 }: SelectedTrainingDayProps) {
   const isPast = date < overviewDate;
@@ -507,6 +572,7 @@ function SelectedTrainingDay({
                   compact
                   onStatus={(status) => onStatus(workout.id, status)}
                   onSaveAsStandard={() => onSaveAsStandard(workout.id)}
+                  onEdit={() => onEdit(workout)}
                   onRemove={() => onRemove(workout.id)}
                 />
               ))}
@@ -530,6 +596,7 @@ function SelectedTrainingDay({
                 workout={workout}
                 onStatus={(status) => onStatus(workout.id, status)}
                 onSaveAsStandard={() => onSaveAsStandard(workout.id)}
+                onEdit={() => onEdit(workout)}
                 onRemove={() => onRemove(workout.id)}
               />
             ))}
@@ -544,11 +611,12 @@ type WorkoutRowProps = {
   workout: WorkoutPlan;
   onStatus: (status: WorkoutStatus) => void;
   onSaveAsStandard: () => void;
+  onEdit: () => void;
   onRemove: () => void;
   compact?: boolean;
 };
 
-function WorkoutRow({ workout, onStatus, onSaveAsStandard, onRemove, compact = false }: WorkoutRowProps) {
+function WorkoutRow({ workout, onStatus, onSaveAsStandard, onEdit, onRemove, compact = false }: WorkoutRowProps) {
   const Icon = iconForSport(workout.sport);
 
   return (
@@ -581,6 +649,14 @@ function WorkoutRow({ workout, onStatus, onSaveAsStandard, onRemove, compact = f
             {statusLabels[status]}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex min-h-9 items-center gap-2 rounded-lg border border-line px-3 text-xs font-semibold text-muted transition hover:border-coach-100 hover:text-coach-700"
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          Bearbeiten
+        </button>
         <button
           type="button"
           onClick={onSaveAsStandard}
