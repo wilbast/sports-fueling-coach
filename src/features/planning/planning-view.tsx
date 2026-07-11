@@ -235,115 +235,128 @@ export function PlanningView() {
         }
       />
 
-      <WeekCalendar />
+      <div className="flex flex-col">
+        <details className="order-2 rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Wocheninformationen</p>
+              <h2 className="mt-1 text-lg font-semibold text-ink">{state.weekPlan.label}</h2>
+            </div>
+            <Pill tone="blue">Trainingslast {trainingLoad}</Pill>
+          </summary>
 
-      <section className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Panel>
-          <div className="flex items-start gap-3">
-            <CalendarDays className="mt-1 h-5 w-5 text-coach-600" aria-hidden="true" />
-            <div>
-              <p className="font-semibold text-ink">{state.weekPlan.label}</p>
-              <p className="mt-1 text-sm text-muted">{state.weekPlan.templateName}</p>
-            </div>
-          </div>
-        </Panel>
-        <Panel>
-          <div className="flex items-start gap-3">
-            <Dumbbell className="mt-1 h-5 w-5 text-coach-600" aria-hidden="true" />
-            <div>
-              <p className="font-semibold text-ink">Trainingslast</p>
-              <p className="mt-1 text-sm text-muted">Diese Woche: {trainingLoad}</p>
-            </div>
-          </div>
-        </Panel>
-        <Panel>
-          <div className="flex items-start gap-3">
-            <Layers3 className="mt-1 h-5 w-5 text-coach-600" aria-hidden="true" />
-            <div>
-              <p className="font-semibold text-ink">Standards</p>
-              <p className="mt-1 text-sm text-muted">{state.standards.weeks.length} Wochen · {state.standards.workouts.length} Einheiten</p>
-            </div>
-          </div>
-        </Panel>
-      </section>
+          <div className="mt-5 grid gap-6">
+            <WeekCalendar />
 
-      <Panel className="mb-6">
-        <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-          <div>
-            <div className="mb-3 flex items-center gap-2">
-              <Layers3 className="h-5 w-5 text-coach-600" aria-hidden="true" />
-              <h2 className="text-lg font-semibold text-ink">Standardwoche</h2>
-            </div>
-            {state.standards.weeks.length === 0 ? (
-              <div className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
-                Noch keine Standardwoche gespeichert. Plane eine echte Woche und speichere sie anschließend als Vorlage.
+            <section className="grid gap-3 sm:grid-cols-3">
+              <Panel>
+                <div className="flex items-start gap-3">
+                  <CalendarDays className="mt-1 h-5 w-5 text-coach-600" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold text-ink">{state.weekPlan.label}</p>
+                    <p className="mt-1 text-sm text-muted">{state.weekPlan.templateName}</p>
+                  </div>
+                </div>
+              </Panel>
+              <Panel>
+                <div className="flex items-start gap-3">
+                  <Dumbbell className="mt-1 h-5 w-5 text-coach-600" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold text-ink">Trainingslast</p>
+                    <p className="mt-1 text-sm text-muted">Diese Woche: {trainingLoad}</p>
+                  </div>
+                </div>
+              </Panel>
+              <Panel>
+                <div className="flex items-start gap-3">
+                  <Layers3 className="mt-1 h-5 w-5 text-coach-600" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold text-ink">Standards</p>
+                    <p className="mt-1 text-sm text-muted">{state.standards.weeks.length} Wochen · {state.standards.workouts.length} Einheiten</p>
+                  </div>
+                </div>
+              </Panel>
+            </section>
+
+            <Panel>
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <div>
+                  <div className="mb-3 flex items-center gap-2">
+                    <Layers3 className="h-5 w-5 text-coach-600" aria-hidden="true" />
+                    <h2 className="text-lg font-semibold text-ink">Standardwoche</h2>
+                  </div>
+                  {state.standards.weeks.length === 0 ? (
+                    <div className="rounded-xl bg-canvas px-3 py-3 text-sm leading-6 text-muted">
+                      Noch keine Standardwoche gespeichert. Plane eine echte Woche und speichere sie anschließend als Vorlage.
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <select
+                        value={selectedWeekTemplateId}
+                        onChange={(event) => setSelectedWeekTemplateId(event.target.value)}
+                        className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
+                        aria-label="Standardwoche auswählen"
+                      >
+                        {state.standards.weeks.map((template) => (
+                          <option key={template.id} value={template.id}>{template.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => applyWeekStandard(selectedWeekTemplateId)}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
+                      >
+                        Anwenden
+                      </button>
+                    </div>
+                  )}
+                  <p className="mt-2 text-sm leading-5 text-muted">
+                    Eine Standardwoche setzt Rahmenbedingungen, Training und grobe Fueling-Slots.
+                  </p>
+                </div>
+
+                <form onSubmit={saveWeekStandard} className="grid content-start gap-2">
+                  <label className="grid gap-2 text-sm font-semibold text-ink">
+                    Aktuelle Woche als Standard speichern
+                    <input
+                      value={weekStandardName}
+                      onChange={(event) => setWeekStandardName(event.target.value)}
+                      placeholder="z. B. Aufbauwoche mit langem Lauf"
+                      className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700"
+                  >
+                    <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
+                    Woche speichern
+                  </button>
+                </form>
               </div>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                <select
-                  value={selectedWeekTemplateId}
-                  onChange={(event) => setSelectedWeekTemplateId(event.target.value)}
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
-                  aria-label="Standardwoche auswählen"
-                >
-                  {state.standards.weeks.map((template) => (
-                    <option key={template.id} value={template.id}>{template.name}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => applyWeekStandard(selectedWeekTemplateId)}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
-                >
-                  Anwenden
-                </button>
+            </Panel>
+
+            <section>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-ink">Tage</h2>
+                <Pill tone="green">Kontext und Training</Pill>
               </div>
-            )}
-            <p className="mt-2 text-sm leading-5 text-muted">
-              Eine Standardwoche setzt Rahmenbedingungen, Training und grobe Fueling-Slots.
-            </p>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+                {state.weekPlan.days.map((day) => (
+                  <DayCard
+                    key={day.date}
+                    day={day}
+                    activityCount={activitiesByDate[day.date]?.length ?? 0}
+                    selected={day.date === selectedDay.date}
+                    onSelect={() => setSelectedDate(day.date)}
+                  />
+                ))}
+              </div>
+            </section>
           </div>
+        </details>
 
-          <form onSubmit={saveWeekStandard} className="grid content-start gap-2">
-            <label className="grid gap-2 text-sm font-semibold text-ink">
-              Aktuelle Woche als Standard speichern
-              <input
-                value={weekStandardName}
-                onChange={(event) => setWeekStandardName(event.target.value)}
-                placeholder="z. B. Aufbauwoche mit langem Lauf"
-                className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
-              />
-            </label>
-            <button
-              type="submit"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 text-sm font-semibold text-ink transition hover:border-coach-100 hover:text-coach-700"
-            >
-              <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
-              Woche speichern
-            </button>
-          </form>
-        </div>
-      </Panel>
-
-      <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-ink">Tage</h2>
-          <Pill tone="green">Kontext und Training</Pill>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-          {state.weekPlan.days.map((day) => (
-            <DayCard
-              key={day.date}
-              day={day}
-              activityCount={activitiesByDate[day.date]?.length ?? 0}
-              selected={day.date === selectedDay.date}
-              onSelect={() => setSelectedDate(day.date)}
-            />
-          ))}
-        </div>
-      </section>
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+        <div className="order-1 mb-6 grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="grid gap-6">
           <Panel>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -746,6 +759,7 @@ export function PlanningView() {
               {briefing.coachHint}
             </div>
           </Panel>
+        </div>
         </div>
       </div>
     </div>

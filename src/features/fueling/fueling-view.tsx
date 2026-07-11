@@ -160,8 +160,6 @@ export function FuelingView() {
         carbsRemaining={Math.max(0, estimateCarbsTarget(selectedDay.workouts.length) - selectedDayLoggedTotals.carbs)}
       />
 
-      <WeekCalendar />
-
       <section className="mb-6 grid gap-3 sm:grid-cols-2">
         <Panel>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Geloggt</p>
@@ -187,7 +185,7 @@ export function FuelingView() {
         <QuickFuelingPanel date={selectedDay.date} />
       </div>
 
-      <section className="mb-6 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+      <section className="mb-6 grid gap-6">
         <Panel>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -208,20 +206,6 @@ export function FuelingView() {
         </Panel>
 
         <Panel>
-          <div className="mb-4 flex items-center gap-2">
-            <History className="h-5 w-5 text-coach-600" aria-hidden="true" />
-            <h2 className="text-lg font-semibold text-ink">Historie dieser Woche</h2>
-          </div>
-          <MealLogList
-            logs={weeklyLogs.logs.slice(0, 8)}
-            isLoading={weeklyLogs.isLoading}
-            emptyText="Noch keine geloggten Mahlzeiten in dieser Woche."
-            onUpdate={updateLog}
-            onDelete={deleteLog}
-          />
-        </Panel>
-
-        <Panel className="lg:col-span-2">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-ink">Rezepte</h2>
             <Pill tone="neutral">vorbereitet</Pill>
@@ -231,6 +215,34 @@ export function FuelingView() {
           </p>
         </Panel>
       </section>
+
+      <details className="mb-6 rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Wocheninformationen</p>
+            <h2 className="mt-1 text-lg font-semibold text-ink">Fueling-Historie und Kalender</h2>
+          </div>
+          <Pill tone="blue">{weeklyLogs.logs.length} Logs</Pill>
+        </summary>
+
+        <div className="mt-5 grid gap-6">
+          <WeekCalendar />
+
+          <Panel>
+            <div className="mb-4 flex items-center gap-2">
+              <History className="h-5 w-5 text-coach-600" aria-hidden="true" />
+              <h2 className="text-lg font-semibold text-ink">Historie dieser Woche</h2>
+            </div>
+            <MealLogList
+              logs={weeklyLogs.logs.slice(0, 8)}
+              isLoading={weeklyLogs.isLoading}
+              emptyText="Noch keine geloggten Mahlzeiten in dieser Woche."
+              onUpdate={updateLog}
+              onDelete={deleteLog}
+            />
+          </Panel>
+        </div>
+      </details>
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.82fr]">
         <div className="grid gap-6">

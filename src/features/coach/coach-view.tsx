@@ -21,8 +21,6 @@ export function CoachView() {
         description="Der Coach nutzt Profil, Ziele, Training, Fueling, Standards und aktuelle Planung für konkrete Empfehlungen."
       />
 
-      <WeekCalendar />
-
       <section className="mb-6 grid gap-3 md:grid-cols-3">
         <Panel>
           <div className="flex items-start gap-3">
@@ -52,6 +50,20 @@ export function CoachView() {
           </div>
         </Panel>
       </section>
+
+      <details className="mb-6 rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Wocheninformationen</p>
+            <h2 className="mt-1 text-lg font-semibold text-ink">Coach-Kontext der Woche</h2>
+          </div>
+          <Pill tone="blue">{plannedWorkouts.length} Einheiten</Pill>
+        </summary>
+
+        <div className="mt-5">
+          <WeekCalendar />
+        </div>
+      </details>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.48fr]">
         <CoachChatPanel pageContext="coach" />

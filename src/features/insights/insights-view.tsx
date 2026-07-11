@@ -5,7 +5,7 @@ import { ArrowDownRight, BarChart3, Info, Target } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { createDailyBriefing } from "@/domain/briefing/create-daily-briefing";
 import { createDailyNutritionSummary, type MealLog } from "@/domain/nutrition/logs";
-import { getWeekTrainingLoad } from "@/domain/planning/week";
+import { getDayPlanByDate, getWeekTrainingLoad } from "@/domain/planning/week";
 import type { WeekPlan } from "@/domain/planning/types";
 import type { ExternalActivitySummary } from "@/features/activities/external-activities";
 import { useExternalActivities } from "@/features/activities/external-activities";
@@ -16,12 +16,14 @@ import { CoachRecommendationButton } from "@/features/coach/coach-recommendation
 
 export function InsightsView() {
   const { state } = useAppState();
+  const selectedDay = getDayPlanByDate(state.weekPlan, state.selectedDate);
   const insights = createInsights(state.weekPlan);
   const weekStart = state.weekPlan.days[0]?.date ?? state.selectedDate;
   const weekEnd = state.weekPlan.days[state.weekPlan.days.length - 1]?.date ?? state.selectedDate;
   const { activitiesByDate } = useExternalActivities(weekStart, weekEnd);
   const weekLogs = useWeekMealLogs(state.weekPlan.days.map((day) => day.date));
   const planVsActual = useMemo(() => createPlanVsActual(state, activitiesByDate, weekLogs.logs), [activitiesByDate, state, weekLogs.logs]);
+  const selectedDayInsight = planVsActual.days.find((day) => day.date === selectedDay.date);
   const currentWeight = state.profile.bodyMetrics.weightKg;
   const targetWeight = state.profile.bodyMetrics.targetWeightKg ?? currentWeight;
   const weightDelta = currentWeight - targetWeight;
@@ -41,14 +43,45 @@ export function InsightsView() {
         }
       />
 
-      <WeekCalendar />
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <InsightCard label="Training" value={`${planVsActual.week.trainingActual}/${planVsActual.week.trainingPlanned}`} detail="durchgeführt / geplant" />
-        <InsightCard label="Kalorien" value={`${planVsActual.week.caloriesActual}`} detail={`von ca. ${planVsActual.week.caloriesTarget} kcal Ziel`} />
-        <InsightCard label="Protein" value={`${planVsActual.week.proteinActual} g`} detail={`von ca. ${planVsActual.week.proteinTarget} g Ziel`} />
-        <InsightCard label="Trainingsbelastung" value={insights.trainingLoad} detail={`${insights.runningKm} km Laufen geplant`} />
+      <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <InsightCard label="Aktiver Tag" value={formatLongDate(selectedDay.date)} detail={selectedDay.focus} />
+        <InsightCard
+          label="Training heute"
+          value={`${selectedDayInsight?.trainingActual ?? 0}/${selectedDayInsight?.trainingPlanned ?? selectedDay.workouts.length}`}
+          detail="durchgeführt / geplant"
+        />
+        <InsightCard
+          label="Kalorien heute"
+          value={`${selectedDayInsight?.caloriesActual ?? 0}`}
+          detail={`von ca. ${selectedDayInsight?.caloriesTarget ?? 0} kcal Ziel`}
+        />
+        <InsightCard
+          label="Protein heute"
+          value={`${selectedDayInsight?.proteinActual ?? 0} g`}
+          detail={`von ca. ${selectedDayInsight?.proteinTarget ?? 0} g Ziel`}
+        />
       </section>
+
+      <details className="rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Wocheninformationen</p>
+            <h2 className="mt-1 text-lg font-semibold text-ink">Plan-vs-Ist der Woche</h2>
+          </div>
+          <Pill tone="blue">{insights.trainingLoad}</Pill>
+        </summary>
+
+        <div className="mt-5 grid gap-6">
+          <WeekCalendar />
+
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <InsightCard label="Training" value={`${planVsActual.week.trainingActual}/${planVsActual.week.trainingPlanned}`} detail="durchgeführt / geplant" />
+            <InsightCard label="Kalorien" value={`${planVsActual.week.caloriesActual}`} detail={`von ca. ${planVsActual.week.caloriesTarget} kcal Ziel`} />
+            <InsightCard label="Protein" value={`${planVsActual.week.proteinActual} g`} detail={`von ca. ${planVsActual.week.proteinTarget} g Ziel`} />
+            <InsightCard label="Trainingsbelastung" value={insights.trainingLoad} detail={`${insights.runningKm} km Laufen geplant`} />
+          </section>
+        </div>
+      </details>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Panel className="lg:col-span-2">
@@ -330,6 +363,11 @@ function createInterpretation(trainingLoad: "niedrig" | "mittel" | "hoch", runni
 
 function formatNumber(value: number): string {
   return value.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+}
+
+function formatLongDate(date: string): string {
+  return new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "numeric", month: "numeric" })
+    .format(new Date(`${date}T12:00:00`));
 }
 
 function formatWeekday(date: string): string {
