@@ -465,6 +465,9 @@ function summarizeWeeklyTrainingReality(
   const actualRunningActivities = actualActivities.filter(isRunningActivity);
   const completedManualRunningWorkouts = completedManualWorkouts.filter((workout) => workout.sport === "running");
   const futureRunningWorkouts = futurePlannedWorkouts.filter((workout) => workout.sport === "running");
+  const actualStrengthLikeActivities = actualActivities.filter(isStrengthLikeActivity);
+  const completedManualStrengthLikeWorkouts = completedManualWorkouts.filter(isStrengthLikeWorkout);
+  const futureStrengthLikeWorkouts = futurePlannedWorkouts.filter(isStrengthLikeWorkout);
   const actualRunningKm = roundTo(sumActivityDistanceKm(actualRunningActivities) + sumRunningKm(completedManualRunningWorkouts), 0.1);
   const futurePlannedRunningKm = sumRunningKm(futureRunningWorkouts);
 
@@ -478,6 +481,8 @@ function summarizeWeeklyTrainingReality(
       manualWorkoutCount: completedManualWorkouts.length,
       runningActivityCount: actualRunningActivities.length,
       manualRunningWorkoutCount: completedManualRunningWorkouts.length,
+      strengthLikeActivityCount: actualStrengthLikeActivities.length,
+      manualStrengthLikeWorkoutCount: completedManualStrengthLikeWorkouts.length,
       runningKm: actualRunningKm,
       totalCalories: roundTo(actualActivities.reduce((sum, activity) => sum + (activity.calories ?? 0), 0), 1),
       bySport: countBy([
@@ -493,6 +498,9 @@ function summarizeWeeklyTrainingReality(
       runningWorkoutCount: futureRunningWorkouts.length,
       runningKm: futurePlannedRunningKm,
       hardRunCount: futureRunningWorkouts.filter(isHardRunningWorkout).length,
+      strengthLikeWorkoutCount: futureStrengthLikeWorkouts.length,
+      hiitWorkoutCount: futureStrengthLikeWorkouts.filter((workout) => workout.sport === "hiit").length,
+      strengthLikeWorkouts: summarizeWorkouts(futureStrengthLikeWorkouts),
       workouts: summarizeWorkouts(futurePlannedWorkouts)
     },
     projectedWeek: {
@@ -505,12 +513,15 @@ function summarizeWeeklyTrainingReality(
         ...futureRunningWorkouts.map((workout) => workout.distanceKm ?? 0)
       ), 0.1),
       hardRunCount: actualRunningActivities.filter(isHardActualActivity).length + completedManualRunningWorkouts.filter(isHardRunningWorkout).length + futureRunningWorkouts.filter(isHardRunningWorkout).length,
+      strengthLikeWorkoutCount: actualStrengthLikeActivities.length + completedManualStrengthLikeWorkouts.length + futureStrengthLikeWorkouts.length,
+      hiitWorkoutCount: actualStrengthLikeActivities.filter(isHiitActivity).length + completedManualStrengthLikeWorkouts.filter((workout) => workout.sport === "hiit").length + futureStrengthLikeWorkouts.filter((workout) => workout.sport === "hiit").length,
       totalTrainingCount: actualActivities.length + completedManualWorkouts.length + futurePlannedWorkouts.length,
       bySport: countBy([
         ...actualActivities.map((activity) => normalizeActivitySport(activity)),
         ...completedManualWorkouts.map((workout) => workout.sport),
         ...futurePlannedWorkouts.map((workout) => workout.sport)
-      ])
+      ]),
+      interpretationRule: "HIIT zählt als zusätzliche Kraft-/Metabolikbelastung und nicht als Laufintervall oder harte Laufeinheit."
     },
     plannedPastNotCountedAsDone: summarizeWorkouts(pastPlannedWorkoutsNotCounted)
   };
@@ -537,6 +548,7 @@ function createAcuteTrainingLoad(
     .filter((workout) => workout.date >= lookbackStart && workout.date <= selectedDate)
     .filter((workout) => !actualActivityDates.has(workout.date));
   const completedManualRunningWorkouts = completedManualWorkouts.filter((workout) => workout.sport === "running");
+  const completedManualStrengthLikeWorkouts = completedManualWorkouts.filter(isStrengthLikeWorkout);
   const upcomingPlannedWorkouts = allDays
     .flatMap((day) => day.workouts)
     .filter((workout) => workout.status !== "cancelled")
@@ -544,6 +556,8 @@ function createAcuteTrainingLoad(
     .filter((workout) => workout.date >= selectedDate && workout.date <= lookaheadEnd)
     .filter((workout) => workout.date !== selectedDate || !actualActivityDates.has(workout.date));
   const upcomingRunningWorkouts = upcomingPlannedWorkouts.filter((workout) => workout.sport === "running");
+  const upcomingStrengthLikeWorkouts = upcomingPlannedWorkouts.filter(isStrengthLikeWorkout);
+  const recentStrengthLikeActivities = recentActivities.filter(isStrengthLikeActivity);
   const actualRunningKm = roundTo(sumActivityDistanceKm(recentRunningActivities) + sumRunningKm(completedManualRunningWorkouts), 0.1);
   const plannedRunningKm = sumRunningKm(upcomingRunningWorkouts);
 
@@ -557,8 +571,11 @@ function createAcuteTrainingLoad(
       manualWorkoutCount: completedManualWorkouts.length,
       runningSessionCount: recentRunningActivities.length + completedManualRunningWorkouts.length,
       runningKm: actualRunningKm,
+      strengthLikeWorkoutCount: recentStrengthLikeActivities.length + completedManualStrengthLikeWorkouts.length,
+      hiitWorkoutCount: recentStrengthLikeActivities.filter(isHiitActivity).length + completedManualStrengthLikeWorkouts.filter((workout) => workout.sport === "hiit").length,
       totalCalories: roundTo(recentActivities.reduce((sum, activity) => sum + (activity.calories ?? 0), 0), 1),
       hardSignalCount: recentActivities.filter(isHardActualActivity).length + completedManualRunningWorkouts.filter(isHardRunningWorkout).length,
+      hardRunningSignalCount: recentRunningActivities.filter(isHardActualActivity).length + completedManualRunningWorkouts.filter(isHardRunningWorkout).length,
       bySport: countBy([
         ...recentActivities.map((activity) => normalizeActivitySport(activity)),
         ...completedManualWorkouts.map((workout) => workout.sport)
@@ -573,6 +590,9 @@ function createAcuteTrainingLoad(
       runningWorkoutCount: upcomingRunningWorkouts.length,
       runningKm: plannedRunningKm,
       hardRunCount: upcomingRunningWorkouts.filter(isHardRunningWorkout).length,
+      strengthLikeWorkoutCount: upcomingStrengthLikeWorkouts.length,
+      hiitWorkoutCount: upcomingStrengthLikeWorkouts.filter((workout) => workout.sport === "hiit").length,
+      strengthLikeWorkouts: summarizeWorkouts(upcomingStrengthLikeWorkouts),
       workouts: summarizeWorkouts(upcomingPlannedWorkouts)
     },
     combinedLoad: {
@@ -584,12 +604,16 @@ function createAcuteTrainingLoad(
         ...completedManualRunningWorkouts.map((workout) => workout.distanceKm ?? 0),
         ...upcomingRunningWorkouts.map((workout) => workout.distanceKm ?? 0)
       ), 0.1),
-      hardRunCount: recentActivities.filter(isHardActualActivity).length + completedManualRunningWorkouts.filter(isHardRunningWorkout).length + upcomingRunningWorkouts.filter(isHardRunningWorkout).length,
+      hardRunCount: recentRunningActivities.filter(isHardActualActivity).length + completedManualRunningWorkouts.filter(isHardRunningWorkout).length + upcomingRunningWorkouts.filter(isHardRunningWorkout).length,
+      strengthLikeWorkoutCount: recentStrengthLikeActivities.length + completedManualStrengthLikeWorkouts.length + upcomingStrengthLikeWorkouts.length,
+      hiitWorkoutCount: recentStrengthLikeActivities.filter(isHiitActivity).length + completedManualStrengthLikeWorkouts.filter((workout) => workout.sport === "hiit").length + upcomingStrengthLikeWorkouts.filter((workout) => workout.sport === "hiit").length,
+      interpretationRule: "HIIT zählt als zusätzliche Kraft-/Metabolikbelastung und nicht als Laufintervall oder harte Laufeinheit.",
       totalTrainingCount: recentActivities.length + completedManualWorkouts.length + upcomingPlannedWorkouts.length
     },
     coachGuidance: [
       "Nutze combinedLoad für Aussagen wie 'zu viel', 'zu wenig' oder 'im Rahmen'.",
       "Bewerte nicht nur die einzelne heutige Einheit isoliert.",
+      "Zähle HIIT als zusätzliche Kraft-/Metabolikbelastung mit Regenerationskosten, aber nicht als Intervalltraining fürs Laufen.",
       "Wenn combinedLoad.runningKm im empfohlenen Rahmen liegt, warne nicht pauschal vor dem Lauf; bewerte stattdessen Intensität, Erholung und Fueling."
     ]
   };
@@ -650,9 +674,10 @@ function createRaceReadinessAssessment(
   const weeklyReality = summarizeWeeklyTrainingReality(weekPlan, externalActivities, selectedDate);
   const plannedWorkouts = weekPlan.days.flatMap((day) => day.workouts).filter((workout) => workout.status !== "cancelled");
   const plannedRunningWorkouts = plannedWorkouts.filter((workout) => workout.sport === "running");
+  const plannedStrengthLikeWorkouts = plannedWorkouts.filter(isStrengthLikeWorkout);
   const plannedRunningKm = sumRunningKm(plannedRunningWorkouts);
   const plannedLongRunKm = roundTo(Math.max(0, ...plannedRunningWorkouts.map((workout) => workout.distanceKm ?? 0)), 0.1);
-  const plannedHardRuns = plannedRunningWorkouts.filter((workout) => workout.intensity === "hard" || workout.runningFocus === "threshold" || workout.runningFocus === "vo2max").length;
+  const plannedHardRuns = plannedRunningWorkouts.filter(isHardRunningWorkout).length;
   const projectedRunningSessions = weeklyReality.projectedWeek.runningSessionCount;
   const projectedRunningKm = weeklyReality.projectedWeek.runningKm;
   const projectedLongRunKm = weeklyReality.projectedWeek.longestRunKm;
@@ -700,8 +725,12 @@ function createRaceReadinessAssessment(
       longestRunKm: plannedLongRunKm,
       hardRunCount: plannedHardRuns,
       qualityRunCount: plannedRunningWorkouts.filter((workout) => workout.runningType === "tempo_run" || workout.runningType === "intervals" || workout.runningType === "fartlek").length,
+      strengthLikeWorkoutCount: plannedStrengthLikeWorkouts.length,
+      hiitWorkoutCount: plannedStrengthLikeWorkouts.filter((workout) => workout.sport === "hiit").length,
       nonRunningWorkoutCount: plannedWorkouts.length - plannedRunningWorkouts.length,
-      runningSessions: summarizeWorkouts(plannedRunningWorkouts)
+      runningSessions: summarizeWorkouts(plannedRunningWorkouts),
+      additionalStrengthLoad: summarizeWorkouts(plannedStrengthLikeWorkouts),
+      interpretationRule: "HIIT ist zusätzliche Kraft-/Metabolikbelastung. Es zählt nicht als Laufintervall, VO2max-Lauf oder harte Laufeinheit."
     },
     projectedTrainingWeek: weeklyReality,
     recentActualRunning: {
@@ -722,6 +751,7 @@ function createRaceReadinessAssessment(
       "Bei Trainings- oder Wochenempfehlungen immer das Wettkampfziel, die aktuelle Planungswoche und die letzten echten Aktivitäten gemeinsam bewerten.",
       "Für vergangene Tage zählen erledigte externe Aktivitäten. Nur zukünftige geplante Workouts ergänzen den Wochenumfang.",
       "Wenn Laufanzahl, Wochenkilometer oder langer Lauf unter dem empfohlenen Rahmen liegen, sprich das explizit an und schlage eine realistische Verbesserung vor.",
+      "HIIT darf den Laufumfang oder die Anzahl harter Laufeinheiten nicht ersetzen. Bewerte es als zusätzliche Kraft-/Metaboliklast mit Einfluss auf Regeneration.",
       "Nicht nur bestätigen, was geplant ist. Als Coach ehrlich bewerten, ob der Plan zum Ziel passt.",
       "Planänderungen nur als Vorschlag formulieren, nicht automatisch speichern."
     ]
@@ -849,6 +879,7 @@ function normalizeActivitySport(activity: CoachExternalActivitySummary): string 
   if (sport.includes("run") || sport.includes("lauf")) return "running";
   if (sport.includes("ride") || sport.includes("cycling") || sport.includes("bike")) return "cycling";
   if (sport.includes("swim")) return "swimming";
+  if (sport.includes("hiit") || sport.includes("freeletics") || sport.includes("crossfit")) return "hiit";
   if (sport.includes("weight") || sport.includes("strength")) return "strength";
   return sport;
 }
@@ -912,6 +943,19 @@ function isHardActualActivity(activity: CoachExternalActivitySummary): boolean {
 function isHardRunningWorkout(workout: WorkoutPlan): boolean {
   return workout.sport === "running"
     && (workout.intensity === "hard" || workout.runningFocus === "threshold" || workout.runningFocus === "vo2max");
+}
+
+function isStrengthLikeWorkout(workout: WorkoutPlan): boolean {
+  return workout.sport === "strength" || workout.sport === "hiit";
+}
+
+function isStrengthLikeActivity(activity: CoachExternalActivitySummary): boolean {
+  const sport = normalizeActivitySport(activity);
+  return sport === "strength" || sport === "hiit";
+}
+
+function isHiitActivity(activity: CoachExternalActivitySummary): boolean {
+  return normalizeActivitySport(activity) === "hiit";
 }
 
 function parseRaceTargetPaceSeconds(targetTime: string, distanceKm: number): number | null {

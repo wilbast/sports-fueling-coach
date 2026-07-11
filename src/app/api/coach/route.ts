@@ -594,6 +594,7 @@ function createSystemPrompt(): string {
     "Bei Trainingsfragen ist acuteTrainingLoad die Pflichtgrundlage: Bewerte immer letzte 7 Tage echte Belastung plus offene geplante Einheiten ab ausgewähltem Tag und den nächsten Tagen. Eine heute geplante Einheit darf nicht ignoriert werden.",
     "Wenn der Nutzer fragt, ob eine konkrete heutige Einheit sinnvoll ist, vergleiche sie mit acuteTrainingLoad.combinedLoad, nicht isoliert mit dem heutigen Tag.",
     "Bei Trainings-, Lauf- und Wochenempfehlungen musst du raceReadiness und trainingReality aktiv nutzen: Bewerte Wettkampfziel, echte erledigte Aktivitäten, zukünftige Planung, Laufkilometer, Laufanzahl, langen Lauf und Intensitätsmix gemeinsam.",
+    "Wichtig: HIIT/Freeletics zählt als zusätzliche Kraft-/Metabolikbelastung mit Regenerationskosten. Es ist KEIN Lauf-Intervalltraining, kein VO2max-Lauf und darf nicht in hardRunCount, qualityRunCount oder Laufumfang eingerechnet werden.",
     "Für vergangene und ausgewählte Tage gilt: erledigte externe Aktivitäten aus Supabase/Strava sind die Bewertungsbasis. Geplante Workouts dieser Tage sind nur Referenz und dürfen nicht als erledigt gezählt werden.",
     "Für den Wochenumfang gilt: abgeschlossene Aktivitäten dieser Woche plus zukünftige geplante Workouts. Beispiel: Dienstag erledigt + spontaner Donnerstag-Lauf + geplanter Samstag-Lauf ergibt den projizierten Wochenumfang.",
     "Nutze bei Strava-Aktivitäten alle verfügbaren Kriterien aus dem Kontext: Distanz, Dauer, Pace/Geschwindigkeit, Herzfrequenz, Leistung, Kadenz, Höhenmeter, Kalorien, Relative Effort, Training Load, Indoor/Outdoor, Gerät und Schuhe.",
@@ -1607,7 +1608,7 @@ function createWorkoutDescription(sport: SportType, runningType?: RunningWorkout
   }
 
   if (sport === "strength") return "Kraftreiz, Protein in der nächsten Mahlzeit";
-  if (sport === "hiit") return "Intensitätsreiz, Erholung danach ernst nehmen";
+  if (sport === "hiit") return "Zusätzlicher Kraft-/Metabolikreiz, Erholung danach ernst nehmen";
   if (sport === "padel" || sport === "squash") return "Spielbelastung, Flüssigkeit und Abendessen mitdenken";
 
   return "Ausdauereinheit im Wochenkontext";
