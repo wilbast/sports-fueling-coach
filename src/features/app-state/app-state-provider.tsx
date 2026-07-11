@@ -33,6 +33,7 @@ import type {
 import { createClient as createSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "sports-fueling-coach:demo-state:v3";
+const APP_STATE_SCHEMA_VERSION = 5;
 
 export type AppState = {
   schemaVersion: number;
@@ -694,7 +695,7 @@ function createInitialAppState(): AppState {
   }
 
   return {
-    schemaVersion: 4,
+    schemaVersion: APP_STATE_SCHEMA_VERSION,
     appMode: "demo",
     profile: clone(demoUserProfile),
     goals: clone(demoUserGoals),
@@ -723,15 +724,17 @@ function normalizeAppState(parsed: Partial<AppState>): AppState {
   const fallback = createInitialAppState();
   const weekPlan = parsed.weekPlan ?? fallback.weekPlan;
   const weekPlans = parsed.weekPlans?.length ? parsed.weekPlans : [weekPlan];
+  const migratedWeekPlans = restoreInitialLongRunIfMissing(weekPlans);
+  const migratedWeekPlan = migratedWeekPlans.find((week) => week.startsOn === weekPlan.startsOn) ?? weekPlan;
 
   return selectDate({
-    schemaVersion: parsed.schemaVersion ?? fallback.schemaVersion,
+    schemaVersion: APP_STATE_SCHEMA_VERSION,
     appMode: parsed.appMode ?? fallback.appMode,
     updatedAt: parsed.updatedAt,
     profile: normalizeProfile(parsed.profile, fallback.profile),
     goals: parsed.goals ?? fallback.goals,
-    weekPlan,
-    weekPlans,
+    weekPlan: migratedWeekPlan,
+    weekPlans: migratedWeekPlans,
     mealTemplates: parsed.mealTemplates ?? fallback.mealTemplates,
     standards: normalizeStandards(parsed.standards, fallback.standards),
     energySettings: normalizeEnergySettings(parsed.energySettings, fallback.energySettings),
@@ -772,6 +775,61 @@ function normalizeStandards(
     workouts: standards?.workouts ?? fallback.workouts,
     weeks: standards?.weeks ?? fallback.weeks
   };
+}
+
+function restoreInitialLongRunIfMissing(weekPlans: WeekPlan[]): WeekPlan[] {
+  const originalDay = demoWeekPlan.days.find((day) => day.date === "2026-07-11");
+  const originalWorkout = originalDay?.workouts.find((workout) => workout.id === "long-run-2026-07-11");
+  const originalBlocks = originalDay?.blocks.filter((block) => block.id === "long-run-sa" || block.id === "nutrition-sa") ?? [];
+  if (!originalDay || !originalWorkout) return weekPlans;
+
+  const hasOriginalWeek = weekPlans.some((week) => week.startsOn === demoWeekPlan.startsOn);
+  const fallbackWeek = createEmptyWeekPlan(originalDay.date);
+  const plans = hasOriginalWeek
+    ? weekPlans
+    : [...weekPlans, {
+      ...fallbackWeek,
+      label: demoWeekPlan.label,
+      days: fallbackWeek.days.map((day) => ({
+        ...day,
+        focus: day.date === originalDay.date ? originalDay.focus : day.focus,
+        context: day.date === originalDay.date ? originalDay.context : day.context,
+        workouts: day.date === originalDay.date ? [clone(originalWorkout)] : day.workouts,
+        blocks: day.date === originalDay.date ? [...day.blocks, ...clone(originalBlocks)] : day.blocks,
+        note: day.date === originalDay.date ? originalDay.note : day.note
+      }))
+    }];
+
+  return plans.map((week) => {
+    if (week.startsOn !== demoWeekPlan.startsOn) return week;
+
+    return {
+      ...week,
+      days: week.days.map((day) => {
+        if (day.date !== originalDay.date) return day;
+        const hasLongRun = day.workouts.some((workout) => (
+          workout.sport === "running" &&
+          (workout.distanceKm ?? 0) >= 17 &&
+          (workout.title.toLowerCase().includes("langer") || workout.title.toLowerCase().includes("18"))
+        ));
+        if (hasLongRun) return day;
+
+        return {
+          ...day,
+          focus: day.focus || originalDay.focus,
+          context: day.context.length > 0 ? day.context : originalDay.context,
+          workouts: [...day.workouts, clone(originalWorkout)],
+          blocks: [
+            ...day.blocks,
+            ...originalBlocks
+              .filter((block) => !day.blocks.some((existingBlock) => existingBlock.id === block.id))
+              .map(clone)
+          ],
+          note: day.note || originalDay.note
+        };
+      })
+    };
+  });
 }
 
 function selectNewestState(remoteState: AppState, localState: AppState | null): AppState {

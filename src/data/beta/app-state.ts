@@ -5,7 +5,7 @@ import type { WeekPlan } from "@/domain/planning/types";
 import type { UserProfile } from "@/domain/profile/types";
 import type { AppStandards } from "@/domain/standards/types";
 
-const APP_STATE_SCHEMA_VERSION = 4;
+const APP_STATE_SCHEMA_VERSION = 5;
 
 type CreateBetaAppStateInput = {
   userId?: string;
