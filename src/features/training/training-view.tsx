@@ -77,7 +77,6 @@ export function TrainingView() {
     overviewDate,
     selectedDayActivities.length > 0
   );
-  const selectedReferenceWorkouts = getReferenceWorkouts(selectedDay.workouts, selectedDay.date, overviewDate);
 
   useEffect(() => {
     if (!selectedStandardId && state.standards.workouts[0]) {
@@ -154,7 +153,7 @@ export function TrainingView() {
             activitiesError={activitiesError}
             completedManualWorkouts={selectedCompletedManualWorkouts}
             remainingWorkouts={selectedRemainingWorkouts}
-            referenceWorkouts={selectedReferenceWorkouts}
+            dayPlanWorkouts={selectedDay.workouts}
             overviewDate={overviewDate}
             onStatus={(workoutId, status) => updateWorkoutStatus(selectedDay.date, workoutId, status)}
             onSaveAsStandard={(workoutId) => saveWorkoutAsStandard(selectedDay.date, workoutId)}
@@ -448,7 +447,7 @@ type SelectedTrainingDayProps = {
   activitiesError: string | null;
   completedManualWorkouts: WorkoutPlan[];
   remainingWorkouts: WorkoutPlan[];
-  referenceWorkouts: WorkoutPlan[];
+  dayPlanWorkouts: WorkoutPlan[];
   overviewDate: string;
   onStatus: (workoutId: string, status: WorkoutStatus) => void;
   onSaveAsStandard: (workoutId: string) => void;
@@ -463,7 +462,7 @@ function SelectedTrainingDay({
   activitiesError,
   completedManualWorkouts,
   remainingWorkouts,
-  referenceWorkouts,
+  dayPlanWorkouts,
   overviewDate,
   onStatus,
   onSaveAsStandard,
@@ -471,8 +470,7 @@ function SelectedTrainingDay({
 }: SelectedTrainingDayProps) {
   const isPast = date < overviewDate;
   const hasCompleted = activities.length > 0 || completedManualWorkouts.length > 0;
-  const plannedDayWorkouts = [...remainingWorkouts, ...referenceWorkouts];
-  const hasOpenPlan = plannedDayWorkouts.length > 0;
+  const hasDayPlan = dayPlanWorkouts.length > 0;
 
   return (
     <Panel>
@@ -484,7 +482,7 @@ function SelectedTrainingDay({
         </div>
         <div className="flex flex-wrap gap-2">
           <Pill tone={hasCompleted ? "amber" : "neutral"}>{activities.length + completedManualWorkouts.length} erledigt</Pill>
-          <Pill tone={hasOpenPlan ? "blue" : "neutral"}>{plannedDayWorkouts.length} geplant</Pill>
+          <Pill tone={hasDayPlan ? "blue" : "neutral"}>{dayPlanWorkouts.length} geplant</Pill>
         </div>
       </div>
 
@@ -519,14 +517,14 @@ function SelectedTrainingDay({
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="font-semibold text-ink">Geplanter Tagesplan</h3>
-            <Pill tone={plannedDayWorkouts.length > 0 ? "blue" : "neutral"}>{plannedDayWorkouts.length} Einheiten</Pill>
+            <Pill tone={dayPlanWorkouts.length > 0 ? "blue" : "neutral"}>{dayPlanWorkouts.length} Einheiten</Pill>
           </div>
           <div className="grid gap-3">
-            {plannedDayWorkouts.length === 0 ? (
+            {dayPlanWorkouts.length === 0 ? (
               <div className="rounded-xl bg-canvas px-3 py-3 text-sm text-muted">
                 {isPast ? "Kein geplanter Tagesplan vorhanden." : "Kein Training geplant."}
               </div>
-            ) : plannedDayWorkouts.map((workout) => (
+            ) : dayPlanWorkouts.map((workout) => (
               <WorkoutRow
                 key={workout.id}
                 workout={workout}
@@ -668,15 +666,6 @@ function getCompletedPlanWorkouts(workouts: WorkoutPlan[], dayDate: string, over
   return workouts
     .filter((workout) => workout.status === "completed")
     .filter((workout) => workout.status !== "cancelled");
-}
-
-function getReferenceWorkouts(workouts: WorkoutPlan[], dayDate: string, overviewDate: string): WorkoutPlan[] {
-  const remainingIds = new Set(getRemainingPlannedWorkouts(workouts, dayDate, overviewDate).map((workout) => workout.id));
-
-  return workouts
-    .filter((workout) => workout.status !== "cancelled")
-    .filter((workout) => workout.status !== "completed")
-    .filter((workout) => !remainingIds.has(workout.id));
 }
 
 function sumRunningActivityKm(activities: ExternalActivitySummary[]): number {
