@@ -3,7 +3,7 @@ import { getSupabaseConfig } from "@/lib/supabase/config";
 
 export function createServiceRoleClient() {
   const config = getSupabaseConfig();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceRoleKey = getServiceRoleKey();
 
   if (!config || !serviceRoleKey) {
     throw new Error("Supabase Service Role ist nicht konfiguriert.");
@@ -18,9 +18,17 @@ export function createServiceRoleClient() {
 }
 
 export function isServiceRoleConfigured(): boolean {
-  return Boolean(getSupabaseConfig() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+  return Boolean(getSupabaseConfig() && getServiceRoleKey());
 }
 
 export function getMissingServiceRoleEnvVars(): string[] {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ? [] : ["SUPABASE_SERVICE_ROLE_KEY"];
+  return getServiceRoleKey() ? [] : ["SUPABASE_SERVICE_ROLE_KEY oder SUPABASE_SERVICE_KEY"];
+}
+
+export function hasServiceRoleEnvValue(): boolean {
+  return Boolean(getServiceRoleKey());
+}
+
+function getServiceRoleKey(): string | undefined {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_SERVICE_KEY?.trim() || undefined;
 }

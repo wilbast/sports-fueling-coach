@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import { syncStravaActivities } from "@/lib/integrations/activity-sync";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getMissingStravaEnvVars } from "@/lib/integrations/strava";
+import { getMissingSupabaseEnvVars, isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { getMissingServiceRoleEnvVars } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: "Supabase ist nicht konfiguriert." }, { status: 503 });
+  const missingEnv = [
+    ...getMissingSupabaseEnvVars(),
+    ...getMissingServiceRoleEnvVars(),
+    ...getMissingStravaEnvVars()
+  ];
+
+  if (missingEnv.length > 0 || !isSupabaseConfigured()) {
+    return NextResponse.json({
+      error: `Strava ist serverseitig nicht vollständig konfiguriert. Fehlend: ${missingEnv.join(", ") || "Supabase-Konfiguration"}.`,
+      missingEnv
+    }, { status: 503 });
   }
 
   const supabase = createSupabaseServerClient();

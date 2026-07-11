@@ -72,6 +72,23 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: true });
 
   if (error) {
+    if (isSchemaCompatibilityError(error)) {
+      const legacy = await supabase
+        .from("meal_logs")
+        .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, created_at")
+        .eq("user_id", user.id)
+        .eq("logged_date", date)
+        .order("time_label", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
+
+      if (!legacy.error) {
+        return NextResponse.json({
+          logs: (legacy.data as MealLogRow[] | null ?? []).map(mapMealLog),
+          source: "supabase"
+        });
+      }
+    }
+
     console.error("[nutrition/logs] failed to load meal logs", { message: error.message });
     return NextResponse.json({ logs: [], error: "Mahlzeiten konnten nicht geladen werden." }, { status: 200 });
   }
@@ -104,35 +121,41 @@ export async function POST(request: Request) {
   }
 
   const values = body.values ?? {};
+  const insertPayload = createMealLogInsertPayload(user.id, body, name, date, values);
   const { data, error } = await supabase
     .from("meal_logs")
-    .insert({
-      user_id: user.id,
-      logged_date: date,
-      time_label: body.time?.trim() || null,
-      name,
-      description: body.description?.trim() || null,
-      source: normalizeSource(body.source),
-      source_id: normalizeUuid(body.sourceId),
-      calories: normalizeNumber(values.calories),
-      protein_grams: normalizeNumber(values.proteinGrams),
-      carbohydrate_grams: normalizeNumber(values.carbohydrateGrams),
-      fat_grams: typeof values.fatGrams === "number" ? normalizeNumber(values.fatGrams) : null,
-      confidence: normalizeConfidence(body.confidence),
-      estimate_rationale: body.rationale?.trim() || null,
-      manually_confirmed: Boolean(body.manuallyConfirmed),
-      raw_input: body.rawInput?.trim() || body.description?.trim() || name,
-      metadata: {
-        category: normalizeCategory(body.category, body.time, name),
-        isMainMeal: typeof body.isMainMeal === "boolean" ? body.isMainMeal : false
-      }
-    })
+    .insert(insertPayload)
     .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, metadata, created_at")
     .single();
 
   if (error) {
+    if (isSchemaCompatibilityError(error)) {
+      const legacy = await supabase
+        .from("meal_logs")
+        .insert(createLegacyMealLogInsertPayload(insertPayload))
+        .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, created_at")
+        .single();
+
+      if (!legacy.error) {
+        return NextResponse.json({ log: mapMealLog(legacy.data as MealLogRow), source: "supabase" });
+      }
+
+      console.error("[nutrition/logs] failed to insert legacy meal log", {
+        message: legacy.error.message,
+        code: getErrorCode(legacy.error)
+      });
+
+      return NextResponse.json({
+        error: `Mahlzeit konnte nicht gespeichert werden. Supabase: ${legacy.error.message}`,
+        code: getErrorCode(legacy.error)
+      }, { status: 500 });
+    }
+
     console.error("[nutrition/logs] failed to insert meal log", { message: error.message });
-    return NextResponse.json({ error: "Mahlzeit konnte nicht gespeichert werden." }, { status: 500 });
+    return NextResponse.json({
+      error: `Mahlzeit konnte nicht gespeichert werden. Supabase: ${error.message}`,
+      code: getErrorCode(error)
+    }, { status: 500 });
   }
 
   return NextResponse.json({ log: mapMealLog(data as MealLogRow), source: "supabase" });
@@ -161,36 +184,40 @@ export async function PATCH(request: Request) {
   }
 
   const values = body.values ?? {};
+  const updatePayload = createMealLogUpdatePayload(body, name, date, values);
   const { data, error } = await supabase
     .from("meal_logs")
-    .update({
-      logged_date: date,
-      time_label: body.time?.trim() || null,
-      name,
-      description: body.description?.trim() || null,
-      source: normalizeSource(body.source),
-      source_id: normalizeUuid(body.sourceId),
-      calories: normalizeNumber(values.calories),
-      protein_grams: normalizeNumber(values.proteinGrams),
-      carbohydrate_grams: normalizeNumber(values.carbohydrateGrams),
-      fat_grams: typeof values.fatGrams === "number" ? normalizeNumber(values.fatGrams) : null,
-      confidence: normalizeConfidence(body.confidence),
-      estimate_rationale: body.rationale?.trim() || null,
-      manually_confirmed: Boolean(body.manuallyConfirmed),
-      raw_input: body.rawInput?.trim() || body.description?.trim() || name,
-      metadata: {
-        category: normalizeCategory(body.category, body.time, name),
-        isMainMeal: Boolean(body.isMainMeal)
-      }
-    })
+    .update(updatePayload)
     .eq("id", id)
     .eq("user_id", user.id)
     .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, metadata, created_at")
     .single();
 
   if (error) {
+    if (isSchemaCompatibilityError(error)) {
+      const legacy = await supabase
+        .from("meal_logs")
+        .update(createLegacyMealLogInsertPayload(updatePayload))
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select("id, logged_date, time_label, name, description, source, calories, protein_grams, carbohydrate_grams, fat_grams, confidence, estimate_rationale, manually_confirmed, created_at")
+        .single();
+
+      if (!legacy.error) {
+        return NextResponse.json({ log: mapMealLog(legacy.data as MealLogRow), source: "supabase" });
+      }
+
+      return NextResponse.json({
+        error: `Mahlzeit konnte nicht gespeichert werden. Supabase: ${legacy.error.message}`,
+        code: getErrorCode(legacy.error)
+      }, { status: 500 });
+    }
+
     console.error("[nutrition/logs] failed to update meal log", { message: error.message });
-    return NextResponse.json({ error: "Mahlzeit konnte nicht gespeichert werden." }, { status: 500 });
+    return NextResponse.json({
+      error: `Mahlzeit konnte nicht gespeichert werden. Supabase: ${error.message}`,
+      code: getErrorCode(error)
+    }, { status: 500 });
   }
 
   return NextResponse.json({ log: mapMealLog(data as MealLogRow), source: "supabase" });
@@ -231,6 +258,58 @@ export async function DELETE(request: Request) {
   return NextResponse.json({ ok: true, date });
 }
 
+function createMealLogInsertPayload(
+  userId: string,
+  body: CreateMealLogBody,
+  name: string,
+  date: string,
+  values: NonNullable<CreateMealLogBody["values"]>
+) {
+  return {
+    user_id: userId,
+    ...createMealLogUpdatePayload(body, name, date, values)
+  };
+}
+
+function createMealLogUpdatePayload(
+  body: CreateMealLogBody,
+  name: string,
+  date: string,
+  values: NonNullable<CreateMealLogBody["values"]>
+) {
+  return {
+    logged_date: date,
+    time_label: body.time?.trim() || null,
+    name,
+    description: body.description?.trim() || null,
+    source: normalizeSource(body.source),
+    source_id: normalizeUuid(body.sourceId),
+    calories: normalizeNumber(values.calories),
+    protein_grams: normalizeNumber(values.proteinGrams),
+    carbohydrate_grams: normalizeNumber(values.carbohydrateGrams),
+    fat_grams: typeof values.fatGrams === "number" ? normalizeNumber(values.fatGrams) : null,
+    confidence: normalizeConfidence(body.confidence),
+    estimate_rationale: body.rationale?.trim() || null,
+    manually_confirmed: Boolean(body.manuallyConfirmed),
+    raw_input: body.rawInput?.trim() || body.description?.trim() || name,
+    metadata: {
+      category: normalizeCategory(body.category, body.time, name),
+      isMainMeal: typeof body.isMainMeal === "boolean" ? body.isMainMeal : false
+    }
+  };
+}
+
+function createLegacyMealLogInsertPayload<T extends Record<string, unknown>>(payload: T): Omit<T, "source_id" | "raw_input" | "metadata"> {
+  const {
+    source_id: _sourceId,
+    raw_input: _rawInput,
+    metadata: _metadata,
+    ...legacyPayload
+  } = payload;
+
+  return legacyPayload;
+}
+
 function mapMealLog(row: MealLogRow): MealLog {
   return {
     id: row.id,
@@ -252,6 +331,31 @@ function mapMealLog(row: MealLogRow): MealLog {
     isMainMeal: typeof row.metadata?.isMainMeal === "boolean" ? row.metadata.isMainMeal : false,
     createdAt: row.created_at
   };
+}
+
+function isSchemaCompatibilityError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  const code = getErrorCode(error);
+
+  return code === "42703"
+    || code === "PGRST204"
+    || message.includes("schema cache")
+    || message.includes("column")
+    || message.includes("source_id")
+    || message.includes("raw_input")
+    || message.includes("metadata");
+}
+
+function getErrorMessage(error: unknown): string {
+  return typeof error === "object" && error !== null && "message" in error && typeof error.message === "string"
+    ? error.message
+    : "";
+}
+
+function getErrorCode(error: unknown): string | null {
+  return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+    ? error.code
+    : null;
 }
 
 function normalizeSource(value: unknown): NutritionEstimateSource {
