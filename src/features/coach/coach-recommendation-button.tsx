@@ -5,6 +5,7 @@ import { ChefHat, Loader2, SendHorizontal, Sparkles, X } from "lucide-react";
 import { Panel } from "@/components/ui";
 import type { CoachPlanResponse } from "@/domain/coach/types";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { requestCoachStream } from "@/features/coach/coach-stream";
 
 type CoachPageContext = "today" | "fueling" | "training" | "planning" | "insights" | "settings" | "coach";
 
@@ -82,26 +83,53 @@ export function CoachRecommendationButton({
     }
 
     try {
-      const apiResponse = await fetch("/api/coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const assistantId = `recommendation-stream-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      let streamedContent = "";
+      let assistantBubbleStarted = false;
+
+      await requestCoachStream(
+        {
           message: options.apiMessage ?? message,
           pageContext,
           threadId,
           state: payloadState
-        })
-      });
-      const result = await apiResponse.json() as CoachPlanResponse & { error?: string };
+        },
+        {
+          onDelta: (text) => {
+            streamedContent += text;
 
-      if (!apiResponse.ok) {
-        throw new Error(result.error ?? "Coach-Empfehlung konnte nicht geladen werden.");
-      }
+            setMessages((current) => {
+              const existing = current.find((item) => item.id === assistantId);
+              if (existing) {
+                return current.map((item) => item.id === assistantId ? { ...item, content: streamedContent } : item);
+              }
 
-      setMessages((current) => [
-        ...current,
-        createRecommendationMessage("assistant", result.assistantMessage, result)
-      ]);
+              assistantBubbleStarted = true;
+              return [
+                ...current,
+                {
+                  ...createRecommendationMessage("assistant", streamedContent),
+                  id: assistantId
+                }
+              ];
+            });
+          },
+          onFinal: (result) => {
+            setMessages((current) => {
+              const finalMessage = {
+                ...createRecommendationMessage("assistant", result.assistantMessage, result),
+                id: assistantId
+              };
+
+              if (assistantBubbleStarted || current.some((item) => item.id === assistantId)) {
+                return current.map((item) => item.id === assistantId ? finalMessage : item);
+              }
+
+              return [...current, finalMessage];
+            });
+          }
+        }
+      );
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Coach-Empfehlung konnte nicht geladen werden.");
     } finally {

@@ -41,6 +41,12 @@ Die Trainingsplanung unterscheidet jetzt Laufen, Padel Tennis, Schwimmen, Squash
 
 Der aktuelle Sprint macht Strava zur ersten externen Datenquelle. Nutzer können Strava per OAuth verbinden, Aktivitäten initial und manuell synchronisieren und den Verbindungsstatus in den Einstellungen sehen. Intern werden die Aktivitäten nicht als isolierte Strava-Daten behandelt, sondern in ein providerneutrales Aktivitätsmodell gemappt. Damit ist die App auf weitere Quellen wie Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings vorbereitet.
 
+Der neueste Coach-Kontext-Sprint verbessert die Trainingsbewertung: Der Coach zählt vergangene oder ausgewählte Tage nicht mehr aus dem Plan, sondern aus tatsächlich importierten Aktivitäten. Für die laufende Woche kombiniert er erledigte Strava-Aktivitäten mit zukünftigen geplanten Workouts. Dadurch werden spontane Einheiten direkt im projizierten Wochenumfang, in der Wettkampfbereitschaft und in Trainingsempfehlungen berücksichtigt.
+
+Der Coach-Chat unterstützt jetzt Streaming: Die UI zeigt den Antworttext live während der Provider-Antwort an. Die finalen Outcomes, Suggestions und Übernahme-Aktionen werden erst nach Abschluss der strukturierten Antwort gesetzt.
+
+Heute, Training und Fueling zeigen nun oben einen zeitabhängigen Coach-Impuls für 06:00, 14:00 und 21:00 Uhr. Der Block ist bewusst leichtgewichtig und regelbasiert, damit die Seiten sofort laden und keine automatischen AI-Kosten beim Öffnen entstehen.
+
 ## Verifikation
 
 - `pnpm typecheck` erfolgreich
@@ -99,9 +105,11 @@ Weitere Bereiche:
 - KI: providerunabhängige serverseitige AI-Schicht, aktueller Startprovider OpenAI, Fallback regelbasiert
 - Coach-Modi: `coach`, `planning`, `change`; Planänderungen werden erst nach Bestätigung angewendet
 - Coach-Historie: `coach_chat_messages` speichert User-/Coach-Nachrichten RLS-geschützt pro Nutzer und Thread
-- Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale, manuelle und tägliche Vercel-Hobby-Cron-Synchronisation, providerneutrale Aktivitätstabellen
+- Coach-Streaming: `/api/coach?stream=1` liefert `delta`-Events für Live-Text und ein finales `CoachPlanResponse`-Objekt
+- Zeitabhängige Coach-Impulse: Today, Training und Fueling zeigen 06:00-/14:00-/21:00-Zusammenfassungen aus aktuellem Seitenkontext
+- Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale, manuelle und tägliche Vercel-Hobby-Cron-Synchronisation um `23:00 UTC`, providerneutrale Aktivitätstabellen
 - Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `equipment`, `sync_jobs`
-- Coach-Kontext: externe Aktivitäten werden serverseitig aus Supabase geladen und strukturiert zusammengefasst; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
+- Coach-Kontext: externe Aktivitäten werden serverseitig aus Supabase geladen, mit erweiterten Strava-Kriterien strukturiert zusammengefasst und als Ist-plus-Zukunft-Bewertung in den Wochenumfang einbezogen; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
 - Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros
 - Meal-Log-Metadaten: Kategorie und Hauptmahlzeit werden in `metadata` gespeichert und in Coach-Kontext, Today und Fueling-UI genutzt
 - Coach Page Context: `/api/coach` akzeptiert `pageContext` und schärft die Empfehlung je nach App-Bereich
@@ -121,7 +129,7 @@ Weitere Bereiche:
 - Es gibt noch keine automatisierten Unit-Tests.
 - Der Coach bietet übernehmbare Vorschläge, hat aber noch keine Undo-Historie.
 - Schlaf, Krankheit, Alkohol und Regeneration sind noch keine echten Zeitreihen. Wasser wird bewusst nicht getrackt.
-- Tagesbewertung ist bewusst noch nicht aktiv, weil dafür mehr Ist-Daten nötig sind.
+- Trainingstage und Wochenumfang werden nur so gut bewertet wie die importierten Ist-Aktivitäten; ohne Sync bleibt die Planung Referenz.
 - Alte Coach-Antworten werden als Textverlauf wiederhergestellt; frühere Vorschlagsbuttons werden nach Reload nicht rekonstruiert.
 - Strava-Synchronisation ist implementiert, aber ohne echte Strava-Credentials und produktive Supabase-Migration nicht live verifiziert.
 

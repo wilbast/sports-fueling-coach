@@ -30,6 +30,7 @@ export type AiJsonResult =
     model: string;
     hasApiKey: boolean;
     generateJson: (request: AiJsonRequest) => Promise<string>;
+    streamJson: (request: AiJsonRequest) => AsyncIterable<string>;
   }
   | {
     status: "invalid";

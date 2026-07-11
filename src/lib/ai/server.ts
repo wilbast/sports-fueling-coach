@@ -91,6 +91,13 @@ export function resolveAiJsonClient(): AiJsonResult {
       apiKey: configuredApiKey,
       model: configuredModel,
       provider: rawProvider
+    }),
+    streamJson: (request) => requestProviderJsonStream({
+      ...request,
+      endpoint: providerConfig.endpoint,
+      apiKey: configuredApiKey,
+      model: configuredModel,
+      provider: rawProvider
     })
   };
 }
@@ -127,31 +134,7 @@ export function getAiErrorDebug(error: unknown, client: Extract<AiJsonResult, { 
 }
 
 async function requestProviderJson(request: ProviderJsonRequest): Promise<string> {
-  const body: Record<string, unknown> = {
-    model: request.model,
-    messages: [
-      {
-        role: "system",
-        content: request.systemPrompt
-      },
-      {
-        role: "user",
-        content: JSON.stringify(request.userPayload)
-      }
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: request.schemaName,
-        strict: false,
-        schema: request.schema
-      }
-    }
-  };
-
-  if (supportsCustomTemperature(request.provider, request.model)) {
-    body.temperature = 0.2;
-  }
+  const body = createProviderJsonRequestBody(request);
 
   const response = await fetch(request.endpoint, {
     method: "POST",
@@ -191,6 +174,130 @@ async function requestProviderJson(request: ProviderJsonRequest): Promise<string
   }
 
   return content;
+}
+
+async function* requestProviderJsonStream(request: ProviderJsonRequest): AsyncIterable<string> {
+  const body = {
+    ...createProviderJsonRequestBody(request),
+    stream: true
+  };
+
+  const response = await fetch(request.endpoint, {
+    method: "POST",
+    headers: createHeaders(request.provider, request.apiKey),
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    const providerError = parseProviderError(detail);
+    throw new AiProviderRequestError({
+      httpStatus: response.status,
+      errorCode: providerError.code,
+      message: providerError.message || `AI provider request failed with HTTP ${response.status}.`,
+      model: request.model,
+      hasApiKey: Boolean(request.apiKey)
+    });
+  }
+
+  if (!response.body) {
+    throw new AiProviderRequestError({
+      httpStatus: response.status,
+      errorCode: "empty_ai_stream",
+      message: "AI provider returned no response stream.",
+      model: request.model,
+      hasApiKey: Boolean(request.apiKey)
+    });
+  }
+
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+
+        const payload = trimmed.slice("data:".length).trim();
+        if (!payload || payload === "[DONE]") continue;
+
+        const content = parseStreamDelta(payload);
+        if (content) yield content;
+      }
+    }
+
+    const tail = decoder.decode();
+    if (tail) buffer += tail;
+
+    for (const line of buffer.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+
+      const payload = trimmed.slice("data:".length).trim();
+      if (!payload || payload === "[DONE]") continue;
+
+      const content = parseStreamDelta(payload);
+      if (content) yield content;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function createProviderJsonRequestBody(request: ProviderJsonRequest): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: request.model,
+    messages: [
+      {
+        role: "system",
+        content: request.systemPrompt
+      },
+      {
+        role: "user",
+        content: JSON.stringify(request.userPayload)
+      }
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: request.schemaName,
+        strict: false,
+        schema: request.schema
+      }
+    }
+  };
+
+  if (supportsCustomTemperature(request.provider, request.model)) {
+    body.temperature = 0.2;
+  }
+
+  return body;
+}
+
+function parseStreamDelta(payload: string): string {
+  try {
+    const parsed = JSON.parse(payload) as {
+      choices?: Array<{
+        delta?: {
+          content?: unknown;
+        };
+      }>;
+    };
+
+    const content = parsed.choices?.[0]?.delta?.content;
+    return typeof content === "string" ? content : "";
+  } catch {
+    return "";
+  }
 }
 
 function parseProviderError(detail: string): { code: string | null; message: string } {

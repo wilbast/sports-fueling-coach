@@ -56,6 +56,19 @@ export async function POST(request: NextRequest) {
   const conversationHistory = user ? await loadCoachChatHistory(user.id, threadId, 16) : [];
   const coachState = await resolveCoachSourceState(state, user?.id);
   const aiClient = resolveAiJsonClient();
+  const pageContext = body?.pageContext ?? "coach";
+
+  if (request.nextUrl.searchParams.get("stream") === "1") {
+    return streamCoachResponse({
+      message,
+      threadId,
+      pageContext,
+      userId: user?.id,
+      conversationHistory,
+      coachState,
+      aiClient
+    });
+  }
 
   if (aiClient.status === "disabled") {
     const fallback = {
@@ -72,7 +85,7 @@ export async function POST(request: NextRequest) {
         }
       }
     };
-    await persistCoachExchange(user?.id, threadId, message, fallback, createChatMetadata(coachState, body?.pageContext ?? "coach", message));
+    await persistCoachExchange(user?.id, threadId, message, fallback, createChatMetadata(coachState, pageContext, message));
     return NextResponse.json(fallback);
   }
 
@@ -87,7 +100,7 @@ export async function POST(request: NextRequest) {
         debug: aiClient.debug
       }
     };
-    await persistCoachExchange(user?.id, threadId, message, response, createChatMetadata(coachState, body?.pageContext ?? "coach", message));
+    await persistCoachExchange(user?.id, threadId, message, response, createChatMetadata(coachState, pageContext, message));
 
     return NextResponse.json(response);
   }
@@ -96,7 +109,7 @@ export async function POST(request: NextRequest) {
     const outputText = await aiClient.generateJson({
       systemPrompt: createSystemPrompt(),
       userPayload: {
-        ...buildCoachContext(message, coachState, body?.pageContext ?? "coach"),
+        ...buildCoachContext(message, coachState, pageContext),
         conversationHistory: conversationHistory.map((item) => ({
           role: item.role,
           content: item.content,
@@ -114,7 +127,7 @@ export async function POST(request: NextRequest) {
         status: "configured" as const
       }
     };
-    await persistCoachExchange(user?.id, threadId, message, response, createChatMetadata(coachState, body?.pageContext ?? "coach", message));
+    await persistCoachExchange(user?.id, threadId, message, response, createChatMetadata(coachState, pageContext, message));
 
     return NextResponse.json(response);
   } catch (error) {
@@ -127,9 +140,202 @@ export async function POST(request: NextRequest) {
         debug
       }
     };
-    await persistCoachExchange(user?.id, threadId, message, fallback, createChatMetadata(coachState, body?.pageContext ?? "coach", message));
+    await persistCoachExchange(user?.id, threadId, message, fallback, createChatMetadata(coachState, pageContext, message));
     return NextResponse.json(fallback);
   }
+}
+
+type CoachStreamInput = {
+  message: string;
+  threadId: string;
+  pageContext: CoachPageContext;
+  userId?: string;
+  conversationHistory: CoachChatHistoryMessage[];
+  coachState: CoachContextSource;
+  aiClient: ReturnType<typeof resolveAiJsonClient>;
+};
+
+function streamCoachResponse(input: CoachStreamInput): Response {
+  const encoder = new TextEncoder();
+  let hasSentVisibleText = false;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string, payload: unknown) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+      };
+      const sendFinalResponse = async (response: CoachPlanResponse) => {
+        if (!hasSentVisibleText && response.assistantMessage) {
+          hasSentVisibleText = true;
+          send("delta", { text: response.assistantMessage });
+        }
+
+        send("final", response);
+        await persistCoachExchange(input.userId, input.threadId, input.message, response, createChatMetadata(input.coachState, input.pageContext, input.message));
+      };
+
+      try {
+        if (input.aiClient.status === "disabled") {
+          await sendFinalResponse({
+            ...createFallbackCoachResponse(input.message, input.coachState),
+            ai: {
+              status: "fallback",
+              message: "OPENAI_API_KEY fehlt oder AI ist nicht konfiguriert. Der regelbasierte Fallback antwortet.",
+              debug: {
+                httpStatus: null,
+                errorCode: "ai_disabled",
+                message: "AI_PROVIDER, AI_API_KEY oder OPENAI_API_KEY ist nicht gesetzt.",
+                model: process.env.AI_MODEL?.trim() || null,
+                hasApiKey: Boolean(process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim())
+              }
+            }
+          });
+          return;
+        }
+
+        if (input.aiClient.status === "invalid") {
+          const fallback = createFallbackCoachResponse(input.message, input.coachState);
+          await sendFinalResponse({
+            ...fallback,
+            assistantMessage: `${fallback.assistantMessage} ${input.aiClient.message} Ich nutze deshalb den regelbasierten Fallback.`,
+            ai: {
+              status: "fallback",
+              message: input.aiClient.message,
+              debug: input.aiClient.debug
+            }
+          });
+          return;
+        }
+
+        const extractor = createAssistantMessageExtractor();
+        let outputText = "";
+
+        for await (const chunk of input.aiClient.streamJson({
+          systemPrompt: createSystemPrompt(),
+          userPayload: {
+            ...buildCoachContext(input.message, input.coachState, input.pageContext),
+            conversationHistory: input.conversationHistory.map((item) => ({
+              role: item.role,
+              content: item.content,
+              mode: item.mode,
+              createdAt: item.createdAt
+            }))
+          },
+          schemaName: "sports_fueling_coach_plan_response",
+          schema: createCoachResponseSchema()
+        })) {
+          outputText += chunk;
+          const visibleDelta = extractor.push(chunk);
+          if (visibleDelta) {
+            hasSentVisibleText = true;
+            send("delta", { text: visibleDelta });
+          }
+        }
+
+        const parsed = outputText ? JSON.parse(outputText) as Partial<CoachPlanResponse> : null;
+        await sendFinalResponse({
+          ...normalizeCoachResponse(parsed, input.coachState.weekPlan.days, input.message),
+          ai: {
+            status: "configured"
+          }
+        });
+      } catch (error) {
+        const debug = input.aiClient.status === "configured"
+          ? getAiErrorDebug(error, input.aiClient)
+          : {
+            httpStatus: null,
+            errorCode: "ai_stream_failed",
+            message: error instanceof Error ? error.message : "AI stream failed.",
+            model: process.env.AI_MODEL?.trim() || null,
+            hasApiKey: Boolean(process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim())
+          };
+        await sendFinalResponse({
+          ...createFallbackCoachResponse(input.message, input.coachState),
+          ai: {
+            status: "fallback",
+            message: "OpenAI konnte gerade nicht antworten. Der regelbasierte Fallback wurde genutzt.",
+            debug
+          }
+        });
+      } finally {
+        send("done", { ok: true });
+        controller.close();
+      }
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no"
+    }
+  });
+}
+
+function createAssistantMessageExtractor() {
+  let rawJson = "";
+  let emitted = "";
+
+  return {
+    push(chunk: string) {
+      rawJson += chunk;
+      const current = extractAssistantMessagePrefix(rawJson);
+      if (!current.found || current.value.length <= emitted.length) return "";
+
+      const delta = current.value.slice(emitted.length);
+      emitted = current.value;
+      return delta;
+    }
+  };
+}
+
+function extractAssistantMessagePrefix(jsonText: string): { found: boolean; value: string } {
+  const match = /"assistantMessage"\s*:\s*"/.exec(jsonText);
+  if (!match) return { found: false, value: "" };
+
+  const start = match.index + match[0].length;
+  let value = "";
+
+  for (let index = start; index < jsonText.length; index += 1) {
+    const char = jsonText[index];
+
+    if (char === "\"") {
+      return { found: true, value };
+    }
+
+    if (char !== "\\") {
+      value += char;
+      continue;
+    }
+
+    const next = jsonText[index + 1];
+    if (!next) return { found: true, value };
+
+    if (next === "u") {
+      const hex = jsonText.slice(index + 2, index + 6);
+      if (hex.length < 4 || !/^[0-9a-fA-F]{4}$/.test(hex)) return { found: true, value };
+      value += String.fromCharCode(Number.parseInt(hex, 16));
+      index += 5;
+      continue;
+    }
+
+    const escapes: Record<string, string> = {
+      "\"": "\"",
+      "\\": "\\",
+      "/": "/",
+      b: "\b",
+      f: "\f",
+      n: "\n",
+      r: "\r",
+      t: "\t"
+    };
+    value += escapes[next] ?? next;
+    index += 1;
+  }
+
+  return { found: true, value };
 }
 
 export async function GET(request: NextRequest) {
@@ -385,7 +591,10 @@ function createSystemPrompt(): string {
     "Empfehlungen sind immer erlaubt. Blockiere hilfreiche Antworten nicht, nur weil keine eindeutige Planänderung vorliegt.",
     "Trenne Beratung, Vorschlag und Änderung klar. Nutze outcomes für recommendation, clarification_question, plan_change oder no_change_note.",
     "Bei Beratungsfragen: analysiere, vergleiche Varianten, nenne Vor- und Nachteile und gib eine klare Empfehlung mit Begründung.",
-    "Bei Trainings-, Lauf- und Wochenempfehlungen musst du raceReadiness aktiv nutzen: Bewerte aktuelle Planungswoche, geplante Laufkilometer, Laufanzahl, langen Lauf, Intensitätsmix, vergangene externe Aktivitäten und Wettkampfziel gemeinsam.",
+    "Bei Trainings-, Lauf- und Wochenempfehlungen musst du raceReadiness und trainingReality aktiv nutzen: Bewerte Wettkampfziel, echte erledigte Aktivitäten, zukünftige Planung, Laufkilometer, Laufanzahl, langen Lauf und Intensitätsmix gemeinsam.",
+    "Für vergangene und ausgewählte Tage gilt: erledigte externe Aktivitäten aus Supabase/Strava sind die Bewertungsbasis. Geplante Workouts dieser Tage sind nur Referenz und dürfen nicht als erledigt gezählt werden.",
+    "Für den Wochenumfang gilt: abgeschlossene Aktivitäten dieser Woche plus zukünftige geplante Workouts. Beispiel: Dienstag erledigt + spontaner Donnerstag-Lauf + geplanter Samstag-Lauf ergibt den projizierten Wochenumfang.",
+    "Nutze bei Strava-Aktivitäten alle verfügbaren Kriterien aus dem Kontext: Distanz, Dauer, Pace/Geschwindigkeit, Herzfrequenz, Leistung, Kadenz, Höhenmeter, Kalorien, Relative Effort, Training Load, Indoor/Outdoor, Gerät und Schuhe.",
     "Wenn raceReadiness.flags Hinweise enthält, sprich diese ehrlich an. Beispiel: 2 Läufe und 28 km für ein ambitioniertes Halbmarathonziel sind eher knapp; empfehle dann eine realistische Ergänzung oder Progression.",
     "Bestätige einen zu schwachen Laufplan nicht stillschweigend. Der Nutzer erwartet einen Coach, der erkennt, wenn Umfang, Frequenz oder langer Lauf nicht zum Ziel passen.",
     "Bei Info/Wunsch/Stimmung, z. B. Alkohol, Restaurant, Müdigkeit: keine automatische Planänderung. Gib kurze Einordnung und optionales Angebot.",

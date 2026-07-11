@@ -210,15 +210,15 @@ Begründung:
 
 Sports & Fueling Coach soll langfristig eine persönliche Gesundheitsplattform werden. Dafür darf die Fachlogik nicht wissen müssen, ob eine Aktivität von Strava, Garmin, Apple Health, Health Connect, Polar, Coros, Oura oder Withings kommt. Provideradapter sind nur Ingestion-Schichten. Coach, Insights und spätere Trainingsanalysen lesen ausschließlich aus Supabase und arbeiten mit normalisierten Aktivitätsdaten. Tokens bleiben serverseitig, RLS schützt nutzerbezogene Daten, und die Token-Tabelle ist nicht für normale authentifizierte Clients freigegeben.
 
-## ADR-022: Strava-Synchronisation läuft automatisch, aber rhythmisch gedrosselt
+## ADR-022: Strava-Synchronisation läuft automatisch nachts
 
 Entscheidung:
 
-Nach dem OAuth-Callback startet die App eine initiale Synchronisation. Weitere Synchronisationen können in den Einstellungen manuell ausgelöst werden. Zusätzlich triggert Vercel Cron auf Hobby `/api/cron/strava-sync` einmal täglich. Der Endpoint unterstützt trotzdem häufigere Aufrufe und entscheidet serverseitig nach `Europe/Berlin`: zwischen 10:00 und 22:00 Uhr darf höchstens etwa alle 15 Minuten synchronisiert werden, nachts nur stündlich. Inkrementelle Läufe verwenden die zuletzt gespeicherte Aktivität als Zeitanker und speichern über eindeutige Provider-/Activity-IDs ohne Duplikate. Sync-Läufe schreiben Status, Zähler und Fehlermeldungen nach `sync_jobs`.
+Nach dem OAuth-Callback startet die App eine initiale Synchronisation. Weitere Synchronisationen können in den Einstellungen manuell ausgelöst werden. Zusätzlich triggert Vercel Cron auf Hobby `/api/cron/strava-sync` einmal täglich nachts. Die statische Cron-Zeit liegt bei `23:00 UTC`, was in der Sommerzeit 01:00 Uhr Berlin entspricht. Inkrementelle Läufe verwenden die zuletzt gespeicherte Aktivität als Zeitanker und speichern über eindeutige Provider-/Activity-IDs ohne Duplikate. Sync-Läufe schreiben Status, Zähler und Fehlermeldungen nach `sync_jobs`.
 
 Begründung:
 
-Der Coach braucht Strava-Daten zeitnah nach Aktivitäten, aber Vercel Hobby erlaubt keine mehrmals täglichen Cronjobs. Für die Beta ist ein täglicher automatischer Basissync plus manueller Sofort-Sync deployment-sicher. Die serverseitige Tag-/Nacht-Drossel bleibt vorbereitet, damit ein späterer Vercel-Pro-Plan, externer Scheduler oder Strava-Webhook ohne neue Sync-Architektur häufiger triggern kann.
+Der Coach braucht Strava-Daten zeitnah nach Aktivitäten, aber Vercel Hobby erlaubt keine mehrmals täglichen Cronjobs. Für die Beta ist ein täglicher automatischer Nacht-Sync plus manueller Sofort-Sync deployment-sicher. Häufigere Synchronisationen sollten später über Vercel Pro, einen externen Scheduler oder Strava-Webhooks ergänzt werden.
 
 ## ADR-023: Coach Mode ist der Standard
 
@@ -299,3 +299,23 @@ Coach-Empfehlungen auf Today sind keine statischen Karten mehr. Jede Empfehlung 
 Begründung:
 
 Eine Empfehlung ist nur wertvoll, wenn der Nutzer sie an seinen Alltag anpassen kann: vegetarische Alternative, Grillabend, Bier, Rezeptwunsch oder konkretes Protein-Ziel. Der Dialog ist deshalb Teil der Empfehlung, nicht ein separates Feature.
+
+## ADR-031: Coach bewertet Training als Ist plus Zukunft
+
+Entscheidung:
+
+Der Coach-Kontext unterscheidet bei Training strikt zwischen erledigten externen Aktivitäten und geplanten Workouts. Für vergangene und ausgewählte Tage zählen Aktivitäten aus `activities` als Bewertungsbasis. Geplante Workouts dieser Tage bleiben nur Referenz. Für den projizierten Wochenumfang werden erledigte Aktivitäten dieser Woche mit zukünftigen geplanten Workouts kombiniert.
+
+Begründung:
+
+Ein Coach darf nicht so tun, als seien geplante Einheiten automatisch erledigt. Spontane Strava-Aktivitäten müssen dagegen den Wochenumfang, die Belastungsbewertung und die Wettkampfvorbereitung sofort beeinflussen. Das providerneutrale Modell erlaubt dieselbe Logik später auch für Garmin, Apple Health oder andere Quellen.
+
+## ADR-032: Coach-Antworten streamen Text, finalisieren aber strukturiert
+
+Entscheidung:
+
+Die Coach-API unterstützt zusätzlich zu normalen JSON-Antworten einen Streaming-Modus über `/api/coach?stream=1`. Während der OpenAI-kompatible Provider das strukturierte JSON erzeugt, extrahiert der Server nur `assistantMessage` und sendet diesen Text als `delta`-Events an die UI. Am Ende sendet die API das normalisierte finale `CoachPlanResponse`-Objekt.
+
+Begründung:
+
+Der Coach soll sich im Chat schnell und lebendig anfühlen, ohne das Sicherheitsmodell aufzugeben. Live-Text ist reine Darstellung. Outcomes, Suggestions, Changes und Übernahme-Buttons erscheinen erst nach der finalen Validierung und werden weiterhin nicht automatisch gespeichert.

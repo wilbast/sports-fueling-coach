@@ -24,6 +24,7 @@ import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { ExternalActivityList, useExternalActivities } from "@/features/activities/external-activities";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
+import { TimedCoachBriefing } from "@/features/coach/timed-coach-briefing";
 
 const statusLabels: Record<WorkoutStatus, string> = {
   planned: "geplant",
@@ -62,6 +63,7 @@ export function TrainingView() {
   const weekStart = state.weekPlan.days[0]?.date ?? state.weekPlan.startsOn;
   const weekEnd = state.weekPlan.days[state.weekPlan.days.length - 1]?.date ?? state.weekPlan.startsOn;
   const {
+    activities,
     activitiesByDate,
     isLoading: activitiesLoading,
     error: activitiesError
@@ -108,6 +110,17 @@ export function TrainingView() {
             label="Coach-Empfehlung"
           />
         }
+      />
+
+      <TimedCoachBriefing
+        page="training"
+        selectedDate={selectedDay.date}
+        focus={selectedDay.focus}
+        plannedWorkoutCount={activeWorkouts.length}
+        plannedRunningKm={runningKm}
+        actualActivityCount={activities.length}
+        actualRunningKm={sumRunningActivityKm(activities)}
+        hardSessionCount={hardSessions}
       />
 
       <WeekCalendar />
@@ -419,6 +432,15 @@ function formatLongDate(date: string): string {
 
 function roundOne(value: number): string {
   return value.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+}
+
+function sumRunningActivityKm(activities: Array<{ sportType: string; distanceMeters?: number | null }>): number {
+  return Math.round(activities
+    .filter((activity) => {
+      const sport = activity.sportType.toLowerCase();
+      return sport.includes("run") || sport.includes("lauf");
+    })
+    .reduce((sum, activity) => sum + ((activity.distanceMeters ?? 0) / 1000), 0) * 10) / 10;
 }
 
 function parseOptionalNumber(value: string): number | undefined {

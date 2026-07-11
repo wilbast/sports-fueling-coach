@@ -68,7 +68,7 @@ export type SyncResult = {
 
 export type StravaCronSyncResult = {
   shouldRun: boolean;
-  cadence: "day_15min" | "night_hourly";
+  cadence: "daily_nightly";
   localTime: string;
   minMinutesBetweenSyncs: number;
   checkedConnections: number;
@@ -355,7 +355,7 @@ export async function loadRecentExternalActivitiesForCoach(userId: string) {
 
   const { data } = await supabase
     .from("activities")
-    .select("source_provider,source_activity_id,name,sport_type,start_date,distance_meters,moving_time_seconds,elapsed_time_seconds,elevation_gain_meters,calories,average_speed_mps,average_pace_seconds_per_km,average_heartrate,max_heartrate,average_watts,weighted_average_watts,relative_effort,training_load,is_indoor,is_commute,gear_name")
+    .select("source_provider,source_activity_id,name,description,sport_type,workout_type,start_date,start_date_local,timezone,utc_offset,distance_meters,moving_time_seconds,elapsed_time_seconds,elevation_gain_meters,calories,average_speed_mps,max_speed_mps,average_pace_seconds_per_km,max_pace_seconds_per_km,average_heartrate,max_heartrate,average_watts,max_watts,weighted_average_watts,normalized_power,average_cadence,max_cadence,relative_effort,training_load,temperature_celsius,device_name,gear_id,gear_name,is_private,is_commute,is_indoor,is_manual")
     .eq("user_id", userId)
     .gte("start_date", since.toISOString())
     .order("start_date", { ascending: false })
@@ -366,13 +366,12 @@ export async function loadRecentExternalActivitiesForCoach(userId: string) {
 
 function createStravaCronSchedule(now: Date) {
   const local = getBerlinTimeParts(now);
-  const isDayWindow = local.hour >= 10 && local.hour < 22;
 
   return {
-    shouldRun: isDayWindow || local.minute < 15,
-    cadence: isDayWindow ? "day_15min" as const : "night_hourly" as const,
+    shouldRun: true,
+    cadence: "daily_nightly" as const,
     localTime: `${String(local.hour).padStart(2, "0")}:${String(local.minute).padStart(2, "0")}`,
-    minMinutesBetweenSyncs: isDayWindow ? 14 : 55
+    minMinutesBetweenSyncs: 23 * 60
   };
 }
 

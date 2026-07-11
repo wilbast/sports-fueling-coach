@@ -10,6 +10,7 @@ import { getDayPlanByDate } from "@/domain/planning/week";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
+import { TimedCoachBriefing } from "@/features/coach/timed-coach-briefing";
 import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
 import { MealLogList } from "@/features/nutrition/meal-log-list";
 import { NUTRITION_LOGS_UPDATED_EVENT, loadLocalMealLogsForDate, useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
@@ -147,6 +148,16 @@ export function FuelingView() {
             label="Coach-Empfehlung"
           />
         }
+      />
+
+      <TimedCoachBriefing
+        page="fueling"
+        selectedDate={selectedDay.date}
+        focus={selectedDay.focus}
+        mealCount={selectedDayLogs.length}
+        caloriesIntake={selectedDayLoggedTotals.calories}
+        proteinRemaining={Math.max(0, estimateProteinTarget(state.profile.bodyMetrics.weightKg) - selectedDayLoggedTotals.protein)}
+        carbsRemaining={Math.max(0, estimateCarbsTarget(selectedDay.workouts.length) - selectedDayLoggedTotals.carbs)}
       />
 
       <WeekCalendar />
@@ -390,6 +401,14 @@ function calculateMealLogTotals(logs: MealLog[]) {
     protein: 0,
     carbs: 0
   });
+}
+
+function estimateProteinTarget(weightKg: number): number {
+  return Math.round(weightKg * 1.9);
+}
+
+function estimateCarbsTarget(workoutCount: number): number {
+  return workoutCount > 0 ? 250 : 180;
 }
 
 function useWeekMealLogs(dates: string[]) {

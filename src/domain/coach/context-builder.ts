@@ -11,23 +11,39 @@ export type CoachExternalActivitySummary = {
   source_provider?: string;
   source_activity_id?: string;
   name?: string;
+  description?: string | null;
   sport_type?: string;
+  workout_type?: string | null;
   start_date?: string;
+  start_date_local?: string | null;
+  timezone?: string | null;
+  utc_offset?: number | null;
   distance_meters?: number | null;
   moving_time_seconds?: number | null;
   elapsed_time_seconds?: number | null;
   elevation_gain_meters?: number | null;
   calories?: number | null;
   average_speed_mps?: number | null;
+  max_speed_mps?: number | null;
   average_pace_seconds_per_km?: number | null;
+  max_pace_seconds_per_km?: number | null;
   average_heartrate?: number | null;
   max_heartrate?: number | null;
   average_watts?: number | null;
+  max_watts?: number | null;
   weighted_average_watts?: number | null;
+  normalized_power?: number | null;
+  average_cadence?: number | null;
+  max_cadence?: number | null;
   relative_effort?: number | null;
   training_load?: number | null;
+  temperature_celsius?: number | null;
+  device_name?: string | null;
+  gear_id?: string | null;
   is_indoor?: boolean | null;
   is_commute?: boolean | null;
+  is_private?: boolean | null;
+  is_manual?: boolean | null;
   gear_name?: string | null;
 };
 
@@ -63,6 +79,10 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
   const last14Days = getLookbackDays(allDays, source.selectedDate, 14);
   const last7Days = last14Days.slice(-7);
   const mealTemplates = source.mealTemplates ?? [];
+  const externalActivities = source.externalActivities ?? [];
+  const actualActivitiesForSelectedDay = selectedDay
+    ? getActivitiesOnDate(externalActivities, selectedDay.date)
+    : [];
   const todayMeals = selectedDay ? hydrateMeals(selectedDay.mealPlan, mealTemplates) : [];
   const nutritionLogsToday = source.nutritionLogsToday ?? [];
   const timedNutritionLogsToday = categorizeNutritionLogsByCurrentTime(nutritionLogsToday, source.selectedDate, coachNow);
@@ -104,10 +124,11 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
       raceGoal: source.profile.raceGoal
     },
     activeGoals: source.goals,
-    today: selectedDay ? summarizeDay(selectedDay, mealTemplates) : null,
-    tomorrow: intent.needsTomorrow && tomorrow ? summarizeDay(tomorrow, mealTemplates) : null,
-    currentWeek: summarizeWeek(source.weekPlan, mealTemplates),
-    raceReadiness: createRaceReadinessAssessment(source.weekPlan, source.profile, source.goals, source.externalActivities ?? [], source.selectedDate),
+    today: selectedDay ? summarizeDay(selectedDay, mealTemplates, actualActivitiesForSelectedDay) : null,
+    tomorrow: intent.needsTomorrow && tomorrow ? summarizeDay(tomorrow, mealTemplates, getActivitiesOnDate(externalActivities, tomorrow.date)) : null,
+    currentWeek: summarizeWeek(source.weekPlan, mealTemplates, externalActivities, source.selectedDate),
+    trainingReality: summarizeWeeklyTrainingReality(source.weekPlan, externalActivities, source.selectedDate),
+    raceReadiness: createRaceReadinessAssessment(source.weekPlan, source.profile, source.goals, externalActivities, source.selectedDate),
     plannedWorkouts: summarizeWorkouts(source.weekPlan.days.flatMap((day) => day.workouts)),
     loggedMealsToday: {
       status: nutritionLogsToday.length > 0 ? "available_from_supabase" : "empty",
@@ -139,8 +160,8 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
     recentTraining: summarizeTrainingWindow(last14Days),
     recentWeightTrend: summarizeWeightTrend(source.profile),
     recentNutrition: summarizeNutritionWindow(last14Days, mealTemplates),
-    externalActivities: summarizeExternalActivities(source.externalActivities ?? [], intent),
-    strava: summarizeStravaStatus(source.externalActivities ?? []),
+    externalActivities: summarizeExternalActivities(externalActivities, intent),
+    strava: summarizeStravaStatus(externalActivities),
     relevantStandards: summarizeRelevantStandards(source.standards, source.mealTemplates, intent),
     deepContext: intent.needsDeepContext
       ? createDeepContext(weekPlans, source.profile, mealTemplates)
@@ -163,17 +184,33 @@ function summarizeExternalActivities(activities: CoachExternalActivitySummary[],
       name: activity.name,
       sportType: activity.sport_type,
       startDate: activity.start_date,
+      startDateLocal: activity.start_date_local,
+      timezone: activity.timezone,
       distanceMeters: activity.distance_meters,
       movingTimeSeconds: activity.moving_time_seconds,
+      elapsedTimeSeconds: activity.elapsed_time_seconds,
+      elevationGainMeters: activity.elevation_gain_meters,
       calories: activity.calories,
+      averageSpeedMps: activity.average_speed_mps,
+      maxSpeedMps: activity.max_speed_mps,
       averagePaceSecondsPerKm: activity.average_pace_seconds_per_km,
+      maxPaceSecondsPerKm: activity.max_pace_seconds_per_km,
       averageHeartrate: activity.average_heartrate,
       maxHeartrate: activity.max_heartrate,
       averageWatts: activity.average_watts,
+      maxWatts: activity.max_watts,
+      weightedAverageWatts: activity.weighted_average_watts,
+      normalizedPower: activity.normalized_power,
+      averageCadence: activity.average_cadence,
+      maxCadence: activity.max_cadence,
       relativeEffort: activity.relative_effort,
       trainingLoad: activity.training_load,
+      temperatureCelsius: activity.temperature_celsius,
       isIndoor: activity.is_indoor,
       isCommute: activity.is_commute,
+      isPrivate: activity.is_private,
+      isManual: activity.is_manual,
+      deviceName: activity.device_name,
       gearName: activity.gear_name
     }))
   };
@@ -341,7 +378,7 @@ function getLookbackDays(days: DayPlan[], selectedDate: string, count: number): 
   return previousAndToday.slice(-count);
 }
 
-function summarizeDay(day: DayPlan, mealTemplates: MealTemplate[]) {
+function summarizeDay(day: DayPlan, mealTemplates: MealTemplate[], actualActivities: CoachExternalActivitySummary[] = []) {
   return {
     date: day.date,
     context: day.context,
@@ -353,12 +390,22 @@ function summarizeDay(day: DayPlan, mealTemplates: MealTemplate[]) {
       impact: block.impact
     })),
     workouts: summarizeWorkouts(day.workouts),
+    actualActivities: summarizeActualActivities(actualActivities),
+    trainingEvaluationBasis: actualActivities.length > 0
+      ? "Für diesen Tag zuerst erledigte externe Aktivitäten bewerten; geplante Workouts sind nur Referenz."
+      : "Für diesen Tag liegen noch keine erledigten externen Aktivitäten im Kontext vor; geplante Workouts sind nur Planung.",
     meals: hydrateMeals(day.mealPlan, mealTemplates)
   };
 }
 
-function summarizeWeek(weekPlan: WeekPlan, mealTemplates: MealTemplate[]) {
+function summarizeWeek(
+  weekPlan: WeekPlan,
+  mealTemplates: MealTemplate[],
+  externalActivities: CoachExternalActivitySummary[] = [],
+  selectedDate: string = weekPlan.days[0]?.date ?? weekPlan.startsOn
+) {
   const workouts = weekPlan.days.flatMap((day) => day.workouts).filter((workout) => workout.status !== "cancelled");
+  const trainingReality = summarizeWeeklyTrainingReality(weekPlan, externalActivities, selectedDate);
 
   return {
     label: weekPlan.label,
@@ -377,8 +424,119 @@ function summarizeWeek(weekPlan: WeekPlan, mealTemplates: MealTemplate[]) {
       hardSessions: workouts.filter((workout) => workout.intensity === "hard").length,
       plannedMeals: weekPlan.days.reduce((sum, day) => sum + day.mealPlan.length, 0),
       estimatedCalories: sumMeals(weekPlan.days.flatMap((day) => hydrateMeals(day.mealPlan, mealTemplates))).calories
-    }
+    },
+    trainingReality
   };
+}
+
+function summarizeWeeklyTrainingReality(
+  weekPlan: WeekPlan,
+  externalActivities: CoachExternalActivitySummary[],
+  selectedDate: string
+) {
+  const weekDates = weekPlan.days.map((day) => day.date).sort();
+  const weekStart = weekDates[0] ?? weekPlan.startsOn;
+  const weekEnd = weekDates[weekDates.length - 1] ?? weekStart;
+  const actualActivities = externalActivities
+    .filter((activity) => {
+      const date = getActivityDateKey(activity);
+      return date >= weekStart && date <= weekEnd && date <= selectedDate;
+    })
+    .sort((left, right) => getActivityDateKey(left).localeCompare(getActivityDateKey(right)));
+  const futurePlannedWorkouts = weekPlan.days
+    .flatMap((day) => day.workouts)
+    .filter((workout) => workout.status !== "cancelled")
+    .filter((workout) => workout.date > selectedDate);
+  const pastPlannedWorkoutsNotCounted = weekPlan.days
+    .flatMap((day) => day.workouts)
+    .filter((workout) => workout.status !== "cancelled")
+    .filter((workout) => workout.date <= selectedDate);
+  const actualRunningActivities = actualActivities.filter(isRunningActivity);
+  const futureRunningWorkouts = futurePlannedWorkouts.filter((workout) => workout.sport === "running");
+  const actualRunningKm = sumActivityDistanceKm(actualRunningActivities);
+  const futurePlannedRunningKm = sumRunningKm(futureRunningWorkouts);
+
+  return {
+    weekStart,
+    weekEnd,
+    selectedDate,
+    rule: "Für vergangene und ausgewählte Tage zählen erledigte externe Aktivitäten aus Supabase. Für zukünftige Tage zählen geplante Workouts. Vergangene geplante Workouts werden nicht als erledigt gewertet.",
+    actualCompletedThisWeek: {
+      activityCount: actualActivities.length,
+      runningActivityCount: actualRunningActivities.length,
+      runningKm: actualRunningKm,
+      totalCalories: roundTo(actualActivities.reduce((sum, activity) => sum + (activity.calories ?? 0), 0), 1),
+      bySport: countBy(actualActivities.map((activity) => normalizeActivitySport(activity))),
+      activities: summarizeActualActivities(actualActivities)
+    },
+    futurePlannedThisWeek: {
+      workoutCount: futurePlannedWorkouts.length,
+      runningWorkoutCount: futureRunningWorkouts.length,
+      runningKm: futurePlannedRunningKm,
+      hardRunCount: futureRunningWorkouts.filter(isHardRunningWorkout).length,
+      workouts: summarizeWorkouts(futurePlannedWorkouts)
+    },
+    projectedWeek: {
+      runningSessionCount: actualRunningActivities.length + futureRunningWorkouts.length,
+      runningKm: roundTo(actualRunningKm + futurePlannedRunningKm, 0.1),
+      longestRunKm: roundTo(Math.max(
+        0,
+        ...actualRunningActivities.map(activityDistanceKm),
+        ...futureRunningWorkouts.map((workout) => workout.distanceKm ?? 0)
+      ), 0.1),
+      hardRunCount: actualRunningActivities.filter(isHardActualActivity).length + futureRunningWorkouts.filter(isHardRunningWorkout).length,
+      totalTrainingCount: actualActivities.length + futurePlannedWorkouts.length,
+      bySport: countBy([
+        ...actualActivities.map((activity) => normalizeActivitySport(activity)),
+        ...futurePlannedWorkouts.map((workout) => workout.sport)
+      ])
+    },
+    plannedPastNotCountedAsDone: summarizeWorkouts(pastPlannedWorkoutsNotCounted)
+  };
+}
+
+function summarizeActualActivities(activities: CoachExternalActivitySummary[]) {
+  return activities.map((activity) => ({
+    provider: activity.source_provider,
+    id: activity.source_activity_id,
+    name: activity.name,
+    description: activity.description,
+    sportType: activity.sport_type,
+    workoutType: activity.workout_type,
+    date: getActivityDateKey(activity),
+    startDate: activity.start_date,
+    startDateLocal: activity.start_date_local,
+    timezone: activity.timezone,
+    distanceKm: roundTo(activityDistanceKm(activity), 0.1),
+    movingTimeMinutes: activity.moving_time_seconds ? Math.round(activity.moving_time_seconds / 60) : null,
+    elapsedTimeMinutes: activity.elapsed_time_seconds ? Math.round(activity.elapsed_time_seconds / 60) : null,
+    elevationGainMeters: activity.elevation_gain_meters,
+    calories: activity.calories,
+    averagePacePerKm: formatPace(activity.average_pace_seconds_per_km ?? null),
+    maxPacePerKm: formatPace(activity.max_pace_seconds_per_km ?? null),
+    averageSpeedKmh: activity.average_speed_mps ? roundTo(activity.average_speed_mps * 3.6, 0.1) : null,
+    maxSpeedKmh: activity.max_speed_mps ? roundTo(activity.max_speed_mps * 3.6, 0.1) : null,
+    averageHeartrate: activity.average_heartrate,
+    maxHeartrate: activity.max_heartrate,
+    averageWatts: activity.average_watts,
+    maxWatts: activity.max_watts,
+    weightedAverageWatts: activity.weighted_average_watts,
+    normalizedPower: activity.normalized_power,
+    averageCadence: activity.average_cadence,
+    maxCadence: activity.max_cadence,
+    relativeEffort: activity.relative_effort,
+    trainingLoad: activity.training_load,
+    temperatureCelsius: activity.temperature_celsius,
+    deviceName: activity.device_name,
+    gearId: activity.gear_id,
+    gearName: activity.gear_name,
+    flags: {
+      indoor: activity.is_indoor,
+      commute: activity.is_commute,
+      private: activity.is_private,
+      manual: activity.is_manual
+    }
+  }));
 }
 
 function createRaceReadinessAssessment(
@@ -389,11 +547,16 @@ function createRaceReadinessAssessment(
   selectedDate: string
 ) {
   const raceGoal = profile.raceGoal ?? goals.raceGoal ?? null;
+  const weeklyReality = summarizeWeeklyTrainingReality(weekPlan, externalActivities, selectedDate);
   const plannedWorkouts = weekPlan.days.flatMap((day) => day.workouts).filter((workout) => workout.status !== "cancelled");
   const plannedRunningWorkouts = plannedWorkouts.filter((workout) => workout.sport === "running");
   const plannedRunningKm = sumRunningKm(plannedRunningWorkouts);
   const plannedLongRunKm = roundTo(Math.max(0, ...plannedRunningWorkouts.map((workout) => workout.distanceKm ?? 0)), 0.1);
   const plannedHardRuns = plannedRunningWorkouts.filter((workout) => workout.intensity === "hard" || workout.runningFocus === "threshold" || workout.runningFocus === "vo2max").length;
+  const projectedRunningSessions = weeklyReality.projectedWeek.runningSessionCount;
+  const projectedRunningKm = weeklyReality.projectedWeek.runningKm;
+  const projectedLongRunKm = weeklyReality.projectedWeek.longestRunKm;
+  const projectedHardRuns = weeklyReality.projectedWeek.hardRunCount;
   const last14Days = summarizeExternalRunningWindow(externalActivities, selectedDate, 14);
   const last28Days = summarizeExternalRunningWindow(externalActivities, selectedDate, 28);
   const last56Days = summarizeExternalRunningWindow(externalActivities, selectedDate, 56);
@@ -401,24 +564,24 @@ function createRaceReadinessAssessment(
   const flags: string[] = [];
 
   if (raceDemand) {
-    if (plannedRunningWorkouts.length < raceDemand.minWeeklyRuns) {
-      flags.push(`Geplante Laufanzahl ist niedrig: ${plannedRunningWorkouts.length} Läufe statt mindestens ${raceDemand.minWeeklyRuns}.`);
+    if (projectedRunningSessions < raceDemand.minWeeklyRuns) {
+      flags.push(`Projizierte Laufanzahl ist niedrig: ${projectedRunningSessions} Läufe statt mindestens ${raceDemand.minWeeklyRuns}.`);
     }
 
-    if (plannedRunningKm < raceDemand.recommendedWeeklyKm.min) {
-      flags.push(`Geplanter Laufumfang ist wahrscheinlich zu gering: ${plannedRunningKm} km statt grob ${raceDemand.recommendedWeeklyKm.min}-${raceDemand.recommendedWeeklyKm.max} km.`);
+    if (projectedRunningKm < raceDemand.recommendedWeeklyKm.min) {
+      flags.push(`Projizierter Laufumfang ist wahrscheinlich zu gering: ${projectedRunningKm} km statt grob ${raceDemand.recommendedWeeklyKm.min}-${raceDemand.recommendedWeeklyKm.max} km.`);
     }
 
-    if (plannedLongRunKm < raceDemand.minLongRunKm) {
-      flags.push(`Langer Lauf fehlt oder ist kurz: längster Lauf ${plannedLongRunKm} km, sinnvoll wären aktuell mindestens ca. ${raceDemand.minLongRunKm} km.`);
+    if (projectedLongRunKm < raceDemand.minLongRunKm) {
+      flags.push(`Langer Lauf fehlt oder ist kurz: längster Lauf ${projectedLongRunKm} km, sinnvoll wären aktuell mindestens ca. ${raceDemand.minLongRunKm} km.`);
     }
 
-    if (plannedHardRuns > raceDemand.maxHardRuns) {
-      flags.push(`Zu viele harte Laufeinheiten für eine stabile Woche: ${plannedHardRuns} hart statt maximal ${raceDemand.maxHardRuns}.`);
+    if (projectedHardRuns > raceDemand.maxHardRuns) {
+      flags.push(`Zu viele harte Laufeinheiten für eine stabile Woche: ${projectedHardRuns} hart statt maximal ${raceDemand.maxHardRuns}.`);
     }
 
-    if (last28Days.runningKm > 0 && plannedRunningKm > last28Days.averageWeeklyRunningKm * 1.25) {
-      flags.push("Der geplante Umfang liegt deutlich über dem letzten 28-Tage-Schnitt. Progression vorsichtig dosieren.");
+    if (last28Days.runningKm > 0 && projectedRunningKm > last28Days.averageWeeklyRunningKm * 1.25) {
+      flags.push("Der projizierte Umfang liegt deutlich über dem letzten 28-Tage-Schnitt. Progression vorsichtig dosieren.");
     }
   }
 
@@ -431,6 +594,7 @@ function createRaceReadinessAssessment(
     } : null,
     currentPlanningWeek: {
       startsOn: weekPlan.startsOn,
+      evaluationBasis: "Ist + Zukunft: erledigte externe Aktivitäten bis zum ausgewählten Tag plus zukünftige geplante Workouts.",
       runningWorkoutCount: plannedRunningWorkouts.length,
       runningKm: plannedRunningKm,
       longestRunKm: plannedLongRunKm,
@@ -439,6 +603,7 @@ function createRaceReadinessAssessment(
       nonRunningWorkoutCount: plannedWorkouts.length - plannedRunningWorkouts.length,
       runningSessions: summarizeWorkouts(plannedRunningWorkouts)
     },
+    projectedTrainingWeek: weeklyReality,
     recentActualRunning: {
       last14Days,
       last28Days,
@@ -455,6 +620,7 @@ function createRaceReadinessAssessment(
       : "Kein Wettkampfziel vorhanden. Empfehlungen sollten allgemeiner bleiben.",
     coachGuidance: [
       "Bei Trainings- oder Wochenempfehlungen immer das Wettkampfziel, die aktuelle Planungswoche und die letzten echten Aktivitäten gemeinsam bewerten.",
+      "Für vergangene Tage zählen erledigte externe Aktivitäten. Nur zukünftige geplante Workouts ergänzen den Wochenumfang.",
       "Wenn Laufanzahl, Wochenkilometer oder langer Lauf unter dem empfohlenen Rahmen liegen, sprich das explizit an und schlage eine realistische Verbesserung vor.",
       "Nicht nur bestätigen, was geplant ist. Als Coach ehrlich bewerten, ob der Plan zum Ziel passt.",
       "Planänderungen nur als Vorschlag formulieren, nicht automatisch speichern."
@@ -531,7 +697,7 @@ function summarizeExternalRunningWindow(activities: CoachExternalActivitySummary
   const runningActivities = activities
     .filter((activity) => isRunningActivity(activity))
     .filter((activity) => {
-      const date = parseDateAtNoon(activity.start_date);
+      const date = parseDateAtNoon(getActivityDateKey(activity));
       return date >= since && date <= selected;
     });
   const totalDistanceKm = roundTo(runningActivities.reduce((sum, activity) => sum + ((activity.distance_meters ?? 0) / 1000), 0), 0.1);
@@ -550,7 +716,7 @@ function summarizeExternalRunningWindow(activities: CoachExternalActivitySummary
     hardSignalCount: runningActivities.filter((activity) => (activity.relative_effort ?? 0) >= 60 || (activity.training_load ?? 0) >= 60).length,
     recentRuns: runningActivities.slice(0, 8).map((activity) => ({
       name: activity.name,
-      date: activity.start_date,
+      date: getActivityDateKey(activity),
       distanceKm: roundTo((activity.distance_meters ?? 0) / 1000, 0.1),
       movingTimeMinutes: activity.moving_time_seconds ? Math.round(activity.moving_time_seconds / 60) : null,
       averagePacePerKm: formatPace(activity.average_pace_seconds_per_km ?? null),
@@ -558,6 +724,33 @@ function summarizeExternalRunningWindow(activities: CoachExternalActivitySummary
       relativeEffort: activity.relative_effort
     }))
   };
+}
+
+function getActivitiesOnDate(activities: CoachExternalActivitySummary[], date: string): CoachExternalActivitySummary[] {
+  return activities
+    .filter((activity) => getActivityDateKey(activity) === date)
+    .sort((left, right) => String(left.start_date_local ?? left.start_date ?? "").localeCompare(String(right.start_date_local ?? right.start_date ?? "")));
+}
+
+function getActivityDateKey(activity: CoachExternalActivitySummary): string {
+  return String(activity.start_date_local ?? activity.start_date ?? "").slice(0, 10);
+}
+
+function activityDistanceKm(activity: CoachExternalActivitySummary): number {
+  return (activity.distance_meters ?? 0) / 1000;
+}
+
+function sumActivityDistanceKm(activities: CoachExternalActivitySummary[]): number {
+  return roundTo(activities.reduce((sum, activity) => sum + activityDistanceKm(activity), 0), 0.1);
+}
+
+function normalizeActivitySport(activity: CoachExternalActivitySummary): string {
+  const sport = activity.sport_type?.toLowerCase() ?? "unknown";
+  if (sport.includes("run") || sport.includes("lauf")) return "running";
+  if (sport.includes("ride") || sport.includes("cycling") || sport.includes("bike")) return "cycling";
+  if (sport.includes("swim")) return "swimming";
+  if (sport.includes("weight") || sport.includes("strength")) return "strength";
+  return sport;
 }
 
 function createRaceDemand(distanceKm: number, daysUntilRace: number | null) {
@@ -607,6 +800,18 @@ function createRaceDemand(distanceKm: number, daysUntilRace: number | null) {
 function isRunningActivity(activity: CoachExternalActivitySummary): boolean {
   const sport = activity.sport_type?.toLowerCase() ?? "";
   return sport.includes("run") || sport.includes("lauf");
+}
+
+function isHardActualActivity(activity: CoachExternalActivitySummary): boolean {
+  return (activity.relative_effort ?? 0) >= 60
+    || (activity.training_load ?? 0) >= 60
+    || (activity.average_heartrate ?? 0) >= 155
+    || (activity.average_watts ?? 0) >= 250;
+}
+
+function isHardRunningWorkout(workout: WorkoutPlan): boolean {
+  return workout.sport === "running"
+    && (workout.intensity === "hard" || workout.runningFocus === "threshold" || workout.runningFocus === "vo2max");
 }
 
 function parseRaceTargetPaceSeconds(targetTime: string, distanceKm: number): number | null {

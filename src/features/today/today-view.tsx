@@ -22,9 +22,11 @@ import type { DailyNutritionSummary, MealLog } from "@/domain/nutrition/logs";
 import { ExternalActivityList, type ExternalActivitySummary } from "@/features/activities/external-activities";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
+import { TimedCoachBriefing } from "@/features/coach/timed-coach-briefing";
 import { MealLogList, type MealLogUpdateInput } from "@/features/nutrition/meal-log-list";
 
 type TodayViewProps = {
+  selectedDate: string;
   briefing: DailyBriefing;
   calendar?: React.ReactNode;
   externalActivities?: ExternalActivitySummary[];
@@ -50,6 +52,7 @@ type CoachRecommendation = {
 };
 
 export function TodayView({
+  selectedDate,
   briefing,
   calendar,
   externalActivities = [],
@@ -92,6 +95,20 @@ export function TodayView({
             </Link>
           </div>
         }
+      />
+
+      <TimedCoachBriefing
+        page="today"
+        selectedDate={selectedDate}
+        focus={briefing.focus}
+        plannedWorkoutCount={briefing.workouts.length}
+        actualActivityCount={externalActivities.length}
+        actualRunningKm={sumRunningActivityKm(externalActivities)}
+        mealCount={nutritionLogs.length}
+        caloriesIntake={nutritionSummary.intake.calories}
+        caloriesTargetMax={nutritionSummary.targets.caloriesMax}
+        proteinRemaining={nutritionSummary.deltas.proteinRemaining}
+        carbsRemaining={nutritionSummary.deltas.carbsRemaining}
       />
 
       {calendar}
@@ -536,6 +553,15 @@ function percent(value: number, target: number): number {
   if (target <= 0) return 0;
 
   return Math.max(0, Math.min(160, Math.round((value / target) * 100)));
+}
+
+function sumRunningActivityKm(activities: ExternalActivitySummary[]): number {
+  return Math.round(activities
+    .filter((activity) => {
+      const sport = activity.sportType.toLowerCase();
+      return sport.includes("run") || sport.includes("lauf");
+    })
+    .reduce((sum, activity) => sum + ((activity.distanceMeters ?? 0) / 1000), 0) * 10) / 10;
 }
 
 function createCoachRecommendations(briefing: DailyBriefing, nutritionSummary: DailyNutritionSummary): CoachRecommendation[] {

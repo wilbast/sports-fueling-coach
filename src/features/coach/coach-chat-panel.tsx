@@ -8,6 +8,7 @@ import type { MealLogCategory } from "@/domain/nutrition/logs";
 import { estimateMealLogTime, inferMealCategory, mealCategoryToRole } from "@/domain/nutrition/meal-timing";
 import { describeWorkoutType } from "@/domain/training/catalog";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { requestCoachStream } from "@/features/coach/coach-stream";
 import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
 type CoachChatPanelProps = {
@@ -196,40 +197,66 @@ export function CoachChatPanel({
     }
 
     try {
-      const response = await fetch("/api/coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const assistantId = `assistant-stream-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      let streamedContent = "";
+      let assistantBubbleStarted = false;
+
+      await requestCoachStream(
+        {
           message,
           threadId: activeThreadId,
           pageContext,
           state: payloadState
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Coach-Antwort konnte nicht geladen werden.");
-      }
-
-      const result = await response.json() as CoachPlanResponse;
-      if (result.ai?.status === "fallback") {
-        setAiNotice(formatAiDebugNotice(result.ai));
-      }
-      const proposalChanges = [...result.changes, ...collectSuggestionChanges(result.suggestions)];
-      if (proposalChanges.length > 0) {
-        setPendingPlan({ id: `proposal-${Date.now().toString(36)}`, changes: proposalChanges });
-      }
-
-      setMessages((current) => [
-        ...current,
+        },
         {
-          ...createMessage("assistant", result.assistantMessage, result.mode),
-          outcomes: result.outcomes,
-          changes: result.changes,
-          suggestions: result.suggestions,
-          questions: result.questions
+          onDelta: (text) => {
+            streamedContent += text;
+
+            setMessages((current) => {
+              const existing = current.find((item) => item.id === assistantId);
+              if (existing) {
+                return current.map((item) => item.id === assistantId ? { ...item, content: streamedContent } : item);
+              }
+
+              assistantBubbleStarted = true;
+              return [
+                ...current,
+                {
+                  ...createMessage("assistant", streamedContent, "coach"),
+                  id: assistantId
+                }
+              ];
+            });
+          },
+          onFinal: (result) => {
+            if (result.ai?.status === "fallback") {
+              setAiNotice(formatAiDebugNotice(result.ai));
+            }
+
+            const proposalChanges = [...result.changes, ...collectSuggestionChanges(result.suggestions)];
+            if (proposalChanges.length > 0) {
+              setPendingPlan({ id: `proposal-${Date.now().toString(36)}`, changes: proposalChanges });
+            }
+
+            setMessages((current) => {
+              const finalMessage: CoachChatMessage = {
+                ...createMessage("assistant", result.assistantMessage, result.mode),
+                id: assistantId,
+                outcomes: result.outcomes,
+                changes: result.changes,
+                suggestions: result.suggestions,
+                questions: result.questions
+              };
+
+              if (assistantBubbleStarted || current.some((item) => item.id === assistantId)) {
+                return current.map((item) => item.id === assistantId ? finalMessage : item);
+              }
+
+              return [...current, finalMessage];
+            });
+          }
         }
-      ]);
+      );
       void loadSessionsForSelectedDate();
     } catch {
       setError("Der Coach konnte gerade nicht antworten. Deine Planung wurde nicht verändert.");

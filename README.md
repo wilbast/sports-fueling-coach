@@ -73,6 +73,7 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - eigener Coach-Bereich unter `/coach`
 - Coach nutzt Profil, Ziele, Training, Fueling, Standards und Wochenplanung als Kontext
 - Chat-Verlauf wird für eingeloggte Nutzer in Supabase gespeichert und als Gesprächskontext an die serverseitige Coach-API gegeben
+- Coach-Antworten können über `/api/coach?stream=1` als Server-Sent Events live angezeigt werden; strukturierte Vorschläge kommen am Ende als finales Objekt
 - Coach Mode ist der Standard: Beratung, Einschätzung, Varianten und Empfehlungen ohne Planänderung
 - Planning Mode entsteht nur bei ausdrücklichem Wunsch nach einem konkreten Plan
 - Change Mode entsteht erst durch Bestätigung per Button oder klare Übernahme-Nachricht
@@ -81,6 +82,7 @@ Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreic
 - Fueling- und Rezeptvorschläge sind Teil der Coach-Antwort
 - Laufen unterscheidet Laufart und Fokus
 - Coach-Kontext wird serverseitig gebaut und enthält importierte externe Aktivitäten nur als strukturierte Zusammenfassung
+- Trainings- und Wochenberatung bewertet erledigte Aktivitäten aus Supabase/Strava vor geplanten Einheiten: Wochenumfang = erledigte Aktivitäten dieser Woche plus zukünftige geplante Workouts
 - Coach-Aufrufe können einen Bereichskontext wie `today`, `fueling`, `training`, `planning`, `insights` oder `settings` senden
 - Hauptseiten bieten sichtbare Coach-/KI-Empfehlungen, die beraten, aber keine Daten automatisch ändern
 - Page Context wird im serverseitigen Context Builder gewichtet, damit Today, Fueling, Training, Planning und Insights unterschiedlich beraten
@@ -124,7 +126,7 @@ STRAVA_STREAM_SYNC_LIMIT=50
 STRAVA_CRON_MAX_CONNECTIONS=10
 ```
 
-Vercel Hobby erlaubt nur einen Cron-Lauf pro Tag. Deshalb triggert `vercel.json` `/api/cron/strava-sync` täglich um `04:00 UTC`. Der Endpoint ist trotzdem so gebaut, dass er bei einem späteren Pro-Plan oder externen Scheduler auch häufigere Aufrufe serverseitig drosseln kann: zwischen 10:00 und 22:00 Uhr maximal etwa alle 15 Minuten, nachts etwa stündlich. `CRON_SECRET` schützt den öffentlichen Cron-Endpoint; Vercel sendet den Wert als Bearer Token.
+Vercel Hobby erlaubt nur einen Cron-Lauf pro Tag. Deshalb triggert `vercel.json` `/api/cron/strava-sync` täglich um `23:00 UTC`, aktuell also 01:00 Uhr Berlin in der Sommerzeit. `CRON_SECRET` schützt den öffentlichen Cron-Endpoint; Vercel sendet den Wert als Bearer Token.
 
 Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, `CRON_SECRET`, OAuth-State-Secret und Tokens dürfen nie im Client oder Repository landen.
 
@@ -149,6 +151,7 @@ Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, `CRON_SECRET`, OAu
 - Fueling Quick Add ist direkt auf Heute sichtbar
 - Tagesbilanz zeigt kcal Input, Tagesverbrauch, Zielbereich, Protein-/Carb-/Fett-Fortschritt und was noch fehlt
 - Jede Coach-Empfehlung kann direkt mit dem Coach besprochen werden; Änderungen werden erst nach Bestätigung übernommen
+- Heute, Training und Fueling zeigen oben einen zeitabhängigen Coach-Impuls für 06:00, 14:00 und 21:00 Uhr als schnelle Zusammenfassung plus Empfehlung
 
 ## Reviews
 
