@@ -87,7 +87,7 @@ def login(payload: dict[str, Any]) -> dict[str, Any]:
 
     with tempfile.TemporaryDirectory(prefix="garmin-session-") as token_dir:
         api = create_login_client(Garmin, email, password, mfa_code)
-        call_login(api, token_dir, mfa_code)
+        call_fresh_login(api, token_dir)
         token_payload = dump_tokenstore(Path(token_dir))
         profile = read_optional_profile(api)
 
@@ -114,7 +114,7 @@ def sync(payload: dict[str, Any]) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="garmin-session-") as token_dir:
         restore_tokenstore(Path(token_dir), token_payload)
         api = Garmin()
-        call_login(api, token_dir, None)
+        call_token_login(api, token_dir)
         records: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
 
@@ -192,21 +192,38 @@ def create_login_client(Garmin: Any, email: str, password: str, mfa_code: str | 
         return Garmin(email, password)
 
 
-def call_login(api: Any, token_dir: str, mfa_code: str | None) -> None:
+def call_fresh_login(api: Any, token_dir: str) -> None:
+    """Authenticate with credentials, then persist the newly issued session."""
+    try:
+        result = api.login()
+    except TypeError:
+        result = api.login(None)
+    if isinstance(result, tuple) and result[0]:
+        raise RuntimeError("MFA_REQUIRED")
+    dump_api_tokenstore(api, token_dir)
+
+
+def call_token_login(api: Any, token_dir: str) -> None:
+    """Restore an existing session without falling back to credentials."""
     try:
         api.login(token_dir)
         return
     except TypeError:
         pass
 
-    try:
-        api.login()
-    except Exception as exc:  # noqa: BLE001
-        if "mfa" in str(exc).lower() or "2fa" in str(exc).lower():
-            raise RuntimeError("MFA_REQUIRED") from exc
-        raise
+    load = getattr(getattr(api, "garth", None), "load", None)
+    if not callable(load):
+        load = getattr(getattr(api, "client", None), "load", None)
+    if not callable(load):
+        raise RuntimeError("Garmin-Session kann mit dieser Bibliotheksversion nicht geladen werden.")
+    load(token_dir)
+    api.login()
 
-    dump = getattr(getattr(api, "garth", None), "dump", None)
+
+def dump_api_tokenstore(api: Any, token_dir: str) -> None:
+    dump = getattr(getattr(api, "client", None), "dump", None)
+    if not callable(dump):
+        dump = getattr(getattr(api, "garth", None), "dump", None)
     if callable(dump):
         dump(token_dir)
         return
@@ -214,6 +231,8 @@ def call_login(api: Any, token_dir: str, mfa_code: str | None) -> None:
     dump = getattr(api, "dump", None)
     if callable(dump):
         dump(token_dir)
+        return
+    raise RuntimeError("Garmin-Session kann mit dieser Bibliotheksversion nicht exportiert werden.")
 
 
 def dump_tokenstore(path: Path) -> dict[str, str]:
