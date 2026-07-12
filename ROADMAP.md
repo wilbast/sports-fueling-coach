@@ -214,3 +214,20 @@ Möglicher Umfang:
 - Coach-Chat als Ausnahme- und Anpassungsfluss konzipieren
 - bessere Coaching-Hinweise für Restaurant, Reise, Krankheit und lange Läufe
 - erste kleine UI-Regression-Smokes
+
+## Sprint 14: Garmin Connect als experimentelle Datenquelle
+
+Status: Fundament umgesetzt, echter Provider-Test ausstehend
+
+Umgesetzt:
+
+- Feature-Flag `GARMIN_INTEGRATION_ENABLED`
+- Python-Bridge für `garminconnect`
+- verschlüsselte Garmin-Session-Payloads
+- MFA-Loginvorgänge
+- Raw-Record-Archiv
+- normalisierte Tabellen für Daily Health, Sleep, HRV und Recovery
+- Garmin-Aktivitäten im bestehenden `activities`-Modell
+- Settings-UI mit Status, Connect, MFA, Sync und Disconnect
+- Cron-Endpoint für stündlichen externen Scheduler
+- technische Dokumentation und Registry-Drift-Check

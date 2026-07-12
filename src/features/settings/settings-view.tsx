@@ -10,6 +10,7 @@ import { SignOutButton } from "@/features/auth/sign-out-button";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
 import { StravaIntegrationPanel } from "@/features/integrations/strava-integration-panel";
+import { GarminIntegrationPanel } from "@/features/integrations/garmin-integration-panel";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export function SettingsView() {
@@ -467,6 +468,7 @@ export function SettingsView() {
                 <h2 className="text-lg font-semibold text-ink">Integrationen</h2>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Pill tone="green">Strava bereit</Pill>
+                  <Pill tone="amber">Garmin experimentell</Pill>
                   <Pill tone="blue">AI serverseitig</Pill>
                   <Pill tone={onlineMode ? "green" : "neutral"}>
                     {onlineMode ? "Supabase aktiv" : "Supabase lokal aus"}
@@ -477,6 +479,7 @@ export function SettingsView() {
           </Panel>
 
           <StravaIntegrationPanel />
+          <GarminIntegrationPanel />
 
           <Panel>
             <h2 className="text-lg font-semibold text-ink">Datenzustand</h2>

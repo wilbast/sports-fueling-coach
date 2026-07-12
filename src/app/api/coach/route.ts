@@ -12,6 +12,7 @@ import type {
 } from "@/domain/training/types";
 import { getAiErrorDebug, resolveAiJsonClient } from "@/lib/ai/server";
 import { loadRecentExternalActivitiesForCoach, loadTrainingZonesForCoach } from "@/lib/integrations/activity-sync";
+import { loadGarminWellnessForCoach } from "@/lib/integrations/garmin/provider";
 import { createClient as createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -367,6 +368,7 @@ async function resolveCoachSourceState(requestState: CoachContextSource, userId?
 
     const externalActivities = await loadRecentExternalActivitiesForCoach(userId);
     const trainingZones = await loadTrainingZonesForCoach(userId);
+    const garminWellness = await loadGarminWellnessForCoach(userId, requestState.selectedDate);
     const nutritionLogsToday = await loadNutritionLogsForCoach(userId, requestState.selectedDate);
 
     if (isCoachContextSource(storedState)) {
@@ -374,6 +376,7 @@ async function resolveCoachSourceState(requestState: CoachContextSource, userId?
         ...normalizeCoachSourceState(storedState, requestState),
         externalActivities,
         trainingZones,
+        garminWellness,
         nutritionLogsToday
       };
     }
@@ -382,6 +385,7 @@ async function resolveCoachSourceState(requestState: CoachContextSource, userId?
       ...requestState,
       externalActivities,
       trainingZones,
+      garminWellness,
       nutritionLogsToday
     };
   } catch {
@@ -600,6 +604,8 @@ function createSystemPrompt(): string {
     "Wichtig: HIIT/Freeletics zählt als zusätzliche Kraft-/Metabolikbelastung mit Regenerationskosten. Es ist KEIN Lauf-Intervalltraining, kein VO2max-Lauf und darf nicht in hardRunCount, qualityRunCount oder Laufumfang eingerechnet werden.",
     "Nutze athleteTrainingZones und activity.zoneSummaries, wenn vorhanden: erledigte Aktivitäten über tatsächliche Zeit in HF-/Power-Zonen bewerten, geplante Einheiten gegen persönliche Zonen als Zielkorridor einordnen.",
     "Für geplante Läufe gilt grob: recovery/easy/base überwiegend niedrige Zonen, threshold/Tempodauerlauf nahe Schwelle, intervals/VO2max in hohen Zonen. Formuliere vorsichtig, wenn nur Strava-Zonen ohne exakte Schwellenlogik vorliegen.",
+    "Nutze garmin.normalized Daten, wenn vorhanden: Schlaf, HRV, Ruhepuls, Stress, Body Battery, Training Readiness, Recovery Time und Trainingsstatus sind wichtige Regenerationssignale für Trainingsplanung und Fueling.",
+    "Fehlende Garmin-Werte sind unknown/null und niemals fachlich als 0 zu interpretieren. Wenn Garmin-Daten fehlen oder veraltet sind, sage das kurz und arbeite mit den anderen Kontextsignalen.",
     "Für vergangene und ausgewählte Tage gilt: erledigte externe Aktivitäten aus Supabase/Strava sind die Bewertungsbasis. Geplante Workouts dieser Tage sind nur Referenz und dürfen nicht als erledigt gezählt werden.",
     "Für den Wochenumfang gilt: abgeschlossene Aktivitäten dieser Woche plus zukünftige geplante Workouts. Beispiel: Dienstag erledigt + spontaner Donnerstag-Lauf + geplanter Samstag-Lauf ergibt den projizierten Wochenumfang.",
     "Nutze bei Strava-Aktivitäten alle verfügbaren Kriterien aus dem Kontext: Distanz, Dauer, Pace/Geschwindigkeit, Herzfrequenz, Leistung, Kadenz, Höhenmeter, Kalorien, Relative Effort, Training Load, Indoor/Outdoor, Gerät und Schuhe.",

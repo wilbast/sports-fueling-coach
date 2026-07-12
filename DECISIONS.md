@@ -319,3 +319,13 @@ Die Coach-API unterstützt zusätzlich zu normalen JSON-Antworten einen Streamin
 Begründung:
 
 Der Coach soll sich im Chat schnell und lebendig anfühlen, ohne das Sicherheitsmodell aufzugeben. Live-Text ist reine Darstellung. Outcomes, Suggestions, Changes und Übernahme-Buttons erscheinen erst nach der finalen Validierung und werden weiterhin nicht automatisch gespeichert.
+
+## ADR-033: Garmin Connect ist ein experimenteller inoffizieller Provider
+
+Entscheidung:
+
+Garmin Connect wird hinter `GARMIN_INTEGRATION_ENABLED` als experimenteller Provider angebunden. Die App nutzt eine isolierte Python-Bridge in `scripts/garmin_bridge.py`; nur diese Datei importiert `garminconnect`. Next.js spricht ausschließlich mit dem internen Garmin-Provider. Garmin-Sessiondaten und temporäre MFA-Loginvorgänge werden serverseitig mit AES-256-GCM verschlüsselt gespeichert.
+
+Begründung:
+
+Garmin Connect stellt für diesen Anwendungsfall keine offizielle öffentliche API bereit. Deshalb braucht die Integration eine harte Sicherheitsgrenze: Read-only-Allowlist, Blocklist für schreibende Methoden, keine Credentials im Client, keine Raw Payloads in Logs und keine direkte Coach-Nutzung von Garmin-JSON. Rohdaten werden in `garmin_raw_records` archiviert, Kernsignale normalisiert und der Coach erhält nur serverseitig gebaute Zusammenfassungen. Für stündliche Synchronisation stellt die App `/api/cron/garmin-sync` bereit; auf Vercel Hobby muss dieser Endpoint extern oder mit Vercel Pro stündlich getriggert werden.

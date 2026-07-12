@@ -133,6 +133,19 @@ Vercel Hobby erlaubt nur einen Cron-Lauf pro Tag. Deshalb triggert `vercel.json`
 
 Wichtig: `SUPABASE_SERVICE_ROLE_KEY`, `STRAVA_CLIENT_SECRET`, `CRON_SECRET`, OAuth-State-Secret und Tokens dürfen nie im Client oder Repository landen.
 
+## Garmin Connect Integration
+
+Garmin ist als experimentelle, inoffizielle Integration vorbereitet. Details stehen in `docs/integrations/garmin.md`.
+
+- Feature Flag: `GARMIN_INTEGRATION_ENABLED=true`
+- Python-Bridge: `scripts/garmin_bridge.py`
+- Dependency: `requirements-garmin.txt`
+- Migration: `supabase/006_garmin_connect.sql`
+- API: `/api/integrations/garmin/*`
+- Cron-Endpoint: `/api/cron/garmin-sync`
+
+Garmin-Sessiondaten werden serverseitig mit `GARMIN_TOKEN_ENCRYPTION_KEY` verschlüsselt. Auf Vercel Hobby kann der stündliche Sync nicht über `vercel.json` aktiviert werden; nutze dafür Vercel Pro oder einen externen Scheduler mit `CRON_SECRET`.
+
 ## Nutrition & Fueling
 
 - Geloggte Mahlzeiten werden für eingeloggte Nutzer in `meal_logs` gespeichert

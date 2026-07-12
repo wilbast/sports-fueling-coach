@@ -88,6 +88,7 @@ export type CoachContextSource = {
   standards?: AppStandards;
   externalActivities?: CoachExternalActivitySummary[];
   trainingZones?: CoachTrainingZoneSummary[];
+  garminWellness?: unknown;
   nutritionLogsToday?: MealLog[];
 };
 
@@ -197,10 +198,30 @@ export function buildCoachContext(message: string, source: CoachContextSource, p
     externalActivities: summarizeExternalActivities(externalActivities, intent),
     athleteTrainingZones: summarizeTrainingZones(source.trainingZones ?? []),
     strava: summarizeStravaStatus(externalActivities, source.trainingZones ?? []),
+    garmin: summarizeGarminContext(source.garminWellness),
     relevantStandards: summarizeRelevantStandards(source.standards, source.mealTemplates, intent),
     deepContext: intent.needsDeepContext
       ? createDeepContext(weekPlans, source.profile, mealTemplates)
       : null
+  };
+}
+
+function summarizeGarminContext(garminWellness: unknown) {
+  if (!garminWellness || typeof garminWellness !== "object") {
+    return {
+      status: "empty",
+      note: "Keine normalisierten Garmin-Daten im Coach-Kontext."
+    };
+  }
+
+  return {
+    ...(garminWellness as Record<string, unknown>),
+    rule: "Garmin-Daten stammen aus normalisierten Supabase-Tabellen. Raw Garmin JSON wird dem Coach nicht direkt gegeben.",
+    coachingUse: [
+      "Nutze Schlaf, HRV, Ruhepuls, Stress, Body Battery und Recovery für Belastungs- und Regenerationsempfehlungen.",
+      "Fehlende Garmin-Werte als unknown behandeln, nicht als 0.",
+      "Wenn Garmin-Daten veraltet oder leer sind, Empfehlungen transparent als Schätzung formulieren."
+    ]
   };
 }
 

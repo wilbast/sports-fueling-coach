@@ -25,6 +25,8 @@
 - Aktivitätsanalysen aus realen Strava-Daten und Zonen ableiten: Belastung, Umfang, Pace-, HF- und Power-Trends.
 - Equipment-Ansicht für Schuhe und Geräte ergänzen.
 - Weitere Provideradapter vorbereiten: Garmin, Apple Health, Health Connect.
+- Garmin mit echtem Testaccount verifizieren: Login, MFA, Token-Reuse, Initial-Sync, Cron-Sync und nicht verfügbare Endpunkte.
+- Garmin-Dateidownloads für FIT/GPX/TCX/CSV an Object Storage anbinden.
 
 ## Erledigt
 
@@ -47,6 +49,7 @@
 - Persistente Coach-Chat-Historie mit Supabase RLS umgesetzt.
 - Strava OAuth, Synchronisation und providerneutrales Aktivitätsmodell umgesetzt.
 - Strava-Zonenimport für persönliche Trainingszonen und Aktivitäts-Zonenverteilungen umgesetzt.
+- Experimentelles Garmin-Fundament mit verschlüsselten Sessions, MFA-Flow, Raw Records, Normalisierung und UI umgesetzt.
 - Today Nutrition Status mit geloggten Mahlzeiten, Tagesbilanz und Protein-/Carb-Fortschritt umgesetzt.
 - Serverroute für AI-/Fallback-Nährwertschätzung und persistente Meal Logs umgesetzt.
 - Meal Logs im Fueling-Bereich bearbeitbar und löschbar gemacht.
