@@ -4,6 +4,7 @@ import { publishGarminSyncJob } from "@/lib/integrations/garmin/qstash";
 import { syncGarminWindow } from "@/lib/integrations/garmin/provider";
 
 type SyncType = "HOURLY" | "MANUAL" | "BACKFILL";
+const GARMIN_NORMALIZATION_VERSION = 2;
 
 type GarminJobRow = {
   id: string;
@@ -56,7 +57,7 @@ export async function dispatchDueGarminJobs(options: { force?: boolean } = {}) {
 export async function enqueueGarminSyncForUser(userId: string, mode: "initial" | "manual") {
   const supabase = createServiceRoleClient();
   const { data: connection, error } = await supabase.from("garmin_connections")
-    .select("id,earliest_imported_date")
+    .select("id,earliest_imported_date,metadata_json")
     .eq("user_id", userId)
     .eq("provider", "garmin")
     .eq("connection_status", "CONNECTED")
@@ -64,19 +65,36 @@ export async function enqueueGarminSyncForUser(userId: string, mode: "initial" |
   if (error || !connection) throw new Error("Garmin ist nicht verbunden.");
 
   const now = new Date();
-  const isBackfill = mode === "initial" && !connection.earliest_imported_date;
+  const backfillCutoff = isoDate(addDays(now, -positiveInt(process.env.GARMIN_INITIAL_BACKFILL_DAYS, 365) + 1));
+  const metadata = connection.metadata_json && typeof connection.metadata_json === "object" && !Array.isArray(connection.metadata_json)
+    ? connection.metadata_json as Record<string, unknown>
+    : {};
+  const requiresRenormalization = metadata.normalizationVersion !== GARMIN_NORMALIZATION_VERSION;
+  if (requiresRenormalization) {
+    const { error: resetError } = await supabase.from("garmin_connections").update({
+      earliest_imported_date: null,
+      metadata_json: { ...metadata, normalizationVersion: GARMIN_NORMALIZATION_VERSION }
+    }).eq("id", connection.id);
+    if (resetError) throw new Error("Garmin-Historienimport konnte nicht für die neue Datenstruktur vorbereitet werden.");
+  }
+  const earliestImportedDate = requiresRenormalization
+    ? null
+    : typeof connection.earliest_imported_date === "string" ? connection.earliest_imported_date : null;
+  const isBackfill = mode === "initial" || !earliestImportedDate || earliestImportedDate > backfillCutoff;
   const days = isBackfill
     ? boundedDays(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS, 1, 1)
     : boundedDays(process.env.GARMIN_SYNC_LOOKBACK_DAYS, 1, 1);
+  const backfillEnd = earliestImportedDate
+    ? isoDate(addDays(new Date(`${earliestImportedDate}T00:00:00.000Z`), -1))
+    : isoDate(now);
+  const endDate = isBackfill ? backfillEnd : isoDate(now);
   return enqueueGarminJob({
     userId,
     connectionId: String(connection.id),
     syncType: isBackfill ? "BACKFILL" : mode === "manual" ? "MANUAL" : "HOURLY",
-    startDate: isoDate(addDays(now, -days + 1)),
-    endDate: isoDate(now),
-    backfillCutoff: isBackfill
-      ? isoDate(addDays(now, -positiveInt(process.env.GARMIN_INITIAL_BACKFILL_DAYS, 365) + 1))
-      : null
+    startDate: isBackfill ? (endDate < backfillCutoff ? backfillCutoff : isoDate(addDays(new Date(`${endDate}T00:00:00.000Z`), -days + 1))) : isoDate(addDays(now, -days + 1)),
+    endDate: endDate < backfillCutoff ? backfillCutoff : endDate,
+    backfillCutoff: isBackfill ? backfillCutoff : null
   });
 }
 

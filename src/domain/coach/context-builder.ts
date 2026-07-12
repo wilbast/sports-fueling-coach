@@ -222,7 +222,6 @@ function summarizeGarminContext(garminWellness: unknown) {
   const sleep = asRecordArray(normalized.sleep);
   const hrv = asRecordArray(normalized.hrv);
   const recovery = asRecordArray(normalized.recovery);
-  const bodyMeasurements = asRecordArray(normalized.bodyMeasurements);
 
   return {
     ...normalized,
@@ -231,7 +230,6 @@ function summarizeGarminContext(garminWellness: unknown) {
       latestSleep: sleep[0] ?? null,
       latestHrv: hrv[0] ?? null,
       latestTrainingState: recovery[0] ?? null,
-      latestBodyMeasurement: bodyMeasurements[0] ?? null,
       sevenDayTrends: {
         averageSleepHours: averageOf(sleep.slice(0, 7), "duration_seconds", 1 / 3600),
         averageSleepScore: averageOf(sleep.slice(0, 7), "sleep_score"),
@@ -244,8 +242,7 @@ function summarizeGarminContext(garminWellness: unknown) {
         sleep.length > 0 ? "sleep" : null,
         hrv.length > 0 ? "hrv" : null,
         dailyHealth.length > 0 ? "daily_health_stress_body_battery_resting_hr" : null,
-        recovery.length > 0 ? "training_readiness_recovery_training_load_status" : null,
-        bodyMeasurements.length > 0 ? "weight_body_composition" : null
+        recovery.length > 0 ? "training_readiness_recovery_training_load_status" : null
       ].filter(Boolean)
     },
     rule: "Garmin-Daten stammen aus normalisierten Supabase-Tabellen. Raw Garmin JSON wird dem Coach nicht direkt gegeben.",

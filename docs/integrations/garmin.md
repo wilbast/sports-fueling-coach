@@ -65,7 +65,7 @@ Job-Payloads enthalten nur `jobId` und `connectionId`. Tokens, E-Mail-Adressen u
 
 Garmin ist die primäre Aktivitätsquelle. Wenn eine Einheit zusätzlich von Strava importiert wurde, erkennt der serverseitige Activity Resolver die Dublette über Sportart, Startzeit, Dauer und Distanz. Der Garmin-Datensatz bleibt kanonisch; Strava darf nur fehlende Felder und Zonen ergänzen. Damit werden Kilometer, Kalorien, Trainingsanzahl und Belastung nicht doppelt gezählt.
 
-Der Context Builder lädt bis zu 14 Tage normalisierte Gesundheitsdaten und erzeugt einen aktuellen Recovery Snapshot plus Sieben-Tage-Trends. Enthalten sind je nach Geräteverfügbarkeit Schlaf und Schlafphasen, HRV/Baseline, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Training Readiness, Recovery Time, Trainingsstatus, akute Last, Load Ratio/Focus, VO2max, Laktatschwelle, FTP, Endurance-/Hill-Score, Akklimatisierung, Gewicht und Körperzusammensetzung. Fehlende Messungen werden als `unknown` und nie als `0` behandelt. Gewichtsdaten benötigen zusätzlich Migration `supabase/008_garmin_body_measurements.sql`.
+Der Context Builder lädt bis zu 14 Tage normalisierte Gesundheitsdaten und erzeugt einen aktuellen Recovery Snapshot plus Sieben-Tage-Trends. Enthalten sind je nach Geräteverfügbarkeit Schlaf und Schlafphasen, HRV/Baseline, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Training Readiness, Recovery Time, Trainingsstatus, akute Last, Load Ratio/Focus, VO2max, Laktatschwelle, FTP, Endurance-/Hill-Score und Akklimatisierung. Fehlende Messungen werden als `unknown` und nie als `0` behandelt.
 
 ## QStash einmalig einrichten
 

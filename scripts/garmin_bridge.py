@@ -52,7 +52,6 @@ READ_REGISTRY = [
     {"endpointKey": "activities_by_date", "dataDomain": "activities", "methodName": "get_activities_by_date", "parameterStrategy": "date_range"},
     {"endpointKey": "training_readiness", "dataDomain": "training_readiness", "methodName": "get_training_readiness", "parameterStrategy": "date"},
     {"endpointKey": "training_status", "dataDomain": "training_status", "methodName": "get_training_status", "parameterStrategy": "date"},
-    {"endpointKey": "weigh_ins", "dataDomain": "weight", "methodName": "get_weigh_ins", "parameterStrategy": "date_range"},
 ]
 
 

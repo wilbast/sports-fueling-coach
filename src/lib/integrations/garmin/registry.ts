@@ -26,8 +26,7 @@ export type GarminDataDomain =
   | "activities"
   | "training_readiness"
   | "training_status"
-  | "performance"
-  | "weight";
+  | "performance";
 
 export const GARMIN_DANGEROUS_METHOD_PREFIXES = [
   "create",
@@ -186,16 +185,6 @@ export const GARMIN_READ_REGISTRY: GarminReadDefinition[] = [
     frequency: ["initial", "manual", "hourly", "backfill"],
     historicalStrategy: "backfill_by_day",
     normalizeTo: ["recovery"],
-    optional: true
-  },
-  {
-    endpointKey: "weigh_ins",
-    dataDomain: "weight",
-    methodName: "get_weigh_ins",
-    parameterStrategy: "date_range",
-    frequency: ["initial", "manual", "backfill"],
-    historicalStrategy: "rolling_window",
-    normalizeTo: [],
     optional: true
   }
 ];

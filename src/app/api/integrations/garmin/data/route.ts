@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const startTimestamp = `${start}T00:00:00.000Z`;
   const endExclusive = addDays(new Date(`${end}T00:00:00.000Z`), 1).toISOString();
 
-  const [activities, dailyHealth, sleep, hrv, recovery, bodyMeasurements] = await Promise.all([
+  const [activities, dailyHealth, sleep, hrv, recovery, connection, latestJob] = await Promise.all([
     supabase.from("activities")
       .select("id,source_activity_id,name,sport_type,start_date,start_date_local,distance_meters,moving_time_seconds,elapsed_time_seconds,elevation_gain_meters,calories,average_speed_mps,max_speed_mps,average_pace_seconds_per_km,max_pace_seconds_per_km,average_heartrate,max_heartrate,average_watts,max_watts,normalized_power,average_cadence,max_cadence,training_load,temperature_celsius,device_name,is_indoor,is_manual")
       .eq("user_id", userId).eq("source_provider", "garmin").gte("start_date", startTimestamp).lt("start_date", endExclusive).order("start_date", { ascending: false }),
@@ -33,12 +33,15 @@ export async function GET(request: NextRequest) {
     supabase.from("recovery_training_states")
       .select("measured_at,training_readiness,recovery_time_seconds,training_status,acute_load,load_ratio,load_focus_json,vo2max_running,vo2max_cycling,lactate_threshold_heart_rate,lactate_threshold_pace,ftp,endurance_score,hill_score,heat_acclimation,altitude_acclimation,updated_at")
       .eq("user_id", userId).eq("source", "garmin").gte("measured_at", startTimestamp).lt("measured_at", endExclusive).order("measured_at", { ascending: false }),
-    supabase.from("body_measurements")
-      .select("measured_at,weight_kg,bmi,body_fat_percent,body_water_percent,muscle_mass_kg,bone_mass_kg,visceral_fat,metabolic_age,basal_metabolic_rate,physique_rating,updated_at")
-      .eq("user_id", userId).eq("source", "garmin").gte("measured_at", startTimestamp).lt("measured_at", endExclusive).order("measured_at", { ascending: false })
+    supabase.from("garmin_connections")
+      .select("connection_status,last_successful_sync_at,earliest_imported_date")
+      .eq("user_id", userId).eq("provider", "garmin").maybeSingle(),
+    supabase.from("garmin_sync_jobs")
+      .select("status,window_start,window_end,last_error_code,sanitized_error_message,created_at,finished_at")
+      .eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle()
   ]);
 
-  const errors = [activities, dailyHealth, sleep, hrv, recovery, bodyMeasurements]
+  const errors = [activities, dailyHealth, sleep, hrv, recovery, connection, latestJob]
     .map((result) => result.error?.message)
     .filter((message): message is string => Boolean(message));
 
@@ -49,8 +52,11 @@ export async function GET(request: NextRequest) {
       daily: dailyHealth.data ?? [],
       sleep: sleep.data ?? [],
       hrv: hrv.data ?? [],
-      recovery: recovery.data ?? [],
-      bodyMeasurements: bodyMeasurements.data ?? []
+      recovery: recovery.data ?? []
+    },
+    sync: {
+      connection: connection.data ?? null,
+      latestJob: latestJob.data ?? null
     },
     warnings: errors
   });
@@ -62,4 +68,3 @@ function validDate(value: string | null): string | null {
 
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }
 function addDays(date: Date, days: number) { const next = new Date(date); next.setUTCDate(next.getUTCDate() + days); return next; }
-
