@@ -1,9 +1,9 @@
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { publishGarminSyncJob } from "@/lib/integrations/garmin/qstash";
 import { syncGarminWindow } from "@/lib/integrations/garmin/provider";
 
-type SyncType = "HOURLY" | "BACKFILL";
+type SyncType = "HOURLY" | "MANUAL" | "BACKFILL";
 
 type GarminJobRow = {
   id: string;
@@ -71,7 +71,7 @@ export async function enqueueGarminSyncForUser(userId: string, mode: "initial" |
   return enqueueGarminJob({
     userId,
     connectionId: String(connection.id),
-    syncType: isBackfill ? "BACKFILL" : "HOURLY",
+    syncType: isBackfill ? "BACKFILL" : mode === "manual" ? "MANUAL" : "HOURLY",
     startDate: isoDate(addDays(now, -days + 1)),
     endDate: isoDate(now),
     backfillCutoff: isBackfill
@@ -94,7 +94,8 @@ export async function enqueueGarminJob(input: {
     input.syncType,
     input.startDate,
     input.endDate,
-    input.syncType === "HOURLY" ? hourSlot(new Date()) : null
+    input.syncType === "HOURLY" ? hourSlot(new Date()) : null,
+    input.syncType === "MANUAL" ? randomUUID() : null
   ].filter(Boolean).join(":");
   const { data: existing } = await supabase
     .from("garmin_sync_jobs")
