@@ -150,6 +150,8 @@ QStash wird einmalig mit `pnpm garmin:qstash:configure` eingerichtet. Benötigt 
 
 Auf Vercel läuft Garmin über die separate Python-Function `api/garmin_bridge.py`. Dafür muss zusätzlich `GARMIN_BRIDGE_SHARED_SECRET` gesetzt sein; `requirements.txt` installiert die Python-Abhängigkeit automatisch.
 
+Die authentifizierte Seite `/garmin` zeigt normalisierte Gesundheitsdaten und Aktivitäten tabellarisch nach frei wählbarem Zeitraum. Tokens und Garmin-Rohpayloads werden dort nicht ausgegeben.
+
 Garmin-Sessiondaten werden serverseitig mit `GARMIN_TOKEN_ENCRYPTION_KEY` verschlüsselt. Auf Vercel Hobby kann der stündliche Sync nicht über `vercel.json` aktiviert werden; nutze dafür Vercel Pro oder einen externen Scheduler mit `CRON_SECRET`.
 
 ## Nutrition & Fueling

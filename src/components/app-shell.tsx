@@ -76,12 +76,12 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </aside>
 
-      <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-28 pt-5 sm:px-6 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-8">
+      <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-40 pt-5 sm:px-6 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-8">
         {children}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-soft backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-xl grid-cols-4 gap-1">
+        <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;

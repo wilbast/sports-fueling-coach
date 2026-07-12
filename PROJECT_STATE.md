@@ -114,6 +114,7 @@ Weitere Bereiche:
 - Garmin Runtime: separate, per Shared Secret geschützte Vercel-Python-Function statt Python-Spawn aus der Node-Function
 - Datenpriorität: Garmin-Aktivitäten sind bei Garmin-/Strava-Dubletten kanonisch; Strava ergänzt nur fehlende Messwerte, die Einheit wird nie doppelt gezählt
 - Garmin Coach Health: Schlaf, HRV, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Readiness, Recovery, Trainingslast/-status und Performancewerte fließen strukturiert in Empfehlungen ein
+- Garmin-Datenansicht: eigener Menüpunkt `/garmin` mit Zeitraumwahl, kategorisierten Gesundheitstabellen und Garmin-Aktivitäten
 - Coach-Kontext: externe Aktivitäten und Trainingszonen werden serverseitig aus Supabase geladen, mit erweiterten Strava-Kriterien strukturiert zusammengefasst und als Ist-plus-Zukunft-Bewertung in den Wochenumfang einbezogen; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
 - Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros
 - Meal-Log-Metadaten: Kategorie und Hauptmahlzeit werden in `metadata` gespeichert und in Coach-Kontext, Today und Fueling-UI genutzt

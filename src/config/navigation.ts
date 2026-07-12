@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
   Salad,
   Settings,
+  Watch,
   type LucideIcon
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ export const navItems: NavItem[] = [
   { label: "Training", href: "/training", icon: Dumbbell },
   { label: "Fueling", href: "/fueling", icon: Salad },
   { label: "Insights", href: "/insights", icon: BarChart3 },
+  { label: "Garmin", href: "/garmin", icon: Watch },
   { label: "Standards", href: "/configuration", icon: SlidersHorizontal },
   { label: "Einstellungen", href: "/settings", icon: Settings }
 ];
