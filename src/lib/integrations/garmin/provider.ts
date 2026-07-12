@@ -50,6 +50,21 @@ type GarminSyncRunRow = {
   sanitized_error_message: string | null;
 };
 
+type GarminSyncJobRow = {
+  id: string;
+  sync_type: string;
+  status: string;
+  window_start: string;
+  window_end: string;
+  attempt_count: number;
+  qstash_message_id: string | null;
+  last_error_code: string | null;
+  sanitized_error_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
 export type GarminIntegrationStatus = {
   configured: boolean;
   featureEnabled: boolean;
@@ -77,6 +92,20 @@ export type GarminIntegrationStatus = {
     unchangedRecords: number;
     errorCode?: string;
     errorMessage?: string;
+  };
+  latestSyncJob?: {
+    id: string;
+    syncType: string;
+    status: string;
+    windowStart: string;
+    windowEnd: string;
+    attemptCount: number;
+    qstashMessageId?: string;
+    errorCode?: string;
+    errorMessage?: string;
+    createdAt: string;
+    startedAt?: string;
+    finishedAt?: string;
   };
   activityCount: number;
   rawRecordCount: number;
@@ -149,6 +178,13 @@ export async function getGarminIntegrationStatus(userId: string): Promise<Garmin
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  const { data: latestSyncJob } = await supabase
+    .from("garmin_sync_jobs")
+    .select("id,sync_type,status,window_start,window_end,attempt_count,qstash_message_id,last_error_code,sanitized_error_message,created_at,started_at,finished_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   const [activityCount, rawRecordCount, dailyHealthCount, sleepCount, hrvCount] = await Promise.all([
     countRows("activities", userId, "source_provider", "garmin"),
     countRows("garmin_raw_records", userId),
@@ -158,11 +194,12 @@ export async function getGarminIntegrationStatus(userId: string): Promise<Garmin
   ]);
   const row = connection as GarminConnectionRow | null;
   const syncRun = latestSyncRun as GarminSyncRunRow | null;
+  const syncJob = latestSyncJob as GarminSyncJobRow | null;
 
   return {
     configured: true,
     featureEnabled,
-    connected: row?.connection_status === "CONNECTED",
+    connected: Boolean(row?.encrypted_token_payload) && !["DISCONNECTED", "REAUTH_REQUIRED"].includes(row?.connection_status ?? "DISCONNECTED"),
     provider: "garmin",
     status: row?.connection_status ?? "DISCONNECTED",
     maskedAccount: row?.encrypted_provider_username_or_email ? safeDecryptMaskedEmail(row.encrypted_provider_username_or_email) : row?.provider_display_name ?? undefined,
@@ -186,6 +223,20 @@ export async function getGarminIntegrationStatus(userId: string): Promise<Garmin
       unchangedRecords: syncRun.unchanged_records ?? 0,
       errorCode: syncRun.error_code ?? undefined,
       errorMessage: syncRun.sanitized_error_message ?? undefined
+    } : undefined,
+    latestSyncJob: syncJob ? {
+      id: syncJob.id,
+      syncType: syncJob.sync_type,
+      status: syncJob.status,
+      windowStart: syncJob.window_start,
+      windowEnd: syncJob.window_end,
+      attemptCount: syncJob.attempt_count ?? 0,
+      qstashMessageId: syncJob.qstash_message_id ?? undefined,
+      errorCode: syncJob.last_error_code ?? undefined,
+      errorMessage: syncJob.sanitized_error_message ?? undefined,
+      createdAt: syncJob.created_at,
+      startedAt: syncJob.started_at ?? undefined,
+      finishedAt: syncJob.finished_at ?? undefined
     } : undefined,
     activityCount,
     rawRecordCount,

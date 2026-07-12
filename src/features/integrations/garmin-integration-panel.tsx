@@ -30,6 +30,19 @@ type GarminStatus = {
     unchangedRecords: number;
     errorMessage?: string;
   };
+  latestSyncJob?: {
+    id: string;
+    syncType: string;
+    status: string;
+    windowStart: string;
+    windowEnd: string;
+    attemptCount: number;
+    errorCode?: string;
+    errorMessage?: string;
+    createdAt: string;
+    startedAt?: string;
+    finishedAt?: string;
+  };
   activityCount: number;
   rawRecordCount: number;
   dailyHealthCount: number;
@@ -153,6 +166,12 @@ export function GarminIntegrationPanel() {
     for (const delayMs of [3000, 7000, 15000, 30000, 45000]) {
       await wait(delayMs);
       const current = await loadStatus({ silent: true });
+      const job = current?.latestSyncJob;
+      if (job && ["RETRYING", "DISPATCH_FAILED", "FAILED"].includes(job.status) && job.errorMessage) {
+        setError(`Garmin-Job ${job.status}: ${job.errorMessage}`);
+        setMessage(null);
+        return;
+      }
       const run = current?.latestSyncRun;
       if (!run || run.id === previousRunId) continue;
       if (["FAILED", "ERROR", "REAUTH_REQUIRED", "RATE_LIMITED"].includes(run.status)) {
@@ -244,6 +263,14 @@ export function GarminIntegrationPanel() {
             <div className="rounded-xl border border-line px-3 py-3 text-sm leading-6 text-muted">
               Letzter Lauf: {status.latestSyncRun.status} · {status.latestSyncRun.syncType} · {status.latestSyncRun.successfulRequests} erfolgreich · {status.latestSyncRun.failedRequests} Fehler
               {status.latestSyncRun.errorMessage ? ` · ${status.latestSyncRun.errorMessage}` : ""}
+            </div>
+          ) : null}
+
+          {status.latestSyncJob ? (
+            <div className={`rounded-xl border px-3 py-3 text-sm leading-6 ${status.latestSyncJob.errorMessage ? "border-rose-100 bg-rose-50 text-rose-700" : "border-line text-muted"}`}>
+              Queue-Job: {status.latestSyncJob.status} · {status.latestSyncJob.syncType} · Versuch {status.latestSyncJob.attemptCount}
+              {status.latestSyncJob.errorCode ? ` · ${status.latestSyncJob.errorCode}` : ""}
+              {status.latestSyncJob.errorMessage ? ` · ${status.latestSyncJob.errorMessage}` : ""}
             </div>
           ) : null}
 
