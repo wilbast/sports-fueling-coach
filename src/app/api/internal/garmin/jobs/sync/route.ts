@@ -3,7 +3,7 @@ import { QStashConfigurationError, QStashSignatureError, readVerifiedQStashBody 
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 150;
 
 export async function POST(request: Request) {
   try {
@@ -31,4 +31,3 @@ function nonRetryable(message: string) {
     headers: { "Upstash-NonRetryable-Error": "true" }
   });
 }
-

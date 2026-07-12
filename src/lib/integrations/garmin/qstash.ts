@@ -51,7 +51,7 @@ export async function publishGarminSyncJob(message: GarminQStashJobMessage, dedu
     deduplicationId,
     retries: 5,
     retryDelay: "max(30000, pow(2, retried) * 30000)",
-    timeout: 55,
+    timeout: 140,
     flowControl: {
       key: `garmin-${message.connectionId}`,
       parallelism: 1,

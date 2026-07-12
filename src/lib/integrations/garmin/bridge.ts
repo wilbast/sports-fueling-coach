@@ -153,8 +153,8 @@ function resolveBridgeBaseUrl(): string | null {
 }
 
 function getTimeoutMs(): number {
-  const parsed = Number.parseInt(process.env.GARMIN_REQUEST_TIMEOUT_SECONDS ?? "45", 10) * 1000;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 45000;
+  const parsed = Number.parseInt(process.env.GARMIN_REQUEST_TIMEOUT_SECONDS ?? "120", 10) * 1000;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.max(90000, Math.min(parsed, 120000)) : 120000;
 }
 
 function sanitizeStderr(value: string): string {

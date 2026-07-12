@@ -34,8 +34,8 @@ export async function dispatchDueGarminJobs(options: { force?: boolean } = {}) {
   const results = [];
   for (const connection of due) {
     const isInitial = !connection.earliest_imported_date;
-    const chunkDays = positiveInt(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS, 7);
-    const lookbackDays = positiveInt(process.env.GARMIN_SYNC_LOOKBACK_DAYS, 3);
+    const chunkDays = boundedDays(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS, 1, 1);
+    const lookbackDays = boundedDays(process.env.GARMIN_SYNC_LOOKBACK_DAYS, 1, 1);
     const endDate = isoDate(now);
     const startDate = isoDate(addDays(now, -(isInitial ? chunkDays : lookbackDays) + 1));
     const cutoff = isInitial
@@ -66,8 +66,8 @@ export async function enqueueGarminSyncForUser(userId: string, mode: "initial" |
   const now = new Date();
   const isBackfill = mode === "initial" && !connection.earliest_imported_date;
   const days = isBackfill
-    ? positiveInt(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS, 7)
-    : positiveInt(process.env.GARMIN_SYNC_LOOKBACK_DAYS, 3);
+    ? boundedDays(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS, 1, 1)
+    : boundedDays(process.env.GARMIN_SYNC_LOOKBACK_DAYS, 1, 1);
   return enqueueGarminJob({
     userId,
     connectionId: String(connection.id),
@@ -99,12 +99,16 @@ export async function enqueueGarminJob(input: {
   ].filter(Boolean).join(":");
   const { data: existing } = await supabase
     .from("garmin_sync_jobs")
-    .select("id,status,qstash_message_id")
+    .select("id,status,qstash_message_id,attempt_count,started_at")
     .eq("deduplication_key", deduplicationKey)
     .maybeSingle();
   if (existing) {
-    if (["DISPATCH_FAILED", "QUEUED"].includes(String(existing.status)) && !existing.qstash_message_id) {
-      return publishExistingJob(String(existing.id), input.connectionId, deduplicationKey);
+    const staleRunning = existing.status === "RUNNING"
+      && existing.started_at
+      && new Date(String(existing.started_at)).getTime() < Date.now() - 3 * 60 * 1000;
+    if (["DISPATCH_FAILED", "RETRYING"].includes(String(existing.status)) || staleRunning || (existing.status === "QUEUED" && !existing.qstash_message_id)) {
+      const dispatchKey = `${deduplicationKey}:recovery:${Number(existing.attempt_count ?? 0) + 1}:v2`;
+      return publishExistingJob(String(existing.id), input.connectionId, dispatchKey);
     }
     return { jobId: existing.id, status: existing.status, messageId: existing.qstash_message_id, deduplicated: true };
   }
@@ -148,7 +152,7 @@ async function publishExistingJob(jobId: string, connectionId: string, deduplica
 }
 
 export function createQStashDeduplicationId(deduplicationKey: string): string {
-  return `garmin-${createHash("sha256").update(deduplicationKey).digest("hex")}`;
+  return `garmin-v2-${createHash("sha256").update(deduplicationKey).digest("hex")}`;
 }
 
 export async function processGarminJob(message: { jobId: string; connectionId: string }) {
@@ -202,7 +206,7 @@ export async function processGarminJob(message: { jobId: string; connectionId: s
 
 async function enqueuePreviousBackfill(job: GarminJobRow) {
   if (!job.backfill_cutoff || job.window_start <= job.backfill_cutoff) return null;
-  const chunkDays = positiveInt(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS, 7);
+  const chunkDays = boundedDays(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS, 1, 1);
   const nextEnd = addDays(new Date(`${job.window_start}T00:00:00.000Z`), -1);
   const proposedStart = isoDate(addDays(nextEnd, -chunkDays + 1));
   const nextStart = proposedStart < job.backfill_cutoff ? job.backfill_cutoff : proposedStart;
@@ -221,6 +225,10 @@ export class NonRetryableGarminJobError extends Error {}
 function positiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function boundedDays(value: string | undefined, fallback: number, maximum: number) {
+  return Math.min(positiveInt(value, fallback), maximum);
 }
 
 function isoDate(value: Date) { return value.toISOString().slice(0, 10); }

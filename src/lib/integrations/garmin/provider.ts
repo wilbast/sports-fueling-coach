@@ -316,8 +316,8 @@ export async function completeGarminMfa(userId: string, input: { attemptId: stri
 export async function syncGarminAccount(userId: string, syncType: "INITIAL" | "HOURLY" | "MANUAL" | "BACKFILL" | "REPAIR", trigger: string): Promise<GarminSyncResult> {
   const now = new Date();
   const lookbackDays = syncType === "INITIAL"
-    ? Number.parseInt(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS ?? "7", 10)
-    : Number.parseInt(process.env.GARMIN_SYNC_LOOKBACK_DAYS ?? "3", 10);
+    ? 1
+    : 1;
   const endDate = toIsoDate(now);
   const startDate = toIsoDate(addDays(now, -Math.max(1, lookbackDays - 1)));
   const connection = await loadConnectedConnection(userId);

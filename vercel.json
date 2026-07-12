@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/garmin_bridge.py": {
-      "maxDuration": 60
+      "maxDuration": 150
     }
   },
   "crons": [
