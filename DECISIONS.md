@@ -341,3 +341,9 @@ Eine Vercel-Node-Function besitzt keinen garantierten `python3`-Prozess. Deshalb
 ### ADR-036: Garmin ist primäre Aktivitäts- und Gesundheitsquelle
 
 Wenn Garmin und Strava dieselbe reale Aktivität enthalten, wird sie nur einmal gezählt. Startzeit, Sportart, Dauer und Distanz dienen zur Dublettenerkennung. Garmin bleibt der kanonische Datensatz; Strava ergänzt ausschließlich fehlende Felder und gegebenenfalls Zoneninformationen. Diese Regel gilt in UI, Tagesbilanz, Wochenumfang, akuter Belastung und Coach-Kontext. Der Coach erhält zusätzlich normalisierte Garmin-Signale für Schlaf, HRV, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Training Readiness, Recovery, Trainingslast/-status und Leistungsmetriken. Fehlende Werte bleiben unbekannt; Entscheidungen berücksichtigen Trends und mehrere übereinstimmende Signale.
+
+### ADR-037: Insights wird zum fokussierten Performance Cockpit
+
+Die Route `/insights` bündelt Recovery, Training, Fueling, Garmin-Marker, Ziele und Coach-Einordnung in einem eigenständigen dunklen Cockpit. `Today` bleibt die operative Tagesseite und wird nicht durch ein Analyse-Dashboard ersetzt. Dashboard-Komponenten lesen ausschließlich einen typisierten `DashboardData`-Vertrag; aktuell liefert `/api/dashboard` klar gekennzeichnete Mockdaten. Später kann die Route serverseitig aggregierte Supabase-Daten liefern, ohne die Visualisierung neu zu strukturieren.
+
+Körper-, Gewichts- und Flüssigkeitsmodule werden trotz ursprünglichem Designbrief nicht aufgenommen, weil diese Bereiche bewusst nicht getrackt werden. Drag-and-drop-Personalisierung und Chart-Export werden erst nach der Echtdatenanbindung bewertet. Framer Motion respektiert reduzierte Bewegung, Recharts übernimmt die zweidimensionalen Visualisierungen und alle Kernaktionen bleiben per Tastatur erreichbar.

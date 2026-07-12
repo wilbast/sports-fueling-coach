@@ -1,5 +1,5 @@
-import { InsightsView } from "@/features/insights/insights-view";
+import { DashboardView } from "@/components/dashboard/dashboard-view";
 
 export default function InsightsPage() {
-  return <InsightsView />;
+  return <DashboardView />;
 }

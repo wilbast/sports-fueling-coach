@@ -85,7 +85,7 @@ Weitere Bereiche:
 
 - Training zeigt die Woche aus dem lokalen Plan, erlaubt Statusänderungen und verwaltet Trainingsstandards.
 - Fueling erlaubt Fuelingstandards, einmalige Tagesmahlzeiten und Tageszuordnung, aber nicht als starre Wochenplanung in Planung.
-- Insights leitet Wochenwerte aus Training und Zielen ab.
+- Insights ist ein responsives Performance Cockpit mit Recovery-, Trainings-, Fueling-, Garmin-, Ziel- und Coach-Modulen.
 - Einstellungen erlauben Profil-, Ziel- und Wettkampfänderungen.
 - Demo-Daten können zurückgesetzt werden.
 
@@ -115,6 +115,7 @@ Weitere Bereiche:
 - Datenpriorität: Garmin-Aktivitäten sind bei Garmin-/Strava-Dubletten kanonisch; Strava ergänzt nur fehlende Messwerte, die Einheit wird nie doppelt gezählt
 - Garmin Coach Health: Schlaf, HRV, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Readiness, Recovery, Trainingslast/-status und Performancewerte fließen strukturiert in Empfehlungen ein
 - Garmin-Datenansicht: eigener Menüpunkt `/garmin` mit Zeitraumwahl, kategorisierten Gesundheitstabellen und Garmin-Aktivitäten
+- Dashboard 2.0: `/insights` nutzt eine typisierte Mock-API, Recharts, Framer Motion, Zeitraumumschaltung, Skeletons und einen eigenständigen responsiven Dark-Mode-Rahmen
 - Coach-Kontext: externe Aktivitäten und Trainingszonen werden serverseitig aus Supabase geladen, mit erweiterten Strava-Kriterien strukturiert zusammengefasst und als Ist-plus-Zukunft-Bewertung in den Wochenumfang einbezogen; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
 - Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros
 - Meal-Log-Metadaten: Kategorie und Hauptmahlzeit werden in `metadata` gespeichert und in Coach-Kontext, Today und Fueling-UI genutzt
@@ -131,7 +132,7 @@ Weitere Bereiche:
 - JSONB-State ist für Planung/Fueling/Standards noch ein Übergangsmodell; externe Aktivitäten sind bereits normalisiert.
 - Standardmahlzeiten werden UI-seitig noch aus dem App-State angezeigt; die normalisierte `standard_meals`-Tabelle ist vorbereitet, aber noch nicht vollständig als Verwaltungsquelle angebunden.
 - Es gibt noch keine Validierung auf fachlich unmögliche Pläne.
-- Insights sind abgeleitet, aber noch nicht tief analysiert.
+- Dashboard 2.0 nutzt bewusst gekennzeichnete Mockdaten; die serverseitige Aggregation echter App-, Garmin-, Strava- und Ernährungsdaten steht noch aus.
 - Es gibt noch keine automatisierten Unit-Tests.
 - Der Coach bietet übernehmbare Vorschläge, hat aber noch keine Undo-Historie.
 - Schlaf, Krankheit, Alkohol und Regeneration sind noch keine echten Zeitreihen. Wasser wird bewusst nicht getrackt.

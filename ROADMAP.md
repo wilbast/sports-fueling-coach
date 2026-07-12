@@ -232,3 +232,24 @@ Umgesetzt:
 - stündlicher QStash-Scheduler mit signierten Einzeljobs pro Verbindung
 - wiederaufnehmbare Erstimporte und Backfills in konfigurierbaren Datumsfenstern
 - technische Dokumentation und Registry-Drift-Check
+
+## Sprint 15: Dashboard 2.0
+
+Status: Mock-Cockpit umgesetzt, Echtdatenanbindung ausstehend
+
+Umgesetzt:
+
+- `/insights` als fokussiertes Performance Cockpit
+- Hero-Status, vier Kern-Scores und zentrale Coach-Empfehlung
+- Recovery-, Schlaf-, HRV-, Stress-, Trainings-, Pace-, Kalorien-, Makro- und Proteinvisualisierung
+- Garmin-Highlights, steuernde Ziele und Trainingskalender
+- typisierte `/api/dashboard`-Schnittstelle mit klar gekennzeichneten Mockdaten
+- Recharts, Framer Motion, Skeletons, Zeitraumumschaltung und responsive Dark-Mode-Darstellung
+- Mobile- und Desktop-Prüfung ohne horizontale Überbreite oder leere Charts
+
+Bewusst verschoben:
+
+- Echtdatenaggregation aus Supabase
+- Drag-and-drop-Personalisierung
+- PNG-/PDF-Export
+- Körper-, Gewichts- und Flüssigkeitsmodule

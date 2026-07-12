@@ -11,7 +11,8 @@
 - Standardmahlzeiten und Rezepte vollständig aus `standard_meals`/`recipes` statt App-State verwalten.
 - Coach-Verlauf um Thread-Auswahl und Löschen/Archivieren erweitern.
 - Coach-Empfehlungen aus Header-Aktionen optional als eigene Seitenpanels anzeigen, falls sie im engen Header zu dominant werden.
-- Normalisierte Zeitreihen für Gewicht, Wasser, Schlaf, Krankheit, Alkohol und Regeneration ergänzen.
+- Normalisierte Zeitreihen für Schlaf, Krankheit, Alkohol und Regeneration ergänzen.
+- Dashboard-API von Mockdaten auf serverseitig aggregierte Supabase-, Garmin-, Strava- und Ernährungsdaten umstellen.
 - Coach-Audit-Trail und Undo für übernommene Änderungen bauen.
 - Tagesbewertung erst nach belastbarer Datenbasis aktivieren.
 
@@ -62,6 +63,7 @@
 - Context Builder um Page-Context-Gewichtung erweitert.
 - Quick-Fueling- und Coach-Übernahmen speichern Kategorie/Hauptmahlzeit konsistent.
 - Product-, UX- und Architekturreview dokumentiert.
+- Dashboard 2.0 als responsives Performance Cockpit mit typisierter Mock-API, Recharts, Framer Motion und Dark Mode umgesetzt.
 
 ## P2
 
@@ -77,3 +79,4 @@
 - Grammgenaue Lebensmittel-Erfassung.
 - Abhak-Checklisten als zentrales Produktmuster.
 - Komplexe Trainingssteuerung vor sauberer Planungslogik.
+- Dashboard-Drag-and-drop und Chart-Export vor der Echtdatenanbindung.

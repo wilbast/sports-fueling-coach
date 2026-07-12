@@ -16,6 +16,7 @@ type AppShellProps = {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const onlineMode = isSupabaseConfigured();
+  const dashboardMode = pathname === "/insights";
 
   if (pathname === "/login") {
     return <div className="min-h-screen bg-canvas text-ink">{children}</div>;
@@ -23,17 +24,17 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <AppStateProvider>
-      <div className="min-h-screen bg-canvas text-ink">
-      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-line bg-white/80 px-4 py-5 backdrop-blur lg:flex lg:flex-col">
+      <div className={clsx("min-h-screen", dashboardMode ? "bg-[#0B1220] text-[#F9FAFB]" : "bg-canvas text-ink")}>
+      <aside className={clsx("fixed inset-y-0 left-0 z-30 hidden w-72 border-r px-4 py-5 backdrop-blur lg:flex lg:flex-col", dashboardMode ? "border-[#1F2937] bg-[#0F172A]/95" : "border-line bg-white/80")}>
         <Link href="/today" className="mb-8 flex items-center gap-3 rounded-xl px-2 py-1">
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-coach-600 text-white">
             <Activity className="h-5 w-5" aria-hidden="true" />
           </span>
           <span>
-            <span className="block text-sm font-semibold tracking-wide text-ink">
+            <span className={clsx("block text-sm font-semibold tracking-wide", dashboardMode ? "text-white" : "text-ink")}>
               Sports & Fueling
             </span>
-            <span className="block text-xs text-muted">{onlineMode ? "Coach Beta" : "Coach Demo"}</span>
+            <span className={clsx("block text-xs", dashboardMode ? "text-[#9CA3AF]" : "text-muted")}>{onlineMode ? "Coach Beta" : "Coach Demo"}</span>
           </span>
         </Link>
 
@@ -49,8 +50,8 @@ export function AppShell({ children }: AppShellProps) {
                 className={clsx(
                   "group flex items-center justify-between rounded-xl px-3 py-3 text-sm font-medium transition",
                   active
-                    ? "bg-coach-50 text-coach-900"
-                    : "text-muted hover:bg-white hover:text-ink"
+                    ? dashboardMode ? "bg-[#1E3A5F] text-white" : "bg-coach-50 text-coach-900"
+                    : dashboardMode ? "text-[#9CA3AF] hover:bg-[#111827] hover:text-white" : "text-muted hover:bg-white hover:text-ink"
                 )}
               >
                 <span className="flex items-center gap-3">
@@ -63,8 +64,8 @@ export function AppShell({ children }: AppShellProps) {
           })}
         </nav>
 
-        <div className="rounded-2xl border border-line bg-white p-4 text-sm text-muted">
-          <p className="font-medium text-ink">
+        <div className={clsx("rounded-lg border p-4 text-sm", dashboardMode ? "border-[#1F2937] bg-[#111827] text-[#9CA3AF]" : "border-line bg-white text-muted")}>
+          <p className={clsx("font-medium", dashboardMode ? "text-white" : "text-ink")}>
             {onlineMode ? "Gesicherter Online-Modus" : "Lokaler Demo-Modus"}
           </p>
           <p className="mt-1 leading-5">
@@ -76,11 +77,11 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </aside>
 
-      <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-40 pt-5 sm:px-6 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-8">
+      <main className={clsx("mx-auto min-h-screen w-full px-4 pb-40 pt-5 sm:px-6 lg:ml-72 lg:w-[calc(100%-18rem)] lg:px-8 lg:pb-10 lg:pt-8", dashboardMode ? "lg:max-w-none" : "max-w-6xl")}>
         {children}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-soft backdrop-blur lg:hidden">
+      <nav className={clsx("fixed inset-x-0 bottom-0 z-40 border-t px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-soft backdrop-blur lg:hidden", dashboardMode ? "border-[#1F2937] bg-[#0F172A]/95" : "border-line bg-white/95")}>
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -92,7 +93,7 @@ export function AppShell({ children }: AppShellProps) {
                 href={item.href}
                 className={clsx(
                   "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[0.68rem] font-medium transition",
-                  active ? "bg-coach-50 text-coach-700" : "text-muted"
+                  active ? dashboardMode ? "bg-[#1E3A5F] text-white" : "bg-coach-50 text-coach-700" : dashboardMode ? "text-[#9CA3AF]" : "text-muted"
                 )}
                 aria-label={item.label}
               >
