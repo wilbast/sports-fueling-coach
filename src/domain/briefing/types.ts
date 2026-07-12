@@ -11,6 +11,7 @@ export type DailyBriefingInput = {
   dayPlan: DayPlan;
   mealTemplates: MealTemplate[];
   actualActivities?: ActualActivityForBriefing[];
+  garminDailyTotalCalories?: number | null;
   energySettings?: EnergySettings;
 };
 

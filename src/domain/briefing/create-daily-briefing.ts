@@ -9,7 +9,7 @@ export function createDailyBriefing(input: DailyBriefingInput): DailyBriefing {
   const primaryWorkout = plannedWorkouts.find((workout) => workout.status === "planned") ?? plannedWorkouts[0];
   const baselineCalories = resolveBaselineCalories(goals.weightStrategy, input.energySettings?.baselineCaloriesWithoutActivity);
   const manualForecastCalories = input.energySettings?.manualDailyBurnForecastCaloriesByDate?.[dayPlan.date] ?? 0;
-  const activitySummary = summarizeActualActivities(actualActivities, manualForecastCalories, plannedWorkouts, baselineCalories);
+  const activitySummary = summarizeActualActivities(actualActivities, input.garminDailyTotalCalories ?? 0, manualForecastCalories, plannedWorkouts, baselineCalories);
   const runningDistanceKm = plannedWorkouts
     .filter((workout) => workout.sport === "running" && workout.status !== "optional")
     .reduce((sum, workout) => sum + (workout.distanceKm ?? 0), 0) || activitySummary.runningDistanceKm;
@@ -54,7 +54,7 @@ type ActualActivitySummary = {
   plannedCalories: number;
   baselineCalories: number;
   totalDailyBurnCalories: number;
-  calorieSource: "actual" | "manual_forecast" | "planned" | "none";
+  calorieSource: "garmin" | "actual" | "manual_forecast" | "planned" | "none";
   runningDistanceKm: number;
   movingMinutes: number;
   averageHeartRate?: number;
@@ -64,23 +64,29 @@ type ActualActivitySummary = {
 
 function summarizeActualActivities(
   activities: ActualActivityForBriefing[],
+  garminTotalCalories: number,
   forecastCalories: number,
   plannedWorkouts: WorkoutPlan[],
   baselineCalories: number
 ): ActualActivitySummary {
   const actualCalories = activities.reduce((sum, activity) => sum + estimateActivityCalories(activity), 0);
+  const normalizedGarminTotalCalories = Math.max(0, Math.round(garminTotalCalories));
   const normalizedForecastTotalCalories = Math.max(0, Math.round(forecastCalories));
   const forecastActivityCalories = normalizedForecastTotalCalories > 0
     ? Math.max(0, normalizedForecastTotalCalories - baselineCalories)
     : 0;
   const plannedCalories = estimatePlannedActivityCalories(plannedWorkouts);
-  const effectiveCalories = normalizedForecastTotalCalories > 0
-    ? forecastActivityCalories
+  const effectiveCalories = normalizedGarminTotalCalories > 0
+    ? Math.max(0, normalizedGarminTotalCalories - baselineCalories)
+    : normalizedForecastTotalCalories > 0
+      ? forecastActivityCalories
     : activities.length > 0
       ? actualCalories
       : plannedCalories;
-  const calorieSource = normalizedForecastTotalCalories > 0
-    ? "manual_forecast"
+  const calorieSource = normalizedGarminTotalCalories > 0
+    ? "garmin"
+    : normalizedForecastTotalCalories > 0
+      ? "manual_forecast"
     : activities.length > 0
       ? "actual"
       : plannedCalories > 0
@@ -104,10 +110,10 @@ function summarizeActualActivities(
     calories: Math.round(effectiveCalories),
     actualCalories: Math.round(actualCalories),
     forecastCalories: forecastActivityCalories,
-    forecastTotalCalories: normalizedForecastTotalCalories,
+    forecastTotalCalories: normalizedGarminTotalCalories || normalizedForecastTotalCalories,
     plannedCalories: Math.round(plannedCalories),
     baselineCalories,
-    totalDailyBurnCalories: normalizedForecastTotalCalories > 0 ? normalizedForecastTotalCalories : baselineCalories + Math.round(effectiveCalories),
+    totalDailyBurnCalories: normalizedGarminTotalCalories || normalizedForecastTotalCalories || baselineCalories + Math.round(effectiveCalories),
     calorieSource,
     runningDistanceKm,
     movingMinutes,
@@ -127,7 +133,7 @@ function createNutritionTarget(
 ): NutritionTarget {
   const baseCalories = createBaseCalorieTarget(weightStrategy, baselineCaloriesWithoutActivity);
   actual.baselineCalories = baseCalories.baseline;
-  actual.totalDailyBurnCalories = actual.calorieSource === "manual_forecast" && actual.forecastTotalCalories > 0
+  actual.totalDailyBurnCalories = (actual.calorieSource === "garmin" || actual.calorieSource === "manual_forecast") && actual.forecastTotalCalories > 0
     ? actual.forecastTotalCalories
     : baseCalories.baseline + actual.calories;
   const calorieTarget = createCalorieIntakeTarget(weightStrategy, actual.totalDailyBurnCalories);
@@ -170,6 +176,8 @@ function createNutritionTarget(
       "Protein bleibt hoch für Sättigung und Muskelerhalt.",
       actual.calorieSource === "actual"
         ? `Tagesverbrauch: ${formatNumber(baseCalories.baseline)} kcal Basis plus ca. ${formatNumber(actual.calories)} kcal aus synchronisierter Aktivität.`
+        : actual.calorieSource === "garmin"
+          ? `Tagesverbrauch aus Garmin: ca. ${formatNumber(actual.forecastTotalCalories)} kcal Gesamtverbrauch.`
         : actual.calorieSource === "manual_forecast"
           ? `Tagesverbrauch manuell überschrieben: ca. ${formatNumber(actual.forecastTotalCalories)} kcal Gesamtverbrauch.`
           : actual.calorieSource === "planned"
@@ -234,6 +242,7 @@ function createNutritionMetrics(target: NutritionTarget): NutritionMetric[] {
 }
 
 function createEnergyExpenditureNote(source: NutritionTarget["energyExpenditure"]["source"], activityCalories: number): string {
+  if (source === "garmin") return "Garmin-Tagesverbrauch hat Vorrang";
   if (source === "actual") return `Basis plus ${formatNumber(activityCalories)} kcal synchronisierte Aktivität`;
   if (source === "manual_forecast") return "Manuell überschrieben";
   if (source === "planned") return `Basis plus ${formatNumber(activityCalories)} kcal geplante Aktivität`;
@@ -278,7 +287,7 @@ function createMealRecommendations(
 
   if (actual.calorieSource === "none") return plannedMeals;
 
-  const isForecast = actual.calorieSource === "manual_forecast";
+  const isForecast = isForecastSource(actual.calorieSource);
   const isPlanned = actual.calorieSource === "planned";
 
   const recoveryMeal = {
@@ -291,7 +300,7 @@ function createMealRecommendations(
       ? "30-45 g Protein, 70-110 g Kohlenhydrate, Flüssigkeit aktiv auffüllen"
       : "25-35 g Protein, 40-70 g Kohlenhydrate",
     reason: isForecast
-      ? `Forecast überschreibt den Tagesverbrauch auf ca. ${formatNumber(actual.forecastTotalCalories)} kcal; Energie vorher und danach ruhiger verteilen.`
+      ? `${actual.calorieSource === "garmin" ? "Garmin" : "Der Forecast"} setzt den Tagesverbrauch auf ca. ${formatNumber(actual.forecastTotalCalories)} kcal; Energie vorher und danach ruhiger verteilen.`
       : isPlanned
         ? `Geplante Aktivität ca. ${formatNumber(actual.plannedCalories)} kcal Verbrauch; Fueling vorab einplanen.`
       : `Aktivität verbraucht ca. ${formatNumber(actual.calories)} kcal; Regeneration und nächste Einheit absichern.`
@@ -349,6 +358,13 @@ function createMealReason(role: MealPlanSlot["role"]): string {
 }
 
 function createPriorities(runningDistanceKm: number, optionalWorkoutCount: number, actual: ActualActivitySummary): string[] {
+  if (actual.calorieSource === "garmin") {
+    return [
+      `Garmin-Tagesverbrauch: ca. ${formatNumber(actual.forecastTotalCalories)} kcal`,
+      actual.highIntensity ? "Heute nicht zu hart ins Defizit gehen" : "Defizit möglich halten, aber Fueling nicht wegkürzen",
+      "Protein und Carbs passend zur tatsächlichen Belastung absichern"
+    ];
+  }
   if (actual.calorieSource === "manual_forecast") {
     return [
       `Manueller Forecast: ca. ${formatNumber(actual.forecastTotalCalories)} kcal Gesamtverbrauch`,
@@ -403,6 +419,12 @@ function createCoachHint(
   raceContext: string | undefined,
   actual: ActualActivitySummary
 ): string {
+  if (actual.calorieSource === "garmin") {
+    const deficitHint = weightStrategy === "reduce"
+      ? "Das Defizit bleibt möglich, aber nicht auf Kosten von Recovery und Trainingsqualität."
+      : "Energie darf heute stärker Richtung Belastung und Regeneration gehen.";
+    return `Garmin setzt den heutigen Gesamtverbrauch auf ca. ${formatNumber(actual.forecastTotalCalories)} kcal. ${deficitHint} Protein und Kohlenhydrate wurden daran angepasst.`;
+  }
   if (actual.calorieSource === "manual_forecast") {
     const deficitHint = weightStrategy === "reduce"
       ? "Das Defizit bleibt möglich, aber bitte nicht über fehlendes Training-Fueling erzwingen."
@@ -437,6 +459,13 @@ function createCoachHint(
 }
 
 function createCoachCards(runningDistanceKm: number, actual: ActualActivitySummary) {
+  if (actual.calorieSource === "garmin") {
+    return [
+      { title: "Garmin-Verbrauch", body: `${formatNumber(actual.forecastTotalCalories)} kcal Gesamtverbrauch steuern den Tagesrahmen.`, tone: "amber" as const },
+      { title: "Aktivität berücksichtigt", body: actual.count > 0 ? `${actual.count} erledigte Aktivität${actual.count === 1 ? "" : "en"} sind enthalten.` : "Garmin-Tagesdaten sind die führende Quelle.", tone: "blue" as const },
+      { title: "Protein sichern", body: "25-45 g Protein in der nächsten Hauptmahlzeit einplanen.", tone: "green" as const }
+    ];
+  }
   if (actual.calorieSource === "manual_forecast") {
     return [
       {
@@ -491,7 +520,7 @@ function createCoachCards(runningDistanceKm: number, actual: ActualActivitySumma
       },
       {
         title: "Abgleich später",
-        body: "Nach Strava-Sync ersetzt die tatsächliche Aktivität die Planung.",
+        body: "Nach Garmin- oder Strava-Sync ersetzt die tatsächliche Aktivität die Planung.",
         tone: "blue" as const
       }
     ];
@@ -537,6 +566,7 @@ function createCoachCards(runningDistanceKm: number, actual: ActualActivitySumma
 }
 
 function createFocusLabel(weightStrategy: string, primaryWorkout: WorkoutPlan | undefined, actual: ActualActivitySummary): string {
+  if (actual.calorieSource === "garmin") return "Garmin-Verbrauch aktiv, Fueling angepasst";
   if (actual.calorieSource === "manual_forecast") {
     return "Forecast aktiv, Tagesverbrauch gesetzt";
   }
@@ -556,6 +586,7 @@ function createFocusLabel(weightStrategy: string, primaryWorkout: WorkoutPlan | 
 }
 
 function createHeroTitle(primaryWorkout: WorkoutPlan | undefined, actual: ActualActivitySummary): string {
+  if (actual.calorieSource === "garmin") return "Garmin kennt deinen Tagesverbrauch. Fueling folgt der tatsächlichen Belastung.";
   if (actual.calorieSource === "manual_forecast") {
     return "Tagesverbrauch-Forecast gesetzt. Heute Fueling bewusst planen.";
   }
@@ -573,6 +604,9 @@ function createHeroTitle(primaryWorkout: WorkoutPlan | undefined, actual: Actual
 }
 
 function createLead(primaryWorkout: WorkoutPlan | undefined, runningDistanceKm: number, optionalWorkoutCount: number, actual: ActualActivitySummary): string {
+  if (actual.calorieSource === "garmin") {
+    return `Garmin liefert für heute ca. ${formatNumber(actual.forecastTotalCalories)} kcal Gesamtverbrauch. Dieser Wert hat Vorrang vor Standardverbrauch und manuellem Forecast.`;
+  }
   if (actual.calorieSource === "manual_forecast") {
     return `Für heute überschreibt ein Forecast den Tagesverbrauch auf ca. ${formatNumber(actual.forecastTotalCalories)} kcal. Protein, Kohlenhydrate und Mahlzeiten wurden daran angepasst.`;
   }
@@ -582,7 +616,7 @@ function createLead(primaryWorkout: WorkoutPlan | undefined, runningDistanceKm: 
   }
 
   if (actual.calorieSource === "planned") {
-    return `Für heute sind ca. ${formatNumber(actual.plannedCalories)} kcal aus geplanter Aktivität eingerechnet. Nach einem Strava-Sync wird automatisch der tatsächliche Verbrauch genutzt.`;
+    return `Für heute sind ca. ${formatNumber(actual.plannedCalories)} kcal aus geplanter Aktivität eingerechnet. Nach einem Garmin- oder Strava-Sync wird automatisch der tatsächliche Verbrauch genutzt.`;
   }
 
   if (!primaryWorkout) {
@@ -598,11 +632,16 @@ function createLead(primaryWorkout: WorkoutPlan | undefined, runningDistanceKm: 
 }
 
 function createReadiness(runningDistanceKm: number, actual: ActualActivitySummary): string {
+  if (actual.calorieSource === "garmin") return actual.highIntensity ? "Recovery priorisieren" : "Garmin-Belastung berücksichtigt";
   if (actual.calorieSource === "actual" && actual.highIntensity) return "Recovery priorisieren";
   if (actual.calorieSource === "actual") return "Belastung verarbeitet";
   if (actual.calorieSource === "manual_forecast" || actual.calorieSource === "planned") return "Fueling vorbereiten";
 
   return runningDistanceKm >= 14 ? "Belastung bewusst steuern" : "Normal belastbar";
+}
+
+function isForecastSource(source: ActualActivitySummary["calorieSource"]): boolean {
+  return source === "garmin" || source === "manual_forecast";
 }
 
 function createRaceContext(raceGoal: DailyBriefingInput["profile"]["raceGoal"], date: string): string | undefined {

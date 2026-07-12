@@ -12,16 +12,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        canvas: "#f4f6f1",
-        ink: "#1f2522",
-        muted: "#66706b",
-        line: "#d9dfd6",
+        canvas: "#0B1220",
+        ink: "#F9FAFB",
+        muted: "#9CA3AF",
+        line: "#1F2937",
         coach: {
-          50: "#ecf7f1",
-          100: "#d6ecdf",
-          500: "#2f7a57",
-          600: "#256247",
-          900: "#173b2c"
+          50: "#172554",
+          100: "#1E3A5F",
+          500: "#3B82F6",
+          600: "#2563EB",
+          700: "#60A5FA",
+          800: "#93C5FD",
+          900: "#EFF6FF"
         },
         effort: {
           easy: "#4d8fc8",
@@ -30,7 +32,7 @@ const config: Config = {
         }
       },
       boxShadow: {
-        soft: "0 16px 50px rgba(31, 37, 34, 0.08)"
+        soft: "0 18px 50px rgba(0, 0, 0, 0.22)"
       }
     }
   },

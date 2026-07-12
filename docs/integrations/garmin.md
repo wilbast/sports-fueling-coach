@@ -65,6 +65,8 @@ Job-Payloads enthalten nur `jobId` und `connectionId`. Tokens, E-Mail-Adressen u
 
 Garmin ist die primäre Aktivitätsquelle. Wenn eine Einheit zusätzlich von Strava importiert wurde, erkennt der serverseitige Activity Resolver die Dublette über Sportart, Startzeit, Dauer und Distanz. Der Garmin-Datensatz bleibt kanonisch; Strava darf nur fehlende Felder und Zonen ergänzen. Damit werden Kilometer, Kalorien, Trainingsanzahl und Belastung nicht doppelt gezählt.
 
+Bei gleicher normalisierter Sportart und einem Startzeitpunkt innerhalb von zwei Minuten wird unabhängig von abweichender Dauer oder Distanz direkt dedupliziert. Garmin-kcal werden nicht durch Strava-kcal ergänzt. `daily_health_summaries.total_calories` ist außerdem die führende Quelle für den Tagesverbrauch und schlägt einen manuellen Forecast, solange der Garmin-Wert vorhanden ist.
+
 Der Context Builder lädt bis zu 14 Tage normalisierte Gesundheitsdaten und erzeugt einen aktuellen Recovery Snapshot plus Sieben-Tage-Trends. Enthalten sind je nach Geräteverfügbarkeit Schlaf und Schlafphasen, HRV/Baseline, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Training Readiness, Recovery Time, Trainingsstatus, akute Last, Load Ratio/Focus, VO2max, Laktatschwelle, FTP, Endurance-/Hill-Score und Akklimatisierung. Fehlende Messungen werden als `unknown` und nie als `0` behandelt.
 
 Readiness und Trainingsstatus werden pro Kalendertag in einem gemeinsamen Datensatz aktualisiert. Persönliche Trainingszonen werden providerneutral aus `training_zones` angezeigt. Die eingesetzte Garmin-Bridge liefert derzeit Zeit-in-Zonen je Aktivität, aber keine stabilen persönlichen Garmin-Zonengrenzen; vorhandene Strava-Zonengrenzen bleiben deshalb als Quelle gekennzeichnet.

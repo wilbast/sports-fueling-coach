@@ -26,7 +26,7 @@ type ActivityRow = {
 
 export async function GET(request: NextRequest) {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ activities: [] });
+    return NextResponse.json({ activities: [], garminDailyEnergyByDate: {} });
   }
 
   const url = new URL(request.url);
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   const user = userData.user;
 
   if (!user) {
-    return NextResponse.json({ activities: [] });
+    return NextResponse.json({ activities: [], garminDailyEnergyByDate: {} });
   }
 
   const startInclusive = new Date(`${start}T00:00:00.000Z`);
@@ -50,22 +50,38 @@ export async function GET(request: NextRequest) {
   const endExclusive = new Date(`${end}T00:00:00.000Z`);
   endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
 
-  const { data, error } = await supabase
-    .from("activities")
-    .select("id,source_provider,source_activity_id,name,sport_type,start_date,start_date_local,distance_meters,calories,moving_time_seconds,elapsed_time_seconds,average_heartrate,relative_effort,training_load,average_pace_seconds_per_km")
-    .eq("user_id", user.id)
-    .gte("start_date", startInclusive.toISOString())
-    .lt("start_date", endExclusive.toISOString())
-    .order("start_date", { ascending: true });
+  const [activityResult, energyResult] = await Promise.all([
+    supabase
+      .from("activities")
+      .select("id,source_provider,source_activity_id,name,sport_type,start_date,start_date_local,distance_meters,calories,moving_time_seconds,elapsed_time_seconds,average_heartrate,relative_effort,training_load,average_pace_seconds_per_km")
+      .eq("user_id", user.id)
+      .gte("start_date", startInclusive.toISOString())
+      .lt("start_date", endExclusive.toISOString())
+      .order("start_date", { ascending: true }),
+    supabase
+      .from("daily_health_summaries")
+      .select("date,total_calories,active_calories,resting_calories")
+      .eq("user_id", user.id)
+      .eq("source", "garmin")
+      .gte("date", start)
+      .lte("date", end)
+      .order("date", { ascending: true })
+  ]);
+  const { data, error } = activityResult;
 
   if (error) {
     console.error("[activities] failed to load external activities", { message: error.message });
 
-    return NextResponse.json({ activities: [] });
+    return NextResponse.json({ activities: [], garminDailyEnergyByDate: {} });
   }
 
   return NextResponse.json({
-    activities: prioritizeGarminActivities(data as ActivityRow[] | null ?? []).map(mapActivity)
+    activities: prioritizeGarminActivities(data as ActivityRow[] | null ?? []).map(mapActivity),
+    garminDailyEnergyByDate: Object.fromEntries((energyResult.data ?? []).map((row) => [String(row.date), {
+      totalCalories: optionalNumber(row.total_calories),
+      activeCalories: optionalNumber(row.active_calories),
+      restingCalories: optionalNumber(row.resting_calories)
+    }]))
   });
 }
 
@@ -93,4 +109,8 @@ function mapActivity(activity: ActivityRow & { merged_source_providers?: string[
 
 function isIsoDate(value: string | null): value is string {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+function optionalNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

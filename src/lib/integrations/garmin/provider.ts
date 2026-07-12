@@ -662,6 +662,16 @@ async function normalizeActivities(userId: string, _connectionId: string, rawRec
     const rawStartDate = firstString(activity.startTimeGMT, activity.startTimeLocal, activity.beginTimestamp, activity.startTime);
     const startDate = rawStartDate ? normalizeGarminTimestamp(rawStartDate) : new Date().toISOString();
     const rawLocalStartDate = firstString(activity.startTimeLocal, activity.startTime);
+    const movingTimeSeconds = firstInteger(activity.movingDuration, activity.movingTime, activity.duration);
+    const elapsedTimeSeconds = firstInteger(activity.elapsedDuration, activity.elapsedTime, activity.duration);
+    const distanceMeters = firstNumber(activity.distance, activity.distanceMeters) ?? null;
+    const averageSpeed = firstNumber(activity.averageSpeed, activity.avgSpeed) ?? null;
+    const maxSpeed = firstNumber(activity.maxSpeed) ?? null;
+    const averagePace = firstNumber(activity.averagePace, activity.avgPace)
+      ?? calculatePaceSecondsPerKm(distanceMeters, movingTimeSeconds)
+      ?? calculatePaceFromSpeed(averageSpeed);
+    const maxPace = firstNumber(activity.maxPace, activity.bestPace)
+      ?? calculatePaceFromSpeed(maxSpeed);
     const { error } = await supabase.from("activities").upsert({
       user_id: userId,
       source_provider: "garmin",
@@ -674,23 +684,23 @@ async function normalizeActivities(userId: string, _connectionId: string, rawRec
       start_date: startDate,
       start_date_local: rawLocalStartDate ? normalizeGarminTimestamp(rawLocalStartDate) : null,
       timezone: firstString(activity.timeZoneUnit, activity.timeZoneId) ?? null,
-      elapsed_time_seconds: firstInteger(activity.elapsedDuration, activity.duration),
-      moving_time_seconds: firstInteger(activity.movingDuration),
-      distance_meters: firstNumber(activity.distance, activity.distanceMeters) ?? null,
+      elapsed_time_seconds: elapsedTimeSeconds,
+      moving_time_seconds: movingTimeSeconds,
+      distance_meters: distanceMeters,
       elevation_gain_meters: firstNumber(activity.elevationGain, activity.totalElevationGain) ?? null,
-      calories: firstNumber(activity.calories, activity.activeKilocalories) ?? null,
-      average_speed_mps: firstNumber(activity.averageSpeed) ?? null,
-      max_speed_mps: firstNumber(activity.maxSpeed) ?? null,
-      average_pace_seconds_per_km: firstNumber(activity.averagePace) ?? null,
-      max_pace_seconds_per_km: firstNumber(activity.maxPace, activity.bestPace) ?? null,
-      average_heartrate: firstNumber(activity.averageHR, activity.averageHeartRate) ?? null,
+      calories: firstNumber(activity.calories, activity.activeKilocalories, activity.caloriesConsumed) ?? null,
+      average_speed_mps: averageSpeed,
+      max_speed_mps: maxSpeed,
+      average_pace_seconds_per_km: averagePace,
+      max_pace_seconds_per_km: maxPace,
+      average_heartrate: firstNumber(activity.averageHR, activity.avgHR, activity.averageHeartRate) ?? null,
       max_heartrate: firstNumber(activity.maxHR, activity.maxHeartRate) ?? null,
-      average_watts: firstNumber(activity.avgPower, activity.averagePower) ?? null,
+      average_watts: firstNumber(activity.avgPower, activity.averagePower, activity.averageWatts) ?? null,
       max_watts: firstNumber(activity.maxPower) ?? null,
       normalized_power: firstNumber(activity.normPower, activity.normalizedPower) ?? null,
       average_cadence: firstNumber(activity.averageRunningCadenceInStepsPerMinute, activity.averageBikeCadenceInRevPerMinute, activity.averageCadence) ?? null,
       max_cadence: firstNumber(activity.maxRunningCadenceInStepsPerMinute, activity.maxBikeCadenceInRevPerMinute, activity.maxCadence) ?? null,
-      training_load: firstNumber(activity.trainingLoad, activity.exerciseLoad) ?? null,
+      training_load: firstNumber(activity.activityTrainingLoad, activity.trainingLoad, activity.exerciseLoad) ?? null,
       temperature_celsius: firstNumber(activity.minTemperature, activity.averageTemperature) ?? null,
       device_name: firstString(activity.deviceName) ?? null,
       is_private: Boolean(nestedValue(activity.privacy, "typeKey") === "private"),
@@ -1071,6 +1081,16 @@ function firstNumber(...values: unknown[]): number | undefined {
 function firstInteger(...values: unknown[]): number | null {
   const value = firstNumber(...values);
   return value == null ? null : Math.round(value);
+}
+
+function calculatePaceSecondsPerKm(distanceMeters: number | null, movingTimeSeconds: number | null): number | null {
+  if (!distanceMeters || distanceMeters <= 0 || !movingTimeSeconds || movingTimeSeconds <= 0) return null;
+  return movingTimeSeconds / (distanceMeters / 1000);
+}
+
+function calculatePaceFromSpeed(speedMetersPerSecond: number | null): number | null {
+  if (!speedMetersPerSecond || speedMetersPerSecond <= 0) return null;
+  return 1000 / speedMetersPerSecond;
 }
 
 function normalizeDurationSeconds(value: unknown, secondKeys: string[], millisecondKeys: string[]): number | null {

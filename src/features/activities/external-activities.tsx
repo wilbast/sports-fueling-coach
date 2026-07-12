@@ -27,12 +27,14 @@ type UseExternalActivitiesResult = {
   activitiesByDate: Record<string, ExternalActivitySummary[]>;
   isLoading: boolean;
   error: string | null;
+  garminDailyEnergyByDate: Record<string, { totalCalories: number | null; activeCalories: number | null; restingCalories: number | null }>;
 };
 
 export function useExternalActivities(startDate: string, endDate: string): UseExternalActivitiesResult {
   const [activities, setActivities] = useState<ExternalActivitySummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [garminDailyEnergyByDate, setGarminDailyEnergyByDate] = useState<UseExternalActivitiesResult["garminDailyEnergyByDate"]>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -45,15 +47,17 @@ export function useExternalActivities(startDate: string, endDate: string): UseEx
         const params = new URLSearchParams({ start: startDate, end: endDate });
         const response = await fetch(`/api/activities?${params.toString()}`);
         if (!response.ok) throw new Error("Aktivitäten konnten nicht geladen werden.");
-        const result = await response.json() as { activities?: ExternalActivitySummary[] };
+        const result = await response.json() as { activities?: ExternalActivitySummary[]; garminDailyEnergyByDate?: UseExternalActivitiesResult["garminDailyEnergyByDate"] };
 
         if (!cancelled) {
           setActivities(result.activities ?? []);
+          setGarminDailyEnergyByDate(result.garminDailyEnergyByDate ?? {});
         }
       } catch {
         if (!cancelled) {
           setError("Importierte Aktivitäten konnten gerade nicht geladen werden.");
           setActivities([]);
+          setGarminDailyEnergyByDate({});
         }
       } finally {
         if (!cancelled) {
@@ -84,7 +88,8 @@ export function useExternalActivities(startDate: string, endDate: string): UseEx
     activities,
     activitiesByDate,
     isLoading,
-    error
+    error,
+    garminDailyEnergyByDate
   };
 }
 

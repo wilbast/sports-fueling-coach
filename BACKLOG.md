@@ -64,6 +64,10 @@
 - Quick-Fueling- und Coach-Übernahmen speichern Kategorie/Hauptmahlzeit konsistent.
 - Product-, UX- und Architekturreview dokumentiert.
 - Dashboard 2.0 als responsives Performance Cockpit mit typisierter Mock-API, Recharts, Framer Motion und Dark Mode umgesetzt.
+- Trainingsbearbeitung stabilisiert und persistente Bearbeitung für Trainingsstandards sowie Standardwochen ergänzt.
+- Providerübergreifende Garmin-/Strava-Dubletten nach Sportart und Startzeit konsolidiert.
+- Garmin-Pace, Aktivitätsdauer, Herzfrequenz, Leistung und Trainingslast robuster normalisiert; Garmin-Tagesverbrauch priorisiert.
+- Trainings- und Fuelingstandards nach fachlichen Kategorien gruppiert.
 
 ## P2
 

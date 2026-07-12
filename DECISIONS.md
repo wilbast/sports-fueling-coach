@@ -347,3 +347,9 @@ Wenn Garmin und Strava dieselbe reale Aktivität enthalten, wird sie nur einmal 
 Die Route `/insights` bündelt Recovery, Training, Fueling, Garmin-Marker, Ziele und Coach-Einordnung in einem eigenständigen dunklen Cockpit. `Today` bleibt die operative Tagesseite und wird nicht durch ein Analyse-Dashboard ersetzt. Dashboard-Komponenten lesen ausschließlich einen typisierten `DashboardData`-Vertrag; aktuell liefert `/api/dashboard` klar gekennzeichnete Mockdaten. Später kann die Route serverseitig aggregierte Supabase-Daten liefern, ohne die Visualisierung neu zu strukturieren.
 
 Körper-, Gewichts- und Flüssigkeitsmodule werden trotz ursprünglichem Designbrief nicht aufgenommen, weil diese Bereiche bewusst nicht getrackt werden. Drag-and-drop-Personalisierung und Chart-Export werden erst nach der Echtdatenanbindung bewertet. Framer Motion respektiert reduzierte Bewegung, Recharts übernimmt die zweidimensionalen Visualisierungen und alle Kernaktionen bleiben per Tastatur erreichbar.
+
+### ADR-038: Garmin führt Aktivität und Tagesenergie
+
+Providerübergreifende Aktivitäten mit gleicher normalisierter Sportart und einem Startzeitpunkt innerhalb von zwei Minuten werden als dieselbe reale Einheit behandelt. Garmin bleibt kanonisch, Strava ergänzt fehlende Leistungs- und Zonendaten, aber niemals Garmin-kcal. Dadurch werden Aktivitätsanzahl, Wochenumfang und Belastung nur einmal gezählt.
+
+Für den Tagesverbrauch hat ein normalisierter Garmin-Wert aus `daily_health_summaries.total_calories` Vorrang vor manuellem Forecast, Standardverbrauch und geplantem Aktivitätsverbrauch. Fehlt dieser Wert, gilt weiter die Kette manueller Gesamtforecast, tatsächliche Aktivitäts-kcal, geplante Aktivität, Basisverbrauch. Garmin-Aktivitäten leiten Pace notfalls aus Distanz und Bewegungszeit ab; Trainingslast berücksichtigt insbesondere `activityTrainingLoad`.

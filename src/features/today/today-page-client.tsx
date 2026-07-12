@@ -25,6 +25,7 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     .find((day) => day.date === tomorrowDate);
   const {
     activitiesByDate,
+    garminDailyEnergyByDate,
     isLoading: activitiesLoading,
     error: activitiesError
   } = useExternalActivities(activeDate, activeDate);
@@ -48,8 +49,9 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     dayPlan,
     mealTemplates: state.mealTemplates,
     actualActivities: activitiesByDate[activeDate] ?? [],
+    garminDailyTotalCalories: garminDailyEnergyByDate[activeDate]?.totalCalories,
     energySettings: state.energySettings
-  }), [activitiesByDate, activeDate, dayPlan, state.energySettings, state.goals, state.mealTemplates, state.profile]);
+  }), [activitiesByDate, activeDate, dayPlan, garminDailyEnergyByDate, state.energySettings, state.goals, state.mealTemplates, state.profile]);
   const nutritionSummary = useMemo(
     () => createDailyNutritionSummary(nutritionLogs, briefing.nutritionTarget),
     [briefing.nutritionTarget, nutritionLogs]

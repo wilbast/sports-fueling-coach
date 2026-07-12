@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BriefcaseBusiness, Flame, MessageCircle, RotateCcw, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import type { PerformanceStrategy, RaceGoal, WeightStrategy } from "@/domain/goals/types";
@@ -109,32 +109,31 @@ export function SettingsView() {
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink">
                 Gewicht
-                <input
+                <EditableNumberInput
                   value={profile.bodyMetrics.weightKg}
-                  onChange={(event) => updateProfile({
+                  onCommit={(value) => updateProfile({
                     ...profile,
                     bodyMetrics: {
                       ...profile.bodyMetrics,
-                      weightKg: parseNumber(event.target.value, profile.bodyMetrics.weightKg)
+                      weightKg: value
                     }
                   })}
                   inputMode="decimal"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                 />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink">
                 Zielgewicht
-                <input
+                <EditableNumberInput
                   value={profile.bodyMetrics.targetWeightKg ?? ""}
-                  onChange={(event) => updateProfile({
+                  onCommit={(value) => updateProfile({
                     ...profile,
                     bodyMetrics: {
                       ...profile.bodyMetrics,
-                      targetWeightKg: parseNumber(event.target.value, profile.bodyMetrics.targetWeightKg ?? profile.bodyMetrics.weightKg)
+                      targetWeightKg: value
                     }
                   })}
+                  onClear={() => updateProfile({ ...profile, bodyMetrics: { ...profile.bodyMetrics, targetWeightKg: undefined } })}
                   inputMode="decimal"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                 />
               </label>
             </div>
@@ -176,14 +175,13 @@ export function SettingsView() {
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink">
                 Kinder
-                <input
+                <EditableNumberInput
                   value={family.childrenCount}
-                  onChange={(event) => updateProfile({
+                  onCommit={(value) => updateProfile({
                     ...profile,
-                    family: { ...family, childrenCount: parseNumber(event.target.value, family.childrenCount) }
+                    family: { ...family, childrenCount: Math.max(0, Math.round(value)) }
                   })}
                   inputMode="numeric"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                 />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink">
@@ -260,14 +258,13 @@ export function SettingsView() {
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink">
                 Pendelzeit Minuten
-                <input
+                <EditableNumberInput
                   value={job.commuteMinutes ?? ""}
-                  onChange={(event) => updateProfile({
+                  onCommit={(value) => updateProfile({
                     ...profile,
-                    job: { ...job, commuteMinutes: parseNumber(event.target.value, job.commuteMinutes ?? 0) }
+                    job: { ...job, commuteMinutes: Math.max(0, Math.round(value)) }
                   })}
                   inputMode="numeric"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                 />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink sm:col-span-2">
@@ -345,13 +342,10 @@ export function SettingsView() {
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-2 text-sm font-semibold text-ink">
                 Standardverbrauch ohne Aktivität
-                <input
+                <EditableNumberInput
                   value={energySettings.baselineCaloriesWithoutActivity}
-                  onChange={(event) => updateBaselineCaloriesWithoutActivity(
-                    parseNumber(event.target.value, energySettings.baselineCaloriesWithoutActivity)
-                  )}
+                  onCommit={(value) => updateBaselineCaloriesWithoutActivity(Math.round(value))}
                   inputMode="numeric"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                 />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink">
@@ -365,15 +359,12 @@ export function SettingsView() {
               </label>
               <label className="grid gap-2 text-sm font-semibold text-ink">
                 Tagesverbrauch-Forecast
-                <input
+                <EditableNumberInput
                   value={selectedForecastCalories ?? ""}
-                  onChange={(event) => updateManualDailyBurnForecastCalories(
-                    state.selectedDate,
-                    parseOptionalNumber(event.target.value)
-                  )}
+                  onCommit={(value) => updateManualDailyBurnForecastCalories(state.selectedDate, Math.round(value))}
+                  onClear={() => updateManualDailyBurnForecastCalories(state.selectedDate)}
                   placeholder="z. B. 3200"
                   inputMode="numeric"
-                  className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                 />
               </label>
               <div className="flex items-end">
@@ -425,14 +416,13 @@ export function SettingsView() {
                 </label>
                 <label className="grid gap-2 text-sm font-semibold text-ink">
                   Distanz km
-                  <input
+                  <EditableNumberInput
                     value={raceGoal.distanceKm}
-                    onChange={(event) => updateRaceGoal({
+                    onCommit={(value) => updateRaceGoal({
                       ...raceGoal,
-                      distanceKm: parseNumber(event.target.value, raceGoal.distanceKm)
+                      distanceKm: value
                     })}
                     inputMode="decimal"
-                    className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
                   />
                 </label>
                 <label className="grid gap-2 text-sm font-semibold text-ink">
@@ -550,16 +540,38 @@ function createFutureDate(daysFromNow: number): RaceGoal["date"] {
   return `${year}-${month}-${day}` as RaceGoal["date"];
 }
 
-function parseNumber(value: string, fallback: number): number {
-  const parsed = Number.parseFloat(value.replace(",", "."));
+function EditableNumberInput({ value, onCommit, onClear, inputMode, placeholder }: {
+  value: number | string;
+  onCommit: (value: number) => void;
+  onClear?: () => void;
+  inputMode: "numeric" | "decimal";
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState(String(value));
 
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
+  useEffect(() => setDraft(String(value)), [value]);
 
-function parseOptionalNumber(value: string): number | undefined {
-  const trimmedValue = value.trim();
-  if (!trimmedValue) return undefined;
+  function commit() {
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      if (onClear) onClear();
+      else setDraft(String(value));
+      return;
+    }
+    const parsed = Number.parseFloat(trimmed.replace(",", "."));
+    if (Number.isFinite(parsed)) onCommit(parsed);
+    else setDraft(String(value));
+  }
 
-  const parsed = Number.parseFloat(trimmedValue.replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return (
+    <input
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+      inputMode={inputMode}
+      placeholder={placeholder}
+      className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-coach-400"
+    />
+  );
 }

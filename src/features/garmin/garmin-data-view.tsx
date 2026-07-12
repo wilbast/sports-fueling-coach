@@ -121,10 +121,12 @@ export function GarminDataView() {
         <StatCard label="Zeitraum" value={data ? `${formatShortDate(data.range.start)}–${formatShortDate(data.range.end)}` : "–"} note="Aktive Auswahl" tone="amber" />
       </section>
 
-      <div className="mb-5 inline-flex rounded-xl border border-line bg-white p-1" role="tablist" aria-label="Garmin-Datenkategorie">
-        <TabButton active={tab === "health"} onClick={() => setTab("health")} icon={HeartPulse} label="Gesundheit" count={healthCount} />
-        <TabButton active={tab === "activities"} onClick={() => setTab("activities")} icon={Activity} label="Aktivitäten" count={data?.activities.length ?? 0} />
-        <TabButton active={tab === "zones"} onClick={() => setTab("zones")} icon={Gauge} label="Zonen" count={data?.trainingZones.length ?? 0} />
+      <div className="mb-5 max-w-full overflow-x-auto pb-1">
+        <div className="inline-flex min-w-max rounded-lg border border-line bg-white p-1" role="tablist" aria-label="Garmin-Datenkategorie">
+          <TabButton active={tab === "health"} onClick={() => setTab("health")} icon={HeartPulse} label="Gesundheit" count={healthCount} />
+          <TabButton active={tab === "activities"} onClick={() => setTab("activities")} icon={Activity} label="Aktivitäten" count={data?.activities.length ?? 0} />
+          <TabButton active={tab === "zones"} onClick={() => setTab("zones")} icon={Gauge} label="Zonen" count={data?.trainingZones.length ?? 0} />
+        </div>
       </div>
 
       {error ? <div className="mb-5 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}

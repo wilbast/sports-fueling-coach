@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Beef, Bot, CheckCircle2, Loader2, Salad, SendHorizontal, Soup, Wheat } from "lucide-react";
 import { Panel, Pill } from "@/components/ui";
 import type { MealLogCategory, NutritionConfidence } from "@/domain/nutrition/logs";
-import { estimateMealLogTime, inferMealCategory, mealCategoryToRole } from "@/domain/nutrition/meal-timing";
+import { estimateMealLogTime, inferMealCategory, mealCategoryLabel, mealCategoryOptions, mealCategoryToRole } from "@/domain/nutrition/meal-timing";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import { useAppState } from "@/features/app-state/app-state-provider";
@@ -46,6 +46,10 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
   const { state, addMealTemplate } = useAppState();
   const { addLog } = useNutritionLogs(date);
   const standards = state.mealTemplates.filter((meal) => meal.isStandard !== false);
+  const groupedStandards = useMemo(
+    () => groupMealStandards(standards.slice(0, compact ? 4 : 12)),
+    [compact, standards]
+  );
   const selectedDay = getDayPlanByDate(state.weekPlan, date);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -230,30 +234,22 @@ export function QuickFuelingPanel({ date, compact = false }: QuickFuelingPanelPr
       </div>
 
       <div className="grid gap-3">
-        <div className="grid gap-2 sm:grid-cols-2">
-          {standards.slice(0, compact ? 4 : 8).map((meal, index) => {
-            const Icon = mealIcons[index % mealIcons.length];
-
-            return (
-              <button
-                key={meal.id}
-                type="button"
-                onClick={() => addStandardToDay(meal)}
-                className="rounded-xl border border-line bg-white px-3 py-3 text-left transition hover:border-coach-200 hover:bg-coach-50"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-coach-50 text-coach-700">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink">{meal.name}</p>
-                    <p className="mt-1 text-xs leading-5 text-muted">{meal.description}</p>
-                    <p className="mt-2 text-xs font-semibold text-coach-700">{formatMealEstimate(meal)}</p>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+        <div className="grid gap-4">
+          {groupedStandards.map((group) => (
+            <section key={group.key} aria-labelledby={`quick-meal-${group.key}`}>
+              <h3 id={`quick-meal-${group.key}`} className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">{group.label}</h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {group.items.map((meal, index) => {
+                  const Icon = mealIcons[index % mealIcons.length];
+                  return (
+                    <button key={meal.id} type="button" onClick={() => addStandardToDay(meal)} className="rounded-xl border border-line bg-white px-3 py-3 text-left transition hover:border-coach-200 hover:bg-coach-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coach-500">
+                      <div className="flex items-start gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-coach-50 text-coach-700"><Icon className="h-4 w-4" aria-hidden="true" /></div><div className="min-w-0"><p className="text-sm font-semibold text-ink">{meal.name}</p><p className="mt-1 text-xs leading-5 text-muted">{meal.description}</p><p className="mt-2 text-xs font-semibold text-coach-700">{formatMealEstimate(meal)}</p></div></div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
 
         <div className="rounded-xl bg-canvas p-3">
@@ -558,6 +554,14 @@ function midpoint(min?: number, max?: number): number {
   if (typeof max === "number") return Math.round(max);
 
   return 0;
+}
+
+function groupMealStandards(standards: MealTemplate[]) {
+  return mealCategoryOptions.map((category) => ({
+    key: category.value,
+    label: mealCategoryLabel(category.value),
+    items: standards.filter((meal) => inferMealCategory(meal) === category.value)
+  })).filter((group) => group.items.length > 0);
 }
 
 function confidenceLabel(confidence: NutritionConfidence): string {

@@ -25,11 +25,12 @@ type TimedCoachBriefingProps = {
 type CoachSlot = "morning" | "afternoon" | "evening";
 
 export function TimedCoachBriefing(props: TimedCoachBriefingProps) {
-  const [now, setNow] = useState(() => new Date());
-  const slot = getCoachSlot(now);
+  const [now, setNow] = useState<Date | null>(null);
+  const slot = now ? getCoachSlot(now) : "morning";
   const briefing = useMemo(() => createTimedBriefing(slot, props), [slot, props]);
 
   useEffect(() => {
+    setNow(new Date());
     const interval = window.setInterval(() => setNow(new Date()), 60 * 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -42,7 +43,7 @@ export function TimedCoachBriefing(props: TimedCoachBriefingProps) {
             <Pill tone="blue">{briefing.label}</Pill>
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-coach-700">
               <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-              {formatLocalTime(now)}
+              {now ? formatLocalTime(now) : "--:--"}
             </span>
           </div>
           <div className="flex items-start gap-3">

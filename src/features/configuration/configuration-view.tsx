@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, BookmarkPlus, Bot, CalendarRange, Dumbbell, Pencil, Plus, Salad, SlidersHorizontal, Trash2 } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { inferMealCategory, mealCategoryLabel, mealCategoryOptions } from "@/domain/nutrition/meal-timing";
 import type { MealTemplate } from "@/domain/nutrition/types";
-import type { PlanningContext } from "@/domain/standards/types";
+import type { PlanningContext, WorkoutTemplate } from "@/domain/standards/types";
 import {
   describeWorkoutType,
   intensityLabels,
@@ -41,6 +41,7 @@ export function ConfigurationView() {
     addPlanningStandard,
     removePlanningStandard,
     addWorkoutStandard,
+    updateWorkoutStandard,
     removeWorkoutStandard,
     addMealTemplate,
     updateMealTemplate,
@@ -48,9 +49,12 @@ export function ConfigurationView() {
     deleteMealTemplate,
     moveMealTemplate,
     saveCurrentWeekAsStandard,
+    updateWeekStandardFromCurrentWeek,
     removeWeekStandard
   } = useAppState();
   const standardMeals = state.mealTemplates.filter((meal) => meal.isStandard !== false);
+  const groupedWorkoutStandards = useMemo(() => groupWorkoutTemplates(state.standards.workouts), [state.standards.workouts]);
+  const groupedMealStandards = useMemo(() => groupMealTemplates(standardMeals), [standardMeals]);
 
   const [planningName, setPlanningName] = useState("");
   const [planningContext, setPlanningContext] = useState<PlanningContext>("homeoffice");
@@ -66,6 +70,7 @@ export function ConfigurationView() {
   const [runningType, setRunningType] = useState<RunningWorkoutType>("easy_run");
   const [runningFocus, setRunningFocus] = useState<RunningFocus>("base");
   const [workoutDescription, setWorkoutDescription] = useState("");
+  const [workoutEditingId, setWorkoutEditingId] = useState<string | null>(null);
 
   const [mealName, setMealName] = useState("");
   const [mealDescription, setMealDescription] = useState("");
@@ -81,6 +86,7 @@ export function ConfigurationView() {
 
   const [weekName, setWeekName] = useState("");
   const [weekDescription, setWeekDescription] = useState("Planung, Training und Fueling aus der aktuellen Woche.");
+  const [weekEditingId, setWeekEditingId] = useState<string | null>(null);
 
   function submitPlanningStandard(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,7 +109,7 @@ export function ConfigurationView() {
     const name = workoutName.trim() || title;
     if (!title || !name) return;
 
-    addWorkoutStandard({
+    const template = {
       name,
       sport,
       title,
@@ -114,10 +120,37 @@ export function ConfigurationView() {
       runningType: sport === "running" ? runningType : undefined,
       runningFocus: sport === "running" ? runningFocus : undefined,
       description: workoutDescription.trim() || createWorkoutDescription(sport, intensity)
-    });
+    };
+    if (workoutEditingId) updateWorkoutStandard(workoutEditingId, template);
+    else addWorkoutStandard(template);
+    resetWorkoutForm();
+  }
+
+  function editWorkoutStandard(template: (typeof state.standards.workouts)[number]) {
+    setWorkoutEditingId(template.id);
+    setWorkoutName(template.name);
+    setWorkoutTitle(template.title);
+    setSport(template.sport);
+    setStartTime(template.startTime ?? "");
+    setDurationMinutes(template.durationMinutes ? String(template.durationMinutes) : "");
+    setDistanceKm(template.distanceKm ? String(template.distanceKm).replace(".", ",") : "");
+    setIntensity(template.intensity);
+    setRunningType(template.runningType ?? "easy_run");
+    setRunningFocus(template.runningFocus ?? "base");
+    setWorkoutDescription(template.description);
+  }
+
+  function resetWorkoutForm() {
+    setWorkoutEditingId(null);
     setWorkoutName("");
     setWorkoutTitle("");
+    setSport("running");
+    setStartTime("18:00");
+    setDurationMinutes("45");
     setDistanceKm("");
+    setIntensity("easy");
+    setRunningType("easy_run");
+    setRunningFocus("base");
     setWorkoutDescription("");
   }
 
@@ -228,8 +261,17 @@ export function ConfigurationView() {
     const name = weekName.trim();
     if (!name) return;
 
-    saveCurrentWeekAsStandard(name, weekDescription.trim() || undefined);
+    if (weekEditingId) updateWeekStandardFromCurrentWeek(weekEditingId, name, weekDescription.trim() || undefined);
+    else saveCurrentWeekAsStandard(name, weekDescription.trim() || undefined);
     setWeekName("");
+    setWeekDescription("Planung, Training und Fueling aus der aktuellen Woche.");
+    setWeekEditingId(null);
+  }
+
+  function editWeekStandard(template: (typeof state.standards.weeks)[number]) {
+    setWeekEditingId(template.id);
+    setWeekName(template.name);
+    setWeekDescription(template.description);
   }
 
   return (
@@ -302,23 +344,35 @@ export function ConfigurationView() {
             count={state.standards.workouts.length}
           />
 
-          <div className="grid gap-2">
+          <div className="grid gap-4">
             {state.standards.workouts.length === 0 ? (
               <EmptyState text="Noch keine Trainingsstandards gespeichert." />
-            ) : state.standards.workouts.map((template) => (
-              <div key={template.id} className="flex items-start justify-between gap-3 rounded-xl border border-line px-3 py-3">
-                <div>
-                  <p className="font-semibold text-ink">{template.name}</p>
-                  <p className="mt-1 text-sm text-muted">
-                    {describeWorkoutType(template)} · {template.startTime ?? "flexibel"} · {intensityLabels[template.intensity]}
-                  </p>
+            ) : groupedWorkoutStandards.map((group) => (
+              <section key={group.key} aria-labelledby={`workout-group-${group.key}`}>
+                <h3 id={`workout-group-${group.key}`} className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">{group.label}</h3>
+                <div className="grid gap-2">
+                  {group.items.map((template) => (
+                    <div key={template.id} className="flex items-start justify-between gap-3 rounded-xl border border-line px-3 py-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-ink">{template.name}</p>
+                        <p className="mt-1 text-sm text-muted">{describeWorkoutType(template)} · {template.startTime ?? "flexibel"} · {intensityLabels[template.intensity]}</p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <IconButton label="Trainingsstandard bearbeiten" onClick={() => editWorkoutStandard(template)}><Pencil className="h-4 w-4" aria-hidden="true" /></IconButton>
+                        <DeleteButton label="Trainingsstandard löschen" onClick={() => removeWorkoutStandard(template.id)} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <DeleteButton label="Trainingsstandard löschen" onClick={() => removeWorkoutStandard(template.id)} />
-              </div>
+              </section>
             ))}
           </div>
 
           <form onSubmit={submitWorkoutStandard} className="mt-5 grid gap-3 rounded-xl bg-canvas p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-ink">{workoutEditingId ? "Trainingsstandard bearbeiten" : "Trainingsstandard hinzufügen"}</p>
+              {workoutEditingId ? <button type="button" onClick={resetWorkoutForm} className="text-xs font-semibold text-muted hover:text-ink">Abbrechen</button> : null}
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
                 value={workoutName}
@@ -409,7 +463,7 @@ export function ConfigurationView() {
               className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
               aria-label="Beschreibung des Trainingsstandards"
             />
-            <SubmitButton label="Trainingsstandard hinzufügen" />
+            <SubmitButton label={workoutEditingId ? "Änderungen speichern" : "Trainingsstandard hinzufügen"} />
           </form>
         </Panel>
 
@@ -420,45 +474,33 @@ export function ConfigurationView() {
             count={standardMeals.length}
           />
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-5">
             {standardMeals.length === 0 ? (
               <EmptyState text="Noch keine Fuelingstandards gespeichert." />
-            ) : standardMeals.map((meal, index) => (
-              <div key={meal.id} className="rounded-xl border border-line px-3 py-3">
-                <div className="grid gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-ink">{meal.name}</p>
-                    <p className="mt-1 text-sm leading-5 text-muted">{meal.description}</p>
-                    <p className="mt-2 text-xs text-muted">
-                      {mealCategoryLabel(inferMealCategory(meal))} · {meal.tags.join(" · ") || "ohne Tags"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    <IconButton label="Nach oben" disabled={index === 0} onClick={() => moveMealTemplate(meal.id, "up")}>
-                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                    </IconButton>
-                    <IconButton label="Nach unten" disabled={index === standardMeals.length - 1} onClick={() => moveMealTemplate(meal.id, "down")}>
-                      <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                    </IconButton>
-                    <IconButton label="Fuelingstandard bearbeiten" onClick={() => editMealStandard(meal)}>
-                      <Pencil className="h-4 w-4" aria-hidden="true" />
-                    </IconButton>
-                    <button
-                      type="button"
-                      onClick={() => removeMealStandard(meal.id)}
-                      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-white px-2 text-xs font-semibold text-muted transition hover:bg-canvas hover:text-ink"
-                    >
-                      Ausblenden
-                    </button>
-                    <DeleteButton label="Fuelingstandard löschen" onClick={() => deleteMealTemplate(meal.id)} />
-                  </div>
+            ) : groupedMealStandards.map((group) => (
+              <section key={group.key} aria-labelledby={`meal-group-${group.key}`}>
+                <h3 id={`meal-group-${group.key}`} className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">{group.label}</h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {group.items.map((meal) => {
+                    const index = standardMeals.findIndex((item) => item.id === meal.id);
+                    return (
+                      <div key={meal.id} className="rounded-xl border border-line px-3 py-3">
+                        <div className="grid gap-3">
+                          <div className="min-w-0"><p className="font-semibold text-ink">{meal.name}</p><p className="mt-1 text-sm leading-5 text-muted">{meal.description}</p></div>
+                          <div className="flex flex-wrap gap-1">
+                            <IconButton label="Nach oben" disabled={index === 0} onClick={() => moveMealTemplate(meal.id, "up")}><ArrowUp className="h-4 w-4" aria-hidden="true" /></IconButton>
+                            <IconButton label="Nach unten" disabled={index === standardMeals.length - 1} onClick={() => moveMealTemplate(meal.id, "down")}><ArrowDown className="h-4 w-4" aria-hidden="true" /></IconButton>
+                            <IconButton label="Fuelingstandard bearbeiten" onClick={() => editMealStandard(meal)}><Pencil className="h-4 w-4" aria-hidden="true" /></IconButton>
+                            <button type="button" onClick={() => removeMealStandard(meal.id)} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-line bg-white px-2 text-xs font-semibold text-muted transition hover:bg-canvas hover:text-ink">Ausblenden</button>
+                            <DeleteButton label="Fuelingstandard löschen" onClick={() => deleteMealTemplate(meal.id)} />
+                          </div>
+                        </div>
+                        <p className="mt-3 text-xs font-semibold text-coach-700">{formatRange(meal.estimatedCalories.min, meal.estimatedCalories.max)} kcal · {formatRange(meal.estimatedProteinGrams.min, meal.estimatedProteinGrams.max)} g Protein{meal.estimatedCarbohydratesGrams ? ` · ${meal.estimatedCarbohydratesGrams.min} g Carbs` : ""}{meal.estimatedFatGrams ? ` · ${meal.estimatedFatGrams.min} g Fett` : ""}</p>
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="mt-3 text-xs font-semibold text-coach-700">
-                  {formatRange(meal.estimatedCalories.min, meal.estimatedCalories.max)} kcal · {formatRange(meal.estimatedProteinGrams.min, meal.estimatedProteinGrams.max)} g Protein
-                  {meal.estimatedCarbohydratesGrams ? ` · ${meal.estimatedCarbohydratesGrams.min} g Carbs` : ""}
-                  {meal.estimatedFatGrams ? ` · ${meal.estimatedFatGrams.min} g Fett` : ""}
-                </p>
-              </div>
+              </section>
             ))}
           </div>
 
@@ -578,12 +620,19 @@ export function ConfigurationView() {
                     {template.description} · {template.days.length} Tage
                   </p>
                 </div>
-                <DeleteButton label="Standardwoche löschen" onClick={() => removeWeekStandard(template.id)} />
+                <div className="flex shrink-0 gap-1">
+                  <IconButton label="Standardwoche bearbeiten" onClick={() => editWeekStandard(template)}><Pencil className="h-4 w-4" aria-hidden="true" /></IconButton>
+                  <DeleteButton label="Standardwoche löschen" onClick={() => removeWeekStandard(template.id)} />
+                </div>
               </div>
             ))}
           </div>
 
           <form onSubmit={submitWeekStandard} className="mt-5 grid gap-3 rounded-xl bg-canvas p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-ink">{weekEditingId ? "Standardwoche bearbeiten" : "Standardwoche hinzufügen"}</p>
+              {weekEditingId ? <button type="button" onClick={() => { setWeekEditingId(null); setWeekName(""); setWeekDescription("Planung, Training und Fueling aus der aktuellen Woche."); }} className="text-xs font-semibold text-muted hover:text-ink">Abbrechen</button> : null}
+            </div>
             <input
               value={weekName}
               onChange={(event) => setWeekName(event.target.value)}
@@ -603,7 +652,7 @@ export function ConfigurationView() {
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-coach-600 px-4 text-sm font-semibold text-white transition hover:bg-coach-500"
             >
               <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
-              Aktuelle Woche als Standard speichern
+              {weekEditingId ? "Mit aktueller Woche aktualisieren" : "Aktuelle Woche als Standard speichern"}
             </button>
           </form>
         </Panel>
@@ -734,4 +783,28 @@ function confidenceLabel(confidence: "low" | "medium" | "high"): string {
   if (confidence === "medium") return "mittel";
 
   return "niedrig";
+}
+
+function groupWorkoutTemplates(templates: WorkoutTemplate[]) {
+  const groups = new Map<string, { key: string; label: string; items: WorkoutTemplate[] }>();
+  for (const template of templates) {
+    const subtype = template.sport === "running" ? template.runningType ?? "easy_run" : "general";
+    const key = `${template.sport}:${subtype}`;
+    const sportLabel = sportOptions.find((option) => option.value === template.sport)?.label ?? template.sport;
+    const subtypeLabel = template.sport === "running"
+      ? runningTypeOptions.find((option) => option.value === subtype)?.label ?? "Laufen"
+      : null;
+    const group = groups.get(key) ?? { key, label: subtypeLabel ? `${sportLabel} · ${subtypeLabel}` : sportLabel, items: [] };
+    group.items.push(template);
+    groups.set(key, group);
+  }
+  return Array.from(groups.values());
+}
+
+function groupMealTemplates(templates: MealTemplate[]) {
+  return mealCategoryOptions.map((category) => ({
+    key: category.value,
+    label: category.label,
+    items: templates.filter((meal) => inferMealCategory(meal) === category.value)
+  })).filter((group) => group.items.length > 0);
 }

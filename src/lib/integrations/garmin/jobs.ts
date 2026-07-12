@@ -4,7 +4,7 @@ import { publishGarminSyncJob } from "@/lib/integrations/garmin/qstash";
 import { syncGarminWindow } from "@/lib/integrations/garmin/provider";
 
 type SyncType = "HOURLY" | "MANUAL" | "BACKFILL";
-const GARMIN_NORMALIZATION_VERSION = 3;
+const GARMIN_NORMALIZATION_VERSION = 4;
 
 type GarminJobRow = {
   id: string;

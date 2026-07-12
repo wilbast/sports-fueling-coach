@@ -113,6 +113,9 @@ Weitere Bereiche:
 - Garmin Jobs: stündlicher QStash-Scheduler, signierte Einzeljobs pro Verbindung sowie wiederaufnehmbare Erstimporte und Backfills in kurzen Datumsfenstern
 - Garmin Runtime: separate, per Shared Secret geschützte Vercel-Python-Function statt Python-Spawn aus der Node-Function
 - Datenpriorität: Garmin-Aktivitäten sind bei Garmin-/Strava-Dubletten kanonisch; Strava ergänzt nur fehlende Messwerte, die Einheit wird nie doppelt gezählt
+- Dublettenschlüssel: gleiche normalisierte Sportart und Startzeit innerhalb von zwei Minuten ergeben providerübergreifend eine Einheit
+- Energiepriorität: Garmin-Tagesverbrauch vor manuellem Forecast, tatsächlicher Aktivität, Planung und Basisverbrauch
+- Standards: Training nach Sport/Laufart und Fueling nach Mahlzeitenkategorie gruppiert; Trainingsstandards und Standardwochen sind bearbeitbar
 - Garmin Coach Health: Schlaf, HRV, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Readiness, Recovery, Trainingslast/-status und Performancewerte fließen strukturiert in Empfehlungen ein
 - Garmin-Datenansicht: eigener Menüpunkt `/garmin` mit Zeitraumwahl, kategorisierten Gesundheitstabellen und Garmin-Aktivitäten
 - Dashboard 2.0: `/insights` nutzt eine typisierte Mock-API, Recharts, Framer Motion, Zeitraumumschaltung, Skeletons und einen eigenständigen responsiven Dark-Mode-Rahmen

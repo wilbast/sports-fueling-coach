@@ -92,6 +92,7 @@ type AppStateContextValue = {
   applyPlanningStandard: (date: string, standardId: string) => void;
   addWorkout: (date: string, workout: WorkoutDraft, options?: { saveAsStandard?: boolean }) => void;
   addWorkoutStandard: (template: Omit<WorkoutTemplate, "id">) => void;
+  updateWorkoutStandard: (templateId: string, template: Omit<WorkoutTemplate, "id">) => void;
   saveWorkoutAsStandard: (date: string, workoutId: string) => void;
   removeWorkoutStandard: (templateId: string) => void;
   applyWorkoutStandard: (date: string, templateId: string) => void;
@@ -113,6 +114,7 @@ type AppStateContextValue = {
     options?: { saveAsStandard?: boolean }
   ) => void;
   saveCurrentWeekAsStandard: (name: string, description?: string) => void;
+  updateWeekStandardFromCurrentWeek: (templateId: string, name: string, description?: string) => void;
   removeWeekStandard: (templateId: string) => void;
   applyWeekStandard: (templateId: string) => void;
   applyCoachPlanChanges: (changes: CoachPlanChange[]) => void;
@@ -364,6 +366,17 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         }
       }));
     },
+    updateWorkoutStandard: (templateId, template) => {
+      setState((current) => ({
+        ...current,
+        standards: {
+          ...current.standards,
+          workouts: current.standards.workouts.map((item) => item.id === templateId
+            ? { ...template, id: templateId }
+            : item)
+        }
+      }));
+    },
     applyWorkoutStandard: (date, templateId) => {
       setState((current) => {
         const template = current.standards.workouts.find((item) => item.id === templateId);
@@ -567,6 +580,23 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
             ...current.standards.weeks,
             weekPlanToTemplate(current.weekPlan, trimmedName, description)
           ]
+        }
+      }));
+    },
+    updateWeekStandardFromCurrentWeek: (templateId, name, description) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) return;
+
+      setState((current) => ({
+        ...current,
+        standards: {
+          ...current.standards,
+          weeks: current.standards.weeks.map((template) => template.id === templateId
+            ? {
+              ...weekPlanToTemplate(current.weekPlan, trimmedName, description),
+              id: templateId
+            }
+            : template)
         }
       }));
     },

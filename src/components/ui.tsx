@@ -9,14 +9,14 @@ type PageHeaderProps = {
 
 export function PageHeader({ eyebrow, title, description, action }: PageHeaderProps) {
   return (
-    <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+    <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
         {eyebrow ? (
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-coach-600">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#60A5FA]">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-3xl font-semibold tracking-normal text-ink sm:text-4xl">
+        <h1 className="text-2xl font-semibold tracking-normal text-ink sm:text-3xl">
           {title}
         </h1>
         {description ? <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">{description}</p> : null}
@@ -34,7 +34,7 @@ type PanelProps = {
 
 export function Panel({ children, className, id }: PanelProps) {
   return (
-    <section id={id} className={clsx("rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5", className)}>
+    <section id={id} className={clsx("rounded-lg border border-line bg-white p-4 shadow-soft sm:p-5", className)}>
       {children}
     </section>
   );
@@ -47,11 +47,11 @@ type PillProps = {
 
 export function Pill({ children, tone = "neutral" }: PillProps) {
   const tones = {
-    green: "bg-coach-50 text-coach-700 ring-coach-100",
-    blue: "bg-sky-50 text-sky-700 ring-sky-100",
-    amber: "bg-amber-50 text-amber-800 ring-amber-100",
-    red: "bg-rose-50 text-rose-700 ring-rose-100",
-    neutral: "bg-stone-100 text-stone-700 ring-stone-200"
+    green: "bg-[#123126] text-[#86EFAC] ring-[#1F513C]",
+    blue: "bg-[#172554] text-[#93C5FD] ring-[#1E3A5F]",
+    amber: "bg-[#332711] text-[#FCD34D] ring-[#5F4819]",
+    red: "bg-[#35181E] text-[#FCA5A5] ring-[#6B2737]",
+    neutral: "bg-[#1F2937] text-[#CBD5E1] ring-[#374151]"
   };
 
   return (
@@ -77,7 +77,7 @@ export function StatCard({ label, value, unit, note, tone = "green" }: StatCardP
   };
 
   return (
-    <div className={clsx("rounded-xl border border-line border-l-4 bg-white p-4", accents[tone])}>
+    <div className={clsx("rounded-lg border border-line border-l-4 bg-white p-4", accents[tone])}>
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{label}</p>
       <div className="mt-3 flex items-baseline gap-1">
         <span className="text-2xl font-semibold text-ink">{value}</span>

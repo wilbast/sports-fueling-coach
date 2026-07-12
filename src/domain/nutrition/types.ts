@@ -11,7 +11,7 @@ export type NutritionTarget = {
     baselineCalories: number;
     activityCalories: number;
     totalCalories: number;
-    source: "actual" | "manual_forecast" | "planned" | "none";
+    source: "garmin" | "actual" | "manual_forecast" | "planned" | "none";
   };
   rationale: string[];
 };

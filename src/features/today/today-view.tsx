@@ -69,6 +69,7 @@ export function TodayView({
   onManualForecastCaloriesChange,
   fuelingQuickAdd
 }: TodayViewProps) {
+  const garminEnergyActive = briefing.nutritionTarget.energyExpenditure.source === "garmin";
   const [activeRecommendation, setActiveRecommendation] = useState<CoachRecommendation | null>(null);
   const coachRecommendations = createCoachRecommendations(briefing, nutritionSummary);
   const fatTarget = createFatTarget(nutritionSummary);
@@ -113,7 +114,7 @@ export function TodayView({
 
       {calendar}
 
-      <section className="mb-6 rounded-3xl bg-ink p-5 text-white shadow-soft sm:p-6">
+      <section className="mb-6 rounded-lg border border-[#263449] bg-[#111827] p-5 text-white shadow-soft sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="mb-4 flex flex-wrap gap-2">
@@ -248,7 +249,7 @@ export function TodayView({
           <div className="mt-4 rounded-2xl border border-line bg-white p-4 shadow-soft">
             <div className="mb-3 flex items-center gap-2">
               <Flame className="h-4 w-4 text-amber-700" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-ink">Tagesverbrauch überschreiben</h3>
+              <h3 className="text-sm font-semibold text-ink">{garminEnergyActive ? "Garmin-Tagesverbrauch aktiv" : "Tagesverbrauch überschreiben"}</h3>
             </div>
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <input
@@ -256,6 +257,7 @@ export function TodayView({
                 onChange={(event) => onManualForecastCaloriesChange?.(parseOptionalNumber(event.target.value))}
                 placeholder="z. B. 3200"
                 inputMode="numeric"
+                disabled={garminEnergyActive}
                 className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
                 aria-label="Prognostizierter Gesamtverbrauch für heute"
               />
@@ -269,7 +271,9 @@ export function TodayView({
               </button>
             </div>
             <p className="mt-2 text-xs leading-5 text-muted">
-              Trage hier den prognostizierten Gesamtverbrauch für heute ein. Dieser Wert überschreibt Basis, Planung und Strava für den Tagesverbrauch.
+              {garminEnergyActive
+                ? "Garmin liefert den führenden Gesamtverbrauch für diesen Tag. Ein manueller Forecast wird nur verwendet, wenn kein Garmin-Tageswert vorliegt."
+                : "Trage hier den prognostizierten Gesamtverbrauch für heute ein. Dieser Wert überschreibt Basis und Planung, solange kein Garmin-Tageswert vorliegt."}
             </p>
           </div>
         </section>

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Bike, BookmarkPlus, CircleDot, Dumbbell, Footprints, MessageCircle, Pencil, Plus, Waves, X, Zap } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
 import { getDayPlanByDate } from "@/domain/planning/week";
+import type { WorkoutTemplate } from "@/domain/standards/types";
 import {
   describeWorkoutType,
   intensityLabels,
@@ -57,6 +58,7 @@ export function TrainingView() {
   const [saveAsStandard, setSaveAsStandard] = useState(false);
   const [selectedStandardId, setSelectedStandardId] = useState(state.standards.workouts[0]?.id ?? "");
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+  const [editingWorkoutDate, setEditingWorkoutDate] = useState<string | null>(null);
   const weekStart = state.weekPlan.days[0]?.date ?? state.weekPlan.startsOn;
   const weekEnd = state.weekPlan.days[state.weekPlan.days.length - 1]?.date ?? state.weekPlan.startsOn;
   const today = getBerlinDate();
@@ -71,6 +73,7 @@ export function TrainingView() {
     () => createTrainingOverview(state.weekPlan.days, activities, overviewDate),
     [activities, overviewDate, state.weekPlan.days]
   );
+  const groupedStandards = useMemo(() => groupWorkoutStandards(state.standards.workouts), [state.standards.workouts]);
   const selectedDayActivities = activitiesByDate[selectedDay.date] ?? [];
   const selectedRemainingWorkouts = getRemainingPlannedWorkouts(selectedDay.workouts, selectedDay.date, overviewDate);
   const selectedCompletedManualWorkouts = getCompletedPlanWorkouts(
@@ -85,12 +88,6 @@ export function TrainingView() {
       setSelectedStandardId(state.standards.workouts[0].id);
     }
   }, [selectedStandardId, state.standards.workouts]);
-
-  useEffect(() => {
-    if (editingWorkoutId && !selectedDay.workouts.some((workout) => workout.id === editingWorkoutId)) {
-      setEditingWorkoutId(null);
-    }
-  }, [editingWorkoutId, selectedDay.workouts]);
 
   function submitWorkout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,7 +108,7 @@ export function TrainingView() {
     };
 
     if (editingWorkoutId) {
-      updateWorkout(selectedDay.date, editingWorkoutId, draft);
+      updateWorkout(editingWorkoutDate ?? selectedDay.date, editingWorkoutId, draft);
     } else {
       addWorkout(selectedDay.date, draft, { saveAsStandard });
     }
@@ -125,6 +122,7 @@ export function TrainingView() {
     }
 
     setEditingWorkoutId(workout.id);
+    setEditingWorkoutDate(date);
     setTitle(workout.title);
     setSport(workout.sport);
     setStartTime(workout.startTime ?? "");
@@ -138,6 +136,7 @@ export function TrainingView() {
 
   function resetWorkoutForm() {
     setEditingWorkoutId(null);
+    setEditingWorkoutDate(null);
     setTitle("");
     setDistanceKm("");
     setStartTime("18:00");
@@ -225,8 +224,10 @@ export function TrainingView() {
                     className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none transition focus:border-coach-400"
                     aria-label="Trainingsstandard auswählen"
                   >
-                    {state.standards.workouts.map((template) => (
-                      <option key={template.id} value={template.id}>{template.name}</option>
+                    {groupedStandards.map((group) => (
+                      <optgroup key={group.key} label={group.label}>
+                        {group.items.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                      </optgroup>
                     ))}
                   </select>
                   <button
@@ -239,14 +240,19 @@ export function TrainingView() {
                   </button>
                 </div>
 
-                <div className="mt-4 grid gap-2">
-                  {state.standards.workouts.slice(0, 4).map((template) => (
-                    <div key={template.id} className="rounded-xl bg-canvas px-3 py-3">
-                      <p className="text-sm font-semibold text-ink">{template.name}</p>
-                      <p className="mt-1 text-xs leading-5 text-muted">
-                        {describeWorkoutType(template)} · {template.startTime ?? "flexibel"} · {intensityLabels[template.intensity]}
-                      </p>
-                    </div>
+                <div className="mt-4 grid gap-4">
+                  {groupedStandards.map((group) => (
+                    <section key={group.key}>
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">{group.label}</h3>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {group.items.map((template) => (
+                          <button key={template.id} type="button" onClick={() => applyWorkoutStandard(selectedDay.date, template.id)} className="rounded-xl bg-canvas px-3 py-3 text-left transition hover:bg-coach-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coach-500">
+                            <p className="text-sm font-semibold text-ink">{template.name}</p>
+                            <p className="mt-1 text-xs leading-5 text-muted">{template.startTime ?? "flexibel"} · {intensityLabels[template.intensity]}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               </>
@@ -430,7 +436,7 @@ export function TrainingView() {
 
           <div className="rounded-2xl bg-canvas px-4 py-4 text-sm leading-6 text-muted">
             <span className="font-semibold text-ink">Wochenlogik: </span>
-            Abgeschlossene Strava-Aktivitäten zählen als Ist. Zukünftige und heutige offene Einheiten bleiben als Plan sichtbar.
+            Abgeschlossene, providerübergreifend zusammengeführte Aktivitäten zählen als Ist. Zukünftige und heutige offene Einheiten bleiben als Plan sichtbar.
           </div>
 
           <div className="grid gap-3">
@@ -555,7 +561,7 @@ function SelectedTrainingDay({
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="font-semibold text-ink">Durchgeführt</h3>
-            <Pill tone={activities.length > 0 ? "amber" : "neutral"}>{activities.length} Strava</Pill>
+            <Pill tone={activities.length > 0 ? "amber" : "neutral"}>{activities.length} importiert</Pill>
           </div>
           <ExternalActivityList
             activities={activities}
@@ -686,6 +692,22 @@ function iconForSport(sport: SportType) {
   if (sport === "padel") return CircleDot;
 
   return Dumbbell;
+}
+
+function groupWorkoutStandards(templates: WorkoutTemplate[]) {
+  const groups = new Map<string, { key: string; label: string; items: WorkoutTemplate[] }>();
+  for (const template of templates) {
+    const subtype = template.sport === "running" ? template.runningType ?? "easy_run" : "general";
+    const key = `${template.sport}:${subtype}`;
+    const sportLabel = sportOptions.find((option) => option.value === template.sport)?.label ?? template.sport;
+    const runningLabel = template.sport === "running"
+      ? runningTypeOptions.find((option) => option.value === subtype)?.label
+      : undefined;
+    const group = groups.get(key) ?? { key, label: runningLabel ? `${sportLabel} · ${runningLabel}` : sportLabel, items: [] };
+    group.items.push(template);
+    groups.set(key, group);
+  }
+  return Array.from(groups.values());
 }
 
 function formatShortDate(date: string): string {

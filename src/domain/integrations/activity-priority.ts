@@ -6,6 +6,7 @@ export type PrioritizableActivity = {
   distance_meters?: number | null;
   moving_time_seconds?: number | null;
   elapsed_time_seconds?: number | null;
+  calories?: number | null;
   zone_summaries?: Array<Record<string, unknown>>;
   [key: string]: unknown;
 };
@@ -37,6 +38,7 @@ export function prioritizeGarminActivities<T extends PrioritizableActivity>(acti
     const supplement = activity.source_provider === "garmin" ? existing : activity;
     canonical[duplicateIndex] = {
       ...mergeMissingValues(primary, supplement),
+      calories: primary.source_provider === "garmin" ? primary.calories ?? null : primary.calories,
       zone_summaries: mergeZoneSummaries(primary.zone_summaries, supplement.zone_summaries),
       merged_source_providers: uniqueStrings([
         ...(existing.merged_source_providers ?? []),
@@ -61,6 +63,7 @@ function sameRecordedActivity(left: PrioritizableActivity, right: PrioritizableA
   const leftStart = Date.parse(String(left.start_date ?? ""));
   const rightStart = Date.parse(String(right.start_date ?? ""));
   if (!Number.isFinite(leftStart) || !Number.isFinite(rightStart) || Math.abs(leftStart - rightStart) > 10 * 60 * 1000) return false;
+  if (Math.abs(leftStart - rightStart) <= 2 * 60 * 1000) return true;
 
   const leftDuration = activityDuration(left);
   const rightDuration = activityDuration(right);
@@ -125,4 +128,3 @@ function providerRank(provider: string | null | undefined): number {
   if (provider === "strava") return 1;
   return 2;
 }
-
