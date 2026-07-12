@@ -58,7 +58,41 @@ export async function runGarminRegistryDrift() {
   return runBridge<Record<string, unknown>>("registry-drift", {});
 }
 
+export function getMissingGarminBridgeEnvVars(): string[] {
+  return shouldUseRemoteBridge() && !process.env.GARMIN_BRIDGE_SHARED_SECRET?.trim()
+    ? ["GARMIN_BRIDGE_SHARED_SECRET"]
+    : [];
+}
+
 function runBridge<T>(command: string, payload: unknown): Promise<T> {
+  return shouldUseRemoteBridge()
+    ? runRemoteBridge<T>(command, payload)
+    : runLocalBridge<T>(command, payload);
+}
+
+async function runRemoteBridge<T>(command: string, payload: unknown): Promise<T> {
+  const secret = process.env.GARMIN_BRIDGE_SHARED_SECRET?.trim();
+  if (!secret) throw new Error("GARMIN_BRIDGE_SHARED_SECRET ist nicht konfiguriert.");
+  const baseUrl = resolveBridgeBaseUrl();
+  if (!baseUrl) throw new Error("Garmin Bridge URL konnte nicht ermittelt werden.");
+  const timeoutMs = getTimeoutMs();
+  const response = await fetch(process.env.GARMIN_BRIDGE_URL?.trim() || `${baseUrl}/api/garmin_bridge`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${secret}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ command, payload }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  if (!response.ok) {
+    throw new Error(`Garmin Bridge antwortete mit HTTP ${response.status}.`);
+  }
+  return await response.json() as T;
+}
+
+function runLocalBridge<T>(command: string, payload: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
     const python = process.env.GARMIN_PYTHON_BIN?.trim() || "python3";
     const script = process.env.GARMIN_BRIDGE_PATH?.trim()
@@ -72,7 +106,7 @@ function runBridge<T>(command: string, payload: unknown): Promise<T> {
     });
     let stdout = "";
     let stderr = "";
-    const timeoutMs = Number.parseInt(process.env.GARMIN_REQUEST_TIMEOUT_SECONDS ?? "30", 10) * 1000;
+    const timeoutMs = getTimeoutMs();
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
       reject(new Error("Garmin Bridge Timeout."));
@@ -105,6 +139,22 @@ function runBridge<T>(command: string, payload: unknown): Promise<T> {
     child.stdin.write(JSON.stringify(payload));
     child.stdin.end();
   });
+}
+
+function shouldUseRemoteBridge(): boolean {
+  return Boolean(process.env.GARMIN_BRIDGE_URL?.trim() || process.env.VERCEL === "1");
+}
+
+function resolveBridgeBaseUrl(): string | null {
+  const explicit = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+  return vercel ? `https://${vercel.replace(/^https?:\/\//, "").replace(/\/$/, "")}` : null;
+}
+
+function getTimeoutMs(): number {
+  const parsed = Number.parseInt(process.env.GARMIN_REQUEST_TIMEOUT_SECONDS ?? "45", 10) * 1000;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 45000;
 }
 
 function sanitizeStderr(value: string): string {

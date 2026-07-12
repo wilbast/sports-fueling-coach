@@ -21,6 +21,7 @@ Diese Integration verwendet keine offiziell von Garmin bereitgestellte Programmi
 - Verschlüsselung: `src/lib/integrations/garmin/crypto.ts`
 - Read-Allowlist: `src/lib/integrations/garmin/registry.ts`
 - Python-Isolation: `scripts/garmin_bridge.py`
+- Vercel-Python-Function: `api/garmin_bridge.py`; Node ruft sie ausschließlich serverseitig mit `GARMIN_BRIDGE_SHARED_SECRET` auf
 
 Die App greift nicht direkt auf Garmin-JSON zu. Garmin-Rohdaten werden in Supabase archiviert und relevante Daten zusätzlich in providerneutrale beziehungsweise interne Tabellen normalisiert.
 
@@ -76,6 +77,9 @@ Der feste Schedule-Identifier `sports-fueling-coach-garmin-hourly` macht den Bef
 GARMIN_INTEGRATION_ENABLED=true
 GARMIN_TOKEN_ENCRYPTION_KEY=base64:<32-byte-key>
 GARMIN_PYTHON_BIN=python3
+GARMIN_BRIDGE_SHARED_SECRET=ein-langes-zufälliges-secret
+# Optional für einen externen Python-Worker; auf Vercel leer lassen:
+GARMIN_BRIDGE_URL=
 GARMIN_SYNC_INTERVAL_MINUTES=60
 GARMIN_SYNC_LOOKBACK_DAYS=3
 GARMIN_INITIAL_BACKFILL_CHUNK_DAYS=7
@@ -95,6 +99,8 @@ Python-Dependency:
 ```bash
 python3 -m pip install -r requirements-garmin.txt
 ```
+
+Auf Vercel wird `requirements.txt` automatisch für `api/garmin_bridge.py` installiert. Die Next.js-Function startet dort keinen lokalen Python-Prozess. Lokal bleibt der Spawn-Pfad für Entwicklung und Registry-Tests aktiv.
 
 ## Registry-Drift
 

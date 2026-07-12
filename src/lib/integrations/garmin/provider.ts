@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "crypto";
 import { createServiceRoleClient, isServiceRoleConfigured } from "@/lib/supabase/service-role";
 import { getMissingSupabaseEnvVars, isSupabaseConfigured } from "@/lib/supabase/config";
 import { decryptGarminSecret, encryptGarminSecret, getMissingGarminEncryptionEnvVars, isGarminEncryptionConfigured, maskGarminEmail } from "@/lib/integrations/garmin/crypto";
-import { runGarminLogin, runGarminSync, type GarminBridgeRecord } from "@/lib/integrations/garmin/bridge";
+import { getMissingGarminBridgeEnvVars, runGarminLogin, runGarminSync, type GarminBridgeRecord } from "@/lib/integrations/garmin/bridge";
 import { assertGarminReadRegistryIsSafe, getGarminReadRegistry } from "@/lib/integrations/garmin/registry";
 import { getMissingQStashEnvVars } from "@/lib/integrations/garmin/qstash";
 
@@ -110,6 +110,7 @@ export function getMissingGarminEnvVars(): string[] {
     ...getMissingSupabaseEnvVars(),
     ...(isServiceRoleConfigured() ? [] : ["SUPABASE_SERVICE_ROLE_KEY oder SUPABASE_SERVICE_KEY"]),
     ...getMissingGarminEncryptionEnvVars(),
+    ...getMissingGarminBridgeEnvVars(),
     ...getMissingQStashEnvVars()
   ];
 }

@@ -333,3 +333,7 @@ Garmin Connect stellt für diesen Anwendungsfall keine offizielle öffentliche A
 ### ADR-034: QStash als Garmin-Scheduler und Job-Dispatcher
 
 Der stündliche Garmin-Takt wird von Upstash QStash ausgelöst. Der Scheduler führt keine Provider-Abfragen aus, sondern persistiert und publiziert pro fälliger Verbindung einen signierten Einzeljob. Historische Importe werden in kleine, rückwärts verkettete Datumsfenster zerlegt. Datenbank- und QStash-Deduplication, ein Job-Lease sowie per-Connection Flow Control ermöglichen idempotente Wiederaufnahme ohne lange Vercel Functions. QStash erhält ausschließlich technische IDs; Secrets und Gesundheitsdaten bleiben in Supabase.
+
+### ADR-035: Garmin-Python als separate Vercel Function
+
+Eine Vercel-Node-Function besitzt keinen garantierten `python3`-Prozess. Deshalb ruft der TypeScript-Provider in Vercel die Python-Function `api/garmin_bridge.py` über HTTPS auf. Die Function ist mit einem serverseitigen Shared Secret geschützt, deaktiviert Request-Logging und nutzt `requirements.txt` für `garminconnect`. Lokal bleibt der Prozess-Spawn erhalten. Garmin-Credentials und Sessiondaten verlassen weder den Serververbund noch QStash.
