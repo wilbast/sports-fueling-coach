@@ -4,7 +4,7 @@ import { publishGarminSyncJob } from "@/lib/integrations/garmin/qstash";
 import { syncGarminWindow } from "@/lib/integrations/garmin/provider";
 
 type SyncType = "HOURLY" | "MANUAL" | "BACKFILL";
-const GARMIN_NORMALIZATION_VERSION = 2;
+const GARMIN_NORMALIZATION_VERSION = 3;
 
 type GarminJobRow = {
   id: string;
@@ -40,7 +40,7 @@ export async function dispatchDueGarminJobs(options: { force?: boolean } = {}) {
     const endDate = isoDate(now);
     const startDate = isoDate(addDays(now, -(isInitial ? chunkDays : lookbackDays) + 1));
     const cutoff = isInitial
-      ? isoDate(addDays(now, -positiveInt(process.env.GARMIN_INITIAL_BACKFILL_DAYS, 365) + 1))
+      ? isoDate(addDays(now, -positiveInt(process.env.GARMIN_INITIAL_BACKFILL_DAYS, 90) + 1))
       : null;
     results.push(await enqueueGarminJob({
       userId: String(connection.user_id),
@@ -65,7 +65,7 @@ export async function enqueueGarminSyncForUser(userId: string, mode: "initial" |
   if (error || !connection) throw new Error("Garmin ist nicht verbunden.");
 
   const now = new Date();
-  const backfillCutoff = isoDate(addDays(now, -positiveInt(process.env.GARMIN_INITIAL_BACKFILL_DAYS, 365) + 1));
+  const backfillCutoff = isoDate(addDays(now, -positiveInt(process.env.GARMIN_INITIAL_BACKFILL_DAYS, 90) + 1));
   const metadata = connection.metadata_json && typeof connection.metadata_json === "object" && !Array.isArray(connection.metadata_json)
     ? connection.metadata_json as Record<string, unknown>
     : {};

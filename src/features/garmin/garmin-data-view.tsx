@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, HeartPulse, MessageCircle, RefreshCw } from "lucide-react";
+import { Activity, Gauge, HeartPulse, MessageCircle, RefreshCw } from "lucide-react";
 import { PageHeader, Panel, Pill, StatCard } from "@/components/ui";
 
 type GarminData = {
   range: { start: string; end: string };
   activities: Record<string, unknown>[];
+  trainingZones: Record<string, unknown>[];
   health: {
     daily: Record<string, unknown>[];
     sleep: Record<string, unknown>[];
@@ -21,7 +22,7 @@ type GarminData = {
   warnings: string[];
 };
 
-type ViewTab = "health" | "activities";
+type ViewTab = "health" | "activities" | "zones";
 
 export function GarminDataView() {
   const defaultEnd = isoDate(new Date());
@@ -123,6 +124,7 @@ export function GarminDataView() {
       <div className="mb-5 inline-flex rounded-xl border border-line bg-white p-1" role="tablist" aria-label="Garmin-Datenkategorie">
         <TabButton active={tab === "health"} onClick={() => setTab("health")} icon={HeartPulse} label="Gesundheit" count={healthCount} />
         <TabButton active={tab === "activities"} onClick={() => setTab("activities")} icon={Activity} label="Aktivitäten" count={data?.activities.length ?? 0} />
+        <TabButton active={tab === "zones"} onClick={() => setTab("zones")} icon={Gauge} label="Zonen" count={data?.trainingZones.length ?? 0} />
       </div>
 
       {error ? <div className="mb-5 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
@@ -139,8 +141,10 @@ export function GarminDataView() {
           <DataTable title="HRV" rows={data?.health.hrv ?? []} columns={hrvColumns} empty="Keine HRV-Daten im Zeitraum." />
           <DataTable title="Trainingsbelastung & Recovery" rows={data?.health.recovery ?? []} columns={recoveryColumns} empty="Keine Recovery-Daten im Zeitraum." />
         </div>
-      ) : (
+      ) : tab === "activities" ? (
         <DataTable title="Garmin-Aktivitäten" rows={data?.activities ?? []} columns={activityColumns} empty="Keine Garmin-Aktivitäten im Zeitraum." />
+      ) : (
+        <DataTable title="Persönliche Trainingszonen" rows={data?.trainingZones ?? []} columns={zoneColumns} empty="Noch keine Trainingszonen synchronisiert." />
       )}
     </div>
   );
@@ -212,6 +216,14 @@ const activityColumns: Column[] = [
   { key: "average_pace_seconds_per_km", label: "Ø Pace", format: paceValue }, { key: "elevation_gain_meters", label: "Höhenmeter", format: numberValue },
   { key: "training_load", label: "Trainingslast", format: numberValue }, { key: "device_name", label: "Gerät" }
 ];
+const zoneColumns: Column[] = [
+  { key: "source_provider", label: "Quelle", format: providerValue },
+  { key: "zone_type", label: "Typ", format: zoneTypeValue },
+  { key: "sport_type", label: "Sport" },
+  { key: "zones", label: "Bereiche", format: zonesValue },
+  { key: "custom_zones", label: "Individuell", format: booleanValue },
+  { key: "updated_at", label: "Aktualisiert", format: dateTimeValue }
+];
 
 function display(value: unknown) { return value == null || value === "" ? "–" : typeof value === "object" ? JSON.stringify(value) : String(value); }
 function numberValue(value: unknown) { return typeof value === "number" ? Math.round(value).toLocaleString("de-DE") : "–"; }
@@ -220,6 +232,18 @@ function dateValue(value: unknown) { return typeof value === "string" ? formatSh
 function dateTimeValue(value: unknown) { return typeof value === "string" ? new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "–"; }
 function durationValue(value: unknown) { if (typeof value !== "number") return "–"; const hours = Math.floor(value / 3600); const minutes = Math.round((value % 3600) / 60); return hours ? `${hours} h ${minutes} min` : `${minutes} min`; }
 function paceValue(value: unknown) { if (typeof value !== "number" || value <= 0) return "–"; const minutes = Math.floor(value / 60); return `${minutes}:${String(Math.round(value % 60)).padStart(2, "0")} min/km`; }
+function providerValue(value: unknown) { return value === "strava" ? "Strava" : value === "garmin" ? "Garmin" : display(value); }
+function zoneTypeValue(value: unknown) { return value === "heartrate" ? "Herzfrequenz" : value === "power" ? "Leistung" : display(value); }
+function booleanValue(value: unknown) { return value === true ? "Ja" : value === false ? "Nein" : "–"; }
+function zonesValue(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) return "–";
+  return value.map((entry, index) => {
+    const zone = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+    const min = typeof zone.min === "number" ? zone.min : null;
+    const max = typeof zone.max === "number" ? zone.max : null;
+    return `Z${index + 1}: ${min ?? "–"}–${max ?? "∞"}`;
+  }).join(" · ");
+}
 function formatShortDate(value: string) { return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" }).format(new Date(`${value.slice(0, 10)}T12:00:00`)); }
 function translateJobStatus(value: string) { return ({ QUEUED: "wartet", RUNNING: "läuft", SUCCESS: "erfolgreich", RETRYING: "wird wiederholt", DISPATCH_FAILED: "Start fehlgeschlagen" } as Record<string, string>)[value] ?? value; }
 function isoDate(date: Date) { return date.toISOString().slice(0, 10); }

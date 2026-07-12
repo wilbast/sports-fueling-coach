@@ -792,33 +792,50 @@ async function normalizeHrv(userId: string, rawRecordId: string, record: GarminB
 }
 
 async function normalizeRecovery(userId: string, rawRecordId: string, record: GarminBridgeRecord) {
-  const measuredAt = deepFirstString(record.payload, ["reportTimestamp", "timestamp", "calendarDate", "date"])
-    ?? record.recordDate
-    ?? new Date().toISOString();
-  const { error } = await createServiceRoleClient().from("recovery_training_states").upsert({
+  const date = record.recordDate
+    ?? deepFirstString(record.payload, ["calendarDate", "date"])
+    ?? toIsoDate(new Date());
+  const sourceRecordId = `garmin-recovery:${date}`;
+  const supabase = createServiceRoleClient();
+  const { data: previous } = await supabase.from("recovery_training_states")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("source", "garmin")
+    .eq("source_record_id", sourceRecordId)
+    .maybeSingle();
+  const existing = asObject(previous);
+  const { error } = await supabase.from("recovery_training_states").upsert({
     user_id: userId,
-    measured_at: normalizeGarminTimestamp(measuredAt),
-    training_readiness: deepFirstNumber(record.payload, ["trainingReadinessScore", "readinessScore", "score"]),
-    recovery_time_seconds: deepFirstInteger(record.payload, ["recoveryTimeSeconds", "recoveryTime"]),
-    training_status: deepFirstString(record.payload, ["trainingStatus", "trainingStatusKey", "trainingStatusFeedbackPhrase"]),
-    acute_load: deepFirstNumber(record.payload, ["acuteLoad", "acuteTrainingLoad", "load"]),
-    load_ratio: deepFirstNumber(record.payload, ["loadRatio", "acuteChronicWorkloadRatio"]),
-    load_focus_json: deepFirstObject(record.payload, ["loadFocus", "trainingLoadFocus"]),
-    vo2max_running: deepFirstNumber(record.payload, ["vo2MaxRunning", "vo2MaxPreciseValue", "vo2MaxValue"]),
-    vo2max_cycling: deepFirstNumber(record.payload, ["vo2MaxCycling"]),
-    lactate_threshold_heart_rate: deepFirstNumber(record.payload, ["lactateThresholdHeartRate", "thresholdHeartRate"]),
-    lactate_threshold_pace: deepFirstString(record.payload, ["lactateThresholdPace", "thresholdPace"]),
-    ftp: deepFirstNumber(record.payload, ["ftp", "functionalThresholdPower"]),
-    race_predictions_json: deepFirstObject(record.payload, ["racePredictions"]),
-    endurance_score: deepFirstNumber(record.payload, ["enduranceScore"]),
-    hill_score: deepFirstNumber(record.payload, ["hillScore"]),
-    heat_acclimation: deepFirstNumber(record.payload, ["heatAcclimation"]),
-    altitude_acclimation: deepFirstNumber(record.payload, ["altitudeAcclimation"]),
+    measured_at: `${date}T12:00:00.000Z`,
+    training_readiness: firstNumber(deepFirstNumber(record.payload, ["trainingReadinessScore", "readinessScore", "score"]), existing.training_readiness),
+    recovery_time_seconds: firstInteger(deepFirstInteger(record.payload, ["recoveryTimeSeconds", "recoveryTime"]), existing.recovery_time_seconds),
+    training_status: firstString(deepFirstString(record.payload, ["trainingStatus", "trainingStatusKey", "trainingStatusFeedbackPhrase"]), existing.training_status) ?? null,
+    acute_load: firstNumber(deepFirstNumber(record.payload, ["acuteLoad", "acuteTrainingLoad", "load"]), existing.acute_load),
+    load_ratio: firstNumber(deepFirstNumber(record.payload, ["loadRatio", "acuteChronicWorkloadRatio"]), existing.load_ratio),
+    load_focus_json: deepFirstObject(record.payload, ["loadFocus", "trainingLoadFocus"]) ?? existing.load_focus_json ?? null,
+    vo2max_running: firstNumber(deepFirstNumber(record.payload, ["vo2MaxRunning", "vo2MaxPreciseValue", "vo2MaxValue"]), existing.vo2max_running),
+    vo2max_cycling: firstNumber(deepFirstNumber(record.payload, ["vo2MaxCycling"]), existing.vo2max_cycling),
+    lactate_threshold_heart_rate: firstNumber(deepFirstNumber(record.payload, ["lactateThresholdHeartRate", "thresholdHeartRate"]), existing.lactate_threshold_heart_rate),
+    lactate_threshold_pace: firstString(deepFirstString(record.payload, ["lactateThresholdPace", "thresholdPace"]), existing.lactate_threshold_pace) ?? null,
+    ftp: firstNumber(deepFirstNumber(record.payload, ["ftp", "functionalThresholdPower"]), existing.ftp),
+    race_predictions_json: deepFirstObject(record.payload, ["racePredictions"]) ?? existing.race_predictions_json ?? null,
+    endurance_score: firstNumber(deepFirstNumber(record.payload, ["enduranceScore"]), existing.endurance_score),
+    hill_score: firstNumber(deepFirstNumber(record.payload, ["hillScore"]), existing.hill_score),
+    heat_acclimation: firstNumber(deepFirstNumber(record.payload, ["heatAcclimation"]), existing.heat_acclimation),
+    altitude_acclimation: firstNumber(deepFirstNumber(record.payload, ["altitudeAcclimation"]), existing.altitude_acclimation),
     source: "garmin",
-    source_record_id: createProviderRecordId(record),
+    source_record_id: sourceRecordId,
     raw_record_id: rawRecordId
   }, { onConflict: "user_id,source,source_record_id" });
   if (error) throw new Error(`Garmin-Trainingsbelastung konnte nicht normalisiert werden: ${error.message}`);
+  const { error: cleanupError } = await supabase.from("recovery_training_states")
+    .delete()
+    .eq("user_id", userId)
+    .eq("source", "garmin")
+    .gte("measured_at", `${date}T00:00:00.000Z`)
+    .lt("measured_at", `${toIsoDate(addDays(new Date(`${date}T00:00:00.000Z`), 1))}T00:00:00.000Z`)
+    .neq("source_record_id", sourceRecordId);
+  if (cleanupError) throw new Error(`Veraltete Garmin-Recovery-Datensätze konnten nicht bereinigt werden: ${cleanupError.message}`);
 }
 
 async function countRows(table: string, userId: string, eqColumn?: string, eqValue?: string): Promise<number> {

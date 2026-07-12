@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const startTimestamp = `${start}T00:00:00.000Z`;
   const endExclusive = addDays(new Date(`${end}T00:00:00.000Z`), 1).toISOString();
 
-  const [activities, dailyHealth, sleep, hrv, recovery, connection, latestJob] = await Promise.all([
+  const [activities, dailyHealth, sleep, hrv, recovery, trainingZones, connection, latestJob] = await Promise.all([
     supabase.from("activities")
       .select("id,source_activity_id,name,sport_type,start_date,start_date_local,distance_meters,moving_time_seconds,elapsed_time_seconds,elevation_gain_meters,calories,average_speed_mps,max_speed_mps,average_pace_seconds_per_km,max_pace_seconds_per_km,average_heartrate,max_heartrate,average_watts,max_watts,normalized_power,average_cadence,max_cadence,training_load,temperature_celsius,device_name,is_indoor,is_manual")
       .eq("user_id", userId).eq("source_provider", "garmin").gte("start_date", startTimestamp).lt("start_date", endExclusive).order("start_date", { ascending: false }),
@@ -33,6 +33,9 @@ export async function GET(request: NextRequest) {
     supabase.from("recovery_training_states")
       .select("measured_at,training_readiness,recovery_time_seconds,training_status,acute_load,load_ratio,load_focus_json,vo2max_running,vo2max_cycling,lactate_threshold_heart_rate,lactate_threshold_pace,ftp,endurance_score,hill_score,heat_acclimation,altitude_acclimation,updated_at")
       .eq("user_id", userId).eq("source", "garmin").gte("measured_at", startTimestamp).lt("measured_at", endExclusive).order("measured_at", { ascending: false }),
+    supabase.from("training_zones")
+      .select("source_provider,zone_type,sport_type,custom_zones,zones,imported_at,updated_at")
+      .eq("user_id", userId).order("source_provider", { ascending: true }).order("zone_type", { ascending: true }),
     supabase.from("garmin_connections")
       .select("connection_status,last_successful_sync_at,earliest_imported_date")
       .eq("user_id", userId).eq("provider", "garmin").maybeSingle(),
@@ -41,13 +44,14 @@ export async function GET(request: NextRequest) {
       .eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle()
   ]);
 
-  const errors = [activities, dailyHealth, sleep, hrv, recovery, connection, latestJob]
+  const errors = [activities, dailyHealth, sleep, hrv, recovery, trainingZones, connection, latestJob]
     .map((result) => result.error?.message)
     .filter((message): message is string => Boolean(message));
 
   return NextResponse.json({
     range: { start, end },
     activities: activities.data ?? [],
+    trainingZones: trainingZones.data ?? [],
     health: {
       daily: dailyHealth.data ?? [],
       sleep: sleep.data ?? [],

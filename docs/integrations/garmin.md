@@ -67,6 +67,8 @@ Garmin ist die primäre Aktivitätsquelle. Wenn eine Einheit zusätzlich von Str
 
 Der Context Builder lädt bis zu 14 Tage normalisierte Gesundheitsdaten und erzeugt einen aktuellen Recovery Snapshot plus Sieben-Tage-Trends. Enthalten sind je nach Geräteverfügbarkeit Schlaf und Schlafphasen, HRV/Baseline, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Training Readiness, Recovery Time, Trainingsstatus, akute Last, Load Ratio/Focus, VO2max, Laktatschwelle, FTP, Endurance-/Hill-Score und Akklimatisierung. Fehlende Messungen werden als `unknown` und nie als `0` behandelt.
 
+Readiness und Trainingsstatus werden pro Kalendertag in einem gemeinsamen Datensatz aktualisiert. Persönliche Trainingszonen werden providerneutral aus `training_zones` angezeigt. Die eingesetzte Garmin-Bridge liefert derzeit Zeit-in-Zonen je Aktivität, aber keine stabilen persönlichen Garmin-Zonengrenzen; vorhandene Strava-Zonengrenzen bleiben deshalb als Quelle gekennzeichnet.
+
 ## QStash einmalig einrichten
 
 Migration `supabase/007_garmin_qstash_jobs.sql` ausführen und in Vercel `APP_URL`, `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY` sowie `QSTASH_NEXT_SIGNING_KEY` setzen. Danach:
@@ -89,7 +91,7 @@ GARMIN_BRIDGE_URL=
 GARMIN_SYNC_INTERVAL_MINUTES=60
 GARMIN_SYNC_LOOKBACK_DAYS=1
 GARMIN_INITIAL_BACKFILL_CHUNK_DAYS=1
-GARMIN_INITIAL_BACKFILL_DAYS=365
+GARMIN_INITIAL_BACKFILL_DAYS=90
 GARMIN_MAX_CONCURRENT_ACCOUNTS=2
 GARMIN_REQUEST_TIMEOUT_SECONDS=120
 SUPABASE_SERVICE_ROLE_KEY=...
@@ -122,5 +124,5 @@ Ein Update von `garminconnect` darf erst übernommen werden, nachdem der Registr
 
 - Echte Garmin-Login-/MFA-Flows wurden lokal nicht mit einem echten Account getestet.
 - FIT/GPX/TCX/CSV-Dateien sind als Metadatenmodell vorbereitet, aber Object-Storage-Download ist noch nicht produktiv verdrahtet.
-- Der historische Backfill läuft standardmäßig 365 Tage zurück und wird in 7-Tage-Jobs zerlegt; beide Werte sind konfigurierbar.
+- Der historische Backfill läuft standardmäßig 90 Tage zurück und wird in wiederaufnehmbare Tagesjobs zerlegt; der Zeitraum ist konfigurierbar.
 - Automatisierte Mock-Integrationstests sind vorbereitet durch den Bridge-/Registry-Schnitt, aber noch nicht vollständig ausgeschrieben.
