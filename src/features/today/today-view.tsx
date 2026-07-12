@@ -236,7 +236,7 @@ export function TodayView({
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-ink">Durchgeführt</h2>
             <Pill tone={externalActivities.length > 0 ? "amber" : "neutral"}>
-              {externalActivities.length} Strava
+              {externalActivities.length} erledigt
             </Pill>
           </div>
           <ExternalActivityList

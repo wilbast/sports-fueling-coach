@@ -337,3 +337,7 @@ Der stündliche Garmin-Takt wird von Upstash QStash ausgelöst. Der Scheduler f�
 ### ADR-035: Garmin-Python als separate Vercel Function
 
 Eine Vercel-Node-Function besitzt keinen garantierten `python3`-Prozess. Deshalb ruft der TypeScript-Provider in Vercel die Python-Function `api/garmin_bridge.py` über HTTPS auf. Die Function ist mit einem serverseitigen Shared Secret geschützt, deaktiviert Request-Logging und nutzt `requirements.txt` für `garminconnect`. Lokal bleibt der Prozess-Spawn erhalten. Garmin-Credentials und Sessiondaten verlassen weder den Serververbund noch QStash.
+
+### ADR-036: Garmin ist primäre Aktivitäts- und Gesundheitsquelle
+
+Wenn Garmin und Strava dieselbe reale Aktivität enthalten, wird sie nur einmal gezählt. Startzeit, Sportart, Dauer und Distanz dienen zur Dublettenerkennung. Garmin bleibt der kanonische Datensatz; Strava ergänzt ausschließlich fehlende Felder und gegebenenfalls Zoneninformationen. Diese Regel gilt in UI, Tagesbilanz, Wochenumfang, akuter Belastung und Coach-Kontext. Der Coach erhält zusätzlich normalisierte Garmin-Signale für Schlaf, HRV, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Training Readiness, Recovery, Trainingslast/-status und Leistungsmetriken. Fehlende Werte bleiben unbekannt; Entscheidungen berücksichtigen Trends und mehrere übereinstimmende Signale.

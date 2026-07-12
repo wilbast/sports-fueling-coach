@@ -1,4 +1,5 @@
 import { createServiceRoleClient, isServiceRoleConfigured } from "@/lib/supabase/service-role";
+import { prioritizeGarminActivities } from "@/domain/integrations/activity-priority";
 import {
   getStravaActivity,
   getStravaActivityStreams,
@@ -424,10 +425,10 @@ export async function loadRecentExternalActivitiesForCoach(userId: string) {
     return groups;
   }, {});
 
-  return activities.map((activity) => ({
+  return prioritizeGarminActivities(activities.map((activity) => ({
     ...activity,
     zone_summaries: summarizeActivityZonesForCoach(zonesByActivityId[activity.id] ?? [])
-  }));
+  })));
 }
 
 export async function loadTrainingZonesForCoach(userId: string) {

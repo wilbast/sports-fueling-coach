@@ -19,6 +19,10 @@ export type GarminDataDomain =
   | "hrv"
   | "stress"
   | "body_battery"
+  | "heart_rate"
+  | "respiration"
+  | "spo2"
+  | "intensity_minutes"
   | "activities"
   | "training_readiness"
   | "training_status"
@@ -108,6 +112,46 @@ export const GARMIN_READ_REGISTRY: GarminReadDefinition[] = [
     endpointKey: "body_battery",
     dataDomain: "body_battery",
     methodName: "get_body_battery",
+    parameterStrategy: "date",
+    frequency: ["initial", "manual", "hourly", "backfill"],
+    historicalStrategy: "backfill_by_day",
+    normalizeTo: ["daily_health"],
+    optional: true
+  },
+  {
+    endpointKey: "heart_rates",
+    dataDomain: "heart_rate",
+    methodName: "get_heart_rates",
+    parameterStrategy: "date",
+    frequency: ["initial", "manual", "hourly", "backfill"],
+    historicalStrategy: "backfill_by_day",
+    normalizeTo: ["daily_health"],
+    optional: true
+  },
+  {
+    endpointKey: "respiration",
+    dataDomain: "respiration",
+    methodName: "get_respiration_data",
+    parameterStrategy: "date",
+    frequency: ["initial", "manual", "hourly", "backfill"],
+    historicalStrategy: "backfill_by_day",
+    normalizeTo: ["daily_health"],
+    optional: true
+  },
+  {
+    endpointKey: "spo2",
+    dataDomain: "spo2",
+    methodName: "get_spo2_data",
+    parameterStrategy: "date",
+    frequency: ["initial", "manual", "hourly", "backfill"],
+    historicalStrategy: "backfill_by_day",
+    normalizeTo: ["daily_health"],
+    optional: true
+  },
+  {
+    endpointKey: "intensity_minutes",
+    dataDomain: "intensity_minutes",
+    methodName: "get_intensity_minutes_data",
     parameterStrategy: "date",
     frequency: ["initial", "manual", "hourly", "backfill"],
     historicalStrategy: "backfill_by_day",

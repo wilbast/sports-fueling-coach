@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { publishGarminSyncJob } from "@/lib/integrations/garmin/qstash";
 import { syncGarminWindow } from "@/lib/integrations/garmin/provider";
@@ -132,7 +133,10 @@ export async function enqueueGarminJob(input: {
 }
 
 async function publishExistingJob(jobId: string, connectionId: string, deduplicationKey: string) {
-  const published = await publishGarminSyncJob({ jobId, connectionId }, deduplicationKey);
+  const published = await publishGarminSyncJob(
+    { jobId, connectionId },
+    createQStashDeduplicationId(deduplicationKey)
+  );
   await createServiceRoleClient().from("garmin_sync_jobs").update({
     status: "QUEUED",
     qstash_message_id: published.messageId,
@@ -140,6 +144,10 @@ async function publishExistingJob(jobId: string, connectionId: string, deduplica
     sanitized_error_message: null
   }).eq("id", jobId);
   return { jobId, status: "QUEUED", messageId: published.messageId, deduplicated: published.deduplicated };
+}
+
+export function createQStashDeduplicationId(deduplicationKey: string): string {
+  return `garmin-${createHash("sha256").update(deduplicationKey).digest("hex")}`;
 }
 
 export async function processGarminJob(message: { jobId: string; connectionId: string }) {

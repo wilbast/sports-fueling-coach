@@ -61,6 +61,12 @@ Wichtige Tabellen:
 
 Job-Payloads enthalten nur `jobId` und `connectionId`. Tokens, E-Mail-Adressen und Garmin-Rohdaten bleiben in Supabase. QStash-Signaturen werden mit Current- und Next-Key geprüft. Eindeutige Deduplication Keys machen wiederholte Zustellungen sicher. Abgebrochene `RUNNING`-Jobs können nach Ablauf eines kurzen Leases erneut verarbeitet werden.
 
+## Priorität und Coach-Nutzung
+
+Garmin ist die primäre Aktivitätsquelle. Wenn eine Einheit zusätzlich von Strava importiert wurde, erkennt der serverseitige Activity Resolver die Dublette über Sportart, Startzeit, Dauer und Distanz. Der Garmin-Datensatz bleibt kanonisch; Strava darf nur fehlende Felder und Zonen ergänzen. Damit werden Kilometer, Kalorien, Trainingsanzahl und Belastung nicht doppelt gezählt.
+
+Der Context Builder lädt bis zu 14 Tage normalisierte Gesundheitsdaten und erzeugt einen aktuellen Recovery Snapshot plus Sieben-Tage-Trends. Enthalten sind je nach Geräteverfügbarkeit Schlaf und Schlafphasen, HRV/Baseline, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Training Readiness, Recovery Time, Trainingsstatus, akute Last, Load Ratio/Focus, VO2max, Laktatschwelle, FTP, Endurance-/Hill-Score, Akklimatisierung, Gewicht und Körperzusammensetzung. Fehlende Messungen werden als `unknown` und nie als `0` behandelt. Gewichtsdaten benötigen zusätzlich Migration `supabase/008_garmin_body_measurements.sql`.
+
 ## QStash einmalig einrichten
 
 Migration `supabase/007_garmin_qstash_jobs.sql` ausführen und in Vercel `APP_URL`, `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY` sowie `QSTASH_NEXT_SIGNING_KEY` setzen. Danach:

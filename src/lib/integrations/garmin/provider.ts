@@ -424,7 +424,8 @@ export async function disconnectGarminAccount(userId: string, deleteData: boolea
       supabase.from("daily_health_summaries").delete().eq("user_id", userId).eq("source", "garmin"),
       supabase.from("sleep_summaries").delete().eq("user_id", userId).eq("source", "garmin"),
       supabase.from("hrv_summaries").delete().eq("user_id", userId).eq("source", "garmin"),
-      supabase.from("recovery_training_states").delete().eq("user_id", userId).eq("source", "garmin")
+      supabase.from("recovery_training_states").delete().eq("user_id", userId).eq("source", "garmin"),
+      supabase.from("body_measurements").delete().eq("user_id", userId).eq("source", "garmin")
     ]);
   }
 
@@ -448,10 +449,10 @@ export async function loadGarminWellnessForCoach(userId: string, selectedDate: s
 
   const supabase = createServiceRoleClient();
   const since = toIsoDate(addDays(new Date(`${selectedDate}T00:00:00.000Z`), -13));
-  const [{ data: daily }, { data: sleep }, { data: hrv }, { data: recovery }] = await Promise.all([
+  const [{ data: daily }, { data: sleep }, { data: hrv }, { data: recovery }, { data: bodyMeasurements }] = await Promise.all([
     supabase
       .from("daily_health_summaries")
-      .select("date,steps,total_calories,active_calories,resting_calories,resting_heart_rate,min_heart_rate,max_heart_rate,average_stress,body_battery_start,body_battery_end,body_battery_low,body_battery_high,source_updated_at")
+      .select("date,steps,distance_m,total_calories,active_calories,resting_calories,floors,moderate_intensity_minutes,vigorous_intensity_minutes,resting_heart_rate,min_heart_rate,max_heart_rate,average_stress,max_stress,body_battery_start,body_battery_end,body_battery_low,body_battery_high,average_respiration,spo2_average,source_updated_at,updated_at")
       .eq("user_id", userId)
       .eq("source", "garmin")
       .gte("date", since)
@@ -460,7 +461,7 @@ export async function loadGarminWellnessForCoach(userId: string, selectedDate: s
       .limit(14),
     supabase
       .from("sleep_summaries")
-      .select("sleep_date,sleep_start,sleep_end,duration_seconds,deep_sleep_seconds,light_sleep_seconds,rem_sleep_seconds,awake_seconds,sleep_score,average_stress,average_respiration,average_spo2,average_hrv,source_updated_at")
+      .select("sleep_date,sleep_start,sleep_end,duration_seconds,deep_sleep_seconds,light_sleep_seconds,rem_sleep_seconds,awake_seconds,sleep_score,average_stress,average_respiration,average_spo2,average_hrv,source_updated_at,updated_at")
       .eq("user_id", userId)
       .eq("source", "garmin")
       .gte("sleep_date", since)
@@ -469,7 +470,7 @@ export async function loadGarminWellnessForCoach(userId: string, selectedDate: s
       .limit(14),
     supabase
       .from("hrv_summaries")
-      .select("date,nightly_average,weekly_average,baseline_low,baseline_high,status,source_updated_at")
+      .select("date,nightly_average,weekly_average,baseline_low,baseline_high,status,source_updated_at,updated_at")
       .eq("user_id", userId)
       .eq("source", "garmin")
       .gte("date", since)
@@ -478,22 +479,31 @@ export async function loadGarminWellnessForCoach(userId: string, selectedDate: s
       .limit(14),
     supabase
       .from("recovery_training_states")
-      .select("measured_at,training_readiness,recovery_time_seconds,training_status,acute_load,load_ratio,vo2max_running,vo2max_cycling,ftp,endurance_score,hill_score")
+      .select("measured_at,training_readiness,recovery_time_seconds,training_status,acute_load,load_ratio,load_focus_json,vo2max_running,vo2max_cycling,lactate_threshold_heart_rate,lactate_threshold_pace,ftp,race_predictions_json,endurance_score,hill_score,heat_acclimation,altitude_acclimation,updated_at")
       .eq("user_id", userId)
       .eq("source", "garmin")
       .gte("measured_at", `${since}T00:00:00.000Z`)
       .order("measured_at", { ascending: false })
-      .limit(14)
+      .limit(14),
+    supabase
+      .from("body_measurements")
+      .select("measured_at,weight_kg,bmi,body_fat_percent,body_water_percent,muscle_mass_kg,bone_mass_kg,visceral_fat,metabolic_age,basal_metabolic_rate,physique_rating,updated_at")
+      .eq("user_id", userId)
+      .eq("source", "garmin")
+      .gte("measured_at", `${since}T00:00:00.000Z`)
+      .order("measured_at", { ascending: false })
+      .limit(30)
   ]);
 
   return {
-    status: (daily?.length || sleep?.length || hrv?.length || recovery?.length) ? "available_from_supabase" : "empty",
+    status: (daily?.length || sleep?.length || hrv?.length || recovery?.length || bodyMeasurements?.length) ? "available_from_supabase" : "empty",
     source: "garmin_normalized_tables",
     lookbackDays: 14,
     dailyHealth: daily ?? [],
     sleep: sleep ?? [],
     hrv: hrv ?? [],
-    recovery: recovery ?? []
+    recovery: recovery ?? [],
+    bodyMeasurements: bodyMeasurements ?? []
   };
 }
 
@@ -592,10 +602,11 @@ async function upsertRawRecord(userId: string, connectionId: string, syncRunId: 
 
 async function normalizeRecord(userId: string, connectionId: string, rawRecordId: string, record: GarminBridgeRecord) {
   if (record.dataDomain === "activities") return normalizeActivities(userId, connectionId, rawRecordId, record);
-  if (record.dataDomain === "daily_health" || record.dataDomain === "stress" || record.dataDomain === "body_battery") return normalizeDailyHealth(userId, rawRecordId, record);
+  if (["daily_health", "stress", "body_battery", "heart_rate", "respiration", "spo2", "intensity_minutes"].includes(record.dataDomain)) return normalizeDailyHealth(userId, rawRecordId, record);
   if (record.dataDomain === "sleep") return normalizeSleep(userId, rawRecordId, record);
   if (record.dataDomain === "hrv") return normalizeHrv(userId, rawRecordId, record);
   if (record.dataDomain === "training_readiness" || record.dataDomain === "training_status") return normalizeRecovery(userId, rawRecordId, record);
+  if (record.dataDomain === "weight") return normalizeBodyMeasurements(userId, rawRecordId, record);
 }
 
 async function normalizeActivities(userId: string, connectionId: string, rawRecordId: string, record: GarminBridgeRecord) {
@@ -648,33 +659,40 @@ async function normalizeActivities(userId: string, connectionId: string, rawReco
 }
 
 async function normalizeDailyHealth(userId: string, rawRecordId: string, record: GarminBridgeRecord) {
-  const payload = asObject(record.payload);
+  const payload = Array.isArray(record.payload)
+    ? Object.assign({}, ...record.payload.map(asObject)) as Record<string, unknown>
+    : asObject(record.payload);
   const date = record.recordDate ?? firstString(payload.calendarDate, payload.date) ?? toIsoDate(new Date());
-  await createServiceRoleClient().from("daily_health_summaries").upsert({
+  const supabase = createServiceRoleClient();
+  const { data: previous } = await supabase.from("daily_health_summaries")
+    .select("*").eq("user_id", userId).eq("source", "garmin").eq("date", date).maybeSingle();
+  const existing = asObject(previous);
+  await supabase.from("daily_health_summaries").upsert({
     user_id: userId,
     date,
-    steps: firstInteger(payload.totalSteps, payload.steps),
-    distance_m: firstNumber(payload.totalDistanceMeters, payload.totalDistance),
-    total_calories: firstNumber(payload.totalKilocalories, payload.totalCalories),
-    active_calories: firstNumber(payload.activeKilocalories, payload.activeCalories),
-    resting_calories: firstNumber(payload.bmrKilocalories, payload.restingCalories),
-    floors: firstNumber(payload.floorsAscended, payload.floors),
-    moderate_intensity_minutes: firstNumber(payload.moderateIntensityMinutes),
-    vigorous_intensity_minutes: firstNumber(payload.vigorousIntensityMinutes),
-    resting_heart_rate: firstNumber(payload.restingHeartRate),
-    min_heart_rate: firstNumber(payload.minHeartRate),
-    max_heart_rate: firstNumber(payload.maxHeartRate),
-    average_stress: firstNumber(payload.averageStressLevel, payload.avgStressLevel),
-    max_stress: firstNumber(payload.maxStressLevel),
-    body_battery_start: firstNumber(payload.bodyBatteryStart),
-    body_battery_end: firstNumber(payload.bodyBatteryEnd),
-    body_battery_high: firstNumber(payload.bodyBatteryHigh),
-    body_battery_low: firstNumber(payload.bodyBatteryLow),
-    average_respiration: firstNumber(payload.avgWakingRespirationValue, payload.averageRespiration),
-    spo2_average: firstNumber(payload.averageSpo2, payload.spo2Average),
+    steps: firstInteger(payload.totalSteps, payload.steps, existing.steps),
+    distance_m: firstNumber(payload.totalDistanceMeters, payload.totalDistance, existing.distance_m),
+    total_calories: firstNumber(payload.totalKilocalories, payload.totalCalories, existing.total_calories),
+    active_calories: firstNumber(payload.activeKilocalories, payload.activeCalories, existing.active_calories),
+    resting_calories: firstNumber(payload.bmrKilocalories, payload.restingCalories, existing.resting_calories),
+    floors: firstNumber(payload.floorsAscended, payload.floors, existing.floors),
+    moderate_intensity_minutes: firstNumber(payload.moderateIntensityMinutes, payload.moderateIntensityMinutesValue, existing.moderate_intensity_minutes),
+    vigorous_intensity_minutes: firstNumber(payload.vigorousIntensityMinutes, payload.vigorousIntensityMinutesValue, existing.vigorous_intensity_minutes),
+    resting_heart_rate: firstNumber(payload.restingHeartRate, existing.resting_heart_rate),
+    min_heart_rate: firstNumber(payload.minHeartRate, existing.min_heart_rate),
+    max_heart_rate: firstNumber(payload.maxHeartRate, existing.max_heart_rate),
+    average_stress: firstNumber(payload.averageStressLevel, payload.avgStressLevel, existing.average_stress),
+    max_stress: firstNumber(payload.maxStressLevel, existing.max_stress),
+    body_battery_start: firstNumber(payload.bodyBatteryStart, existing.body_battery_start),
+    body_battery_end: firstNumber(payload.bodyBatteryEnd, existing.body_battery_end),
+    body_battery_high: firstNumber(payload.bodyBatteryHigh, existing.body_battery_high),
+    body_battery_low: firstNumber(payload.bodyBatteryLow, existing.body_battery_low),
+    average_respiration: firstNumber(payload.avgWakingRespirationValue, payload.averageRespiration, payload.avgRespirationValue, existing.average_respiration),
+    spo2_average: firstNumber(payload.averageSpo2, payload.spo2Average, payload.averageSpO2, existing.spo2_average),
     source: "garmin",
     source_record_id: createProviderRecordId(record),
-    raw_record_id: rawRecordId
+    raw_record_id: rawRecordId,
+    source_updated_at: new Date().toISOString()
   }, { onConflict: "user_id,source,date" });
 }
 
@@ -734,6 +752,8 @@ async function normalizeRecovery(userId: string, rawRecordId: string, record: Ga
     load_focus_json: payload.loadFocus ?? null,
     vo2max_running: firstNumber(payload.vo2MaxRunning, nestedValue(payload.generic, "vo2MaxRunning")),
     vo2max_cycling: firstNumber(payload.vo2MaxCycling),
+    lactate_threshold_heart_rate: firstNumber(payload.lactateThresholdHeartRate, nestedValue(payload.lactateThreshold, "heartRate")),
+    lactate_threshold_pace: firstString(payload.lactateThresholdPace, nestedValue(payload.lactateThreshold, "pace")),
     ftp: firstNumber(payload.ftp),
     race_predictions_json: payload.racePredictions ?? null,
     endurance_score: firstNumber(payload.enduranceScore),
@@ -744,6 +764,36 @@ async function normalizeRecovery(userId: string, rawRecordId: string, record: Ga
     source_record_id: createProviderRecordId(record),
     raw_record_id: rawRecordId
   }, { onConflict: "user_id,source,source_record_id" });
+}
+
+async function normalizeBodyMeasurements(userId: string, rawRecordId: string, record: GarminBridgeRecord) {
+  const measurements = collectMeasurementObjects(record.payload);
+  const supabase = createServiceRoleClient();
+  for (let index = 0; index < measurements.length; index += 1) {
+    const measurement = measurements[index];
+    const rawWeight = firstNumber(measurement.weight, measurement.weightInGrams, measurement.weightGrams, measurement.weightKg);
+    const weightKg = rawWeight == null ? null : rawWeight > 500 ? rawWeight / 1000 : rawWeight;
+    const measuredAt = firstString(measurement.samplePk, measurement.timestampGMT, measurement.date, measurement.calendarDate, measurement.measurementTimestamp)
+      ?? `${record.recordDate ?? toIsoDate(new Date())}T12:00:00.000Z`;
+    if (weightKg == null && firstNumber(measurement.bodyFat, measurement.bmi) == null) continue;
+    await supabase.from("body_measurements").upsert({
+      user_id: userId,
+      measured_at: normalizeMeasurementTimestamp(measuredAt),
+      weight_kg: weightKg,
+      bmi: firstNumber(measurement.bmi),
+      body_fat_percent: firstNumber(measurement.bodyFat, measurement.bodyFatPercent),
+      body_water_percent: firstNumber(measurement.bodyWater, measurement.bodyWaterPercent),
+      muscle_mass_kg: normalizeMassKg(firstNumber(measurement.muscleMass, measurement.muscleMassInGrams)),
+      bone_mass_kg: normalizeMassKg(firstNumber(measurement.boneMass, measurement.boneMassInGrams)),
+      visceral_fat: firstNumber(measurement.visceralFat),
+      metabolic_age: firstNumber(measurement.metabolicAge),
+      basal_metabolic_rate: firstNumber(measurement.basalMet, measurement.basalMetabolicRate),
+      physique_rating: firstString(measurement.physiqueRating),
+      source: "garmin",
+      source_record_id: `${createProviderRecordId(record)}:${index}:${measuredAt}`,
+      raw_record_id: rawRecordId
+    }, { onConflict: "user_id,source,source_record_id" });
+  }
 }
 
 async function countRows(table: string, userId: string, eqColumn?: string, eqValue?: string): Promise<number> {
@@ -941,6 +991,35 @@ function addDays(date: Date, days: number): Date {
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+function collectMeasurementObjects(value: unknown): Record<string, unknown>[] {
+  const result: Record<string, unknown>[] = [];
+  const visit = (current: unknown) => {
+    if (Array.isArray(current)) {
+      current.forEach(visit);
+      return;
+    }
+    if (!current || typeof current !== "object") return;
+    const record = current as Record<string, unknown>;
+    if (["weight", "weightInGrams", "weightGrams", "weightKg", "bodyFat", "bmi"].some((key) => record[key] != null)) {
+      result.push(record);
+    }
+    Object.values(record).forEach(visit);
+  };
+  visit(value);
+  return result;
+}
+
+function normalizeMeasurementTimestamp(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T12:00:00.000Z`;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+}
+
+function normalizeMassKg(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  return value > 500 ? value / 1000 : value;
 }
 
 function dateSpanDays(startDate: string, endDate: string): number {

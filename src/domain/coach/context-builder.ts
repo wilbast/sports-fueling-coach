@@ -47,6 +47,9 @@ export type CoachExternalActivitySummary = {
   is_manual?: boolean | null;
   gear_name?: string | null;
   zone_summaries?: CoachActivityZoneSummary[];
+  merged_source_providers?: string[];
+  duplicate_source_activity_ids?: string[];
+  source_priority?: "garmin_primary" | "single_source";
 };
 
 export type CoachActivityZoneSummary = {
@@ -214,15 +217,59 @@ function summarizeGarminContext(garminWellness: unknown) {
     };
   }
 
+  const normalized = garminWellness as Record<string, unknown>;
+  const dailyHealth = asRecordArray(normalized.dailyHealth);
+  const sleep = asRecordArray(normalized.sleep);
+  const hrv = asRecordArray(normalized.hrv);
+  const recovery = asRecordArray(normalized.recovery);
+  const bodyMeasurements = asRecordArray(normalized.bodyMeasurements);
+
   return {
-    ...(garminWellness as Record<string, unknown>),
+    ...normalized,
+    recoverySnapshot: {
+      latestDailyHealth: dailyHealth[0] ?? null,
+      latestSleep: sleep[0] ?? null,
+      latestHrv: hrv[0] ?? null,
+      latestTrainingState: recovery[0] ?? null,
+      latestBodyMeasurement: bodyMeasurements[0] ?? null,
+      sevenDayTrends: {
+        averageSleepHours: averageOf(sleep.slice(0, 7), "duration_seconds", 1 / 3600),
+        averageSleepScore: averageOf(sleep.slice(0, 7), "sleep_score"),
+        averageNightlyHrv: averageOf(hrv.slice(0, 7), "nightly_average"),
+        averageRestingHeartRate: averageOf(dailyHealth.slice(0, 7), "resting_heart_rate"),
+        averageStress: averageOf(dailyHealth.slice(0, 7), "average_stress"),
+        averageBodyBatteryEnd: averageOf(dailyHealth.slice(0, 7), "body_battery_end")
+      },
+      availableSignals: [
+        sleep.length > 0 ? "sleep" : null,
+        hrv.length > 0 ? "hrv" : null,
+        dailyHealth.length > 0 ? "daily_health_stress_body_battery_resting_hr" : null,
+        recovery.length > 0 ? "training_readiness_recovery_training_load_status" : null,
+        bodyMeasurements.length > 0 ? "weight_body_composition" : null
+      ].filter(Boolean)
+    },
     rule: "Garmin-Daten stammen aus normalisierten Supabase-Tabellen. Raw Garmin JSON wird dem Coach nicht direkt gegeben.",
     coachingUse: [
-      "Nutze Schlaf, HRV, Ruhepuls, Stress, Body Battery und Recovery für Belastungs- und Regenerationsempfehlungen.",
+      "Nutze alle verfügbaren Signale: Schlafdauer/-phasen/-score, HRV inkl. Baseline/Status, Ruhepuls, Stress, Body Battery, SpO2, Atmung, Training Readiness, Recovery Time, Trainingsstatus, akute Last, Load Ratio/Focus, VO2max, Schwelle, FTP und Akklimatisierung.",
+      "Bewerte Trends und mehrere Signale gemeinsam. Ein einzelner schlechter Wert reicht nicht für eine harte Trainingsabsage.",
       "Fehlende Garmin-Werte als unknown behandeln, nicht als 0.",
       "Wenn Garmin-Daten veraltet oder leer sind, Empfehlungen transparent als Schätzung formulieren."
     ]
   };
+}
+
+function asRecordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    : [];
+}
+
+function averageOf(rows: Record<string, unknown>[], key: string, multiplier = 1): number | null {
+  const values = rows
+    .map((row) => row[key])
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (values.length === 0) return null;
+  return roundTo((values.reduce((sum, value) => sum + value, 0) / values.length) * multiplier, 0.1);
 }
 
 function summarizeExternalActivities(activities: CoachExternalActivitySummary[], intent: CoachIntent) {
@@ -236,6 +283,8 @@ function summarizeExternalActivities(activities: CoachExternalActivitySummary[],
     totalInContextWindow: activities.length,
     relevantActivities: relevant.map((activity) => ({
       provider: activity.source_provider,
+      sourcePriority: activity.source_priority ?? "single_source",
+      mergedSourceProviders: activity.merged_source_providers ?? [activity.source_provider].filter(Boolean),
       id: activity.source_activity_id,
       name: activity.name,
       sportType: activity.sport_type,
@@ -736,6 +785,8 @@ function createAcuteTrainingLoad(
 function summarizeActualActivities(activities: CoachExternalActivitySummary[]) {
   return activities.map((activity) => ({
     provider: activity.source_provider,
+    sourcePriority: activity.source_priority ?? "single_source",
+    mergedSourceProviders: activity.merged_source_providers ?? [activity.source_provider].filter(Boolean),
     id: activity.source_activity_id,
     name: activity.name,
     description: activity.description,

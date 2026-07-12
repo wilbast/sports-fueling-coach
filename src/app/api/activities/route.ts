@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { prioritizeGarminActivities } from "@/domain/integrations/activity-priority";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,11 +65,11 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    activities: (data as ActivityRow[] | null ?? []).map(mapActivity)
+    activities: prioritizeGarminActivities(data as ActivityRow[] | null ?? []).map(mapActivity)
   });
 }
 
-function mapActivity(activity: ActivityRow) {
+function mapActivity(activity: ActivityRow & { merged_source_providers?: string[]; source_priority?: string }) {
   return {
     id: activity.id,
     sourceProvider: activity.source_provider,
@@ -84,7 +85,9 @@ function mapActivity(activity: ActivityRow) {
     averageHeartrate: activity.average_heartrate,
     relativeEffort: activity.relative_effort,
     trainingLoad: activity.training_load,
-    averagePaceSecondsPerKm: activity.average_pace_seconds_per_km
+    averagePaceSecondsPerKm: activity.average_pace_seconds_per_km,
+    mergedSourceProviders: activity.merged_source_providers ?? [activity.source_provider],
+    sourcePriority: activity.source_priority ?? "single_source"
   };
 }
 
