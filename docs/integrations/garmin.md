@@ -71,6 +71,10 @@ Der Context Builder lädt bis zu 14 Tage normalisierte Gesundheitsdaten und erze
 
 Readiness und Trainingsstatus werden pro Kalendertag in einem gemeinsamen Datensatz aktualisiert. Persönliche Trainingszonen werden providerneutral aus `training_zones` angezeigt. Die eingesetzte Garmin-Bridge liefert derzeit Zeit-in-Zonen je Aktivität, aber keine stabilen persönlichen Garmin-Zonengrenzen; vorhandene Strava-Zonengrenzen bleiben deshalb als Quelle gekennzeichnet.
 
+Aktivitätsfenster werden zunächst über `get_activities_by_date` geladen. Anschließend ergänzt die Bridge jede gefundene Aktivität fehlertolerant über `get_activity`. Die Normalisierung übernimmt unter anderem `activityTrainingLoad`; die Durchschnittspace kommt aus dem Garmin-Wert oder wird aus Distanz und Bewegungszeit beziehungsweise Durchschnittsgeschwindigkeit abgeleitet. Ein Detailfehler verwirft nicht das gesamte Sync-Fenster.
+
+Für kcal gelten zwei getrennte Größen: `activities.calories` enthält ausschließlich den Aktivitätsverbrauch. `daily_health_summaries.total_calories` enthält den Garmin-Tagesgesamtverbrauch und ist der führende Wert für Today, Fueling und die sichtbare Gesamt-kcal-Anzeige. Ein manueller Sync nach einer Änderung der Normalisierungsversion startet die erneute Verarbeitung der konfigurierten 90-Tage-Historie.
+
 ## QStash einmalig einrichten
 
 Migration `supabase/007_garmin_qstash_jobs.sql` ausführen und in Vercel `APP_URL`, `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY` sowie `QSTASH_NEXT_SIGNING_KEY` setzen. Danach:

@@ -75,17 +75,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ activities: [], garminDailyEnergyByDate: {} });
   }
 
-  return NextResponse.json({
-    activities: prioritizeGarminActivities(data as ActivityRow[] | null ?? []).map(mapActivity),
-    garminDailyEnergyByDate: Object.fromEntries((energyResult.data ?? []).map((row) => [String(row.date), {
+  const garminDailyEnergyByDate = Object.fromEntries((energyResult.data ?? []).map((row) => [String(row.date), {
       totalCalories: optionalNumber(row.total_calories),
       activeCalories: optionalNumber(row.active_calories),
       restingCalories: optionalNumber(row.resting_calories)
-    }]))
+    }]));
+
+  return NextResponse.json({
+    activities: prioritizeGarminActivities(data as ActivityRow[] | null ?? []).map((activity) => mapActivity(activity, garminDailyEnergyByDate)),
+    garminDailyEnergyByDate
   });
 }
 
-function mapActivity(activity: ActivityRow & { merged_source_providers?: string[]; source_priority?: string }) {
+function mapActivity(
+  activity: ActivityRow & { merged_source_providers?: string[]; source_priority?: string },
+  energyByDate: Record<string, { totalCalories: number | null; activeCalories: number | null; restingCalories: number | null }>
+) {
+  const activityDate = (activity.start_date_local ?? activity.start_date).slice(0, 10);
+  const dailyEnergy = energyByDate[activityDate];
+
   return {
     id: activity.id,
     sourceProvider: activity.source_provider,
@@ -96,6 +104,8 @@ function mapActivity(activity: ActivityRow & { merged_source_providers?: string[
     startDateLocal: activity.start_date_local,
     distanceMeters: activity.distance_meters,
     calories: activity.calories,
+    garminDailyTotalCalories: dailyEnergy?.totalCalories ?? null,
+    garminDailyActiveCalories: dailyEnergy?.activeCalories ?? null,
     movingTimeSeconds: activity.moving_time_seconds,
     elapsedTimeSeconds: activity.elapsed_time_seconds,
     averageHeartrate: activity.average_heartrate,

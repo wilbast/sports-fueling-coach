@@ -72,6 +72,19 @@ export function GarminDataView() {
   const healthCount = useMemo(() => data
     ? Object.values(data.health).reduce((sum, rows) => sum + rows.length, 0)
     : 0, [data]);
+  const activitiesWithDailyEnergy = useMemo(() => {
+    if (!data) return [];
+    const energyByDate = new Map(data.health.daily.map((row) => [String(row.date), row]));
+    return data.activities.map((activity) => {
+      const activityDate = String(activity.start_date_local ?? activity.start_date ?? "").slice(0, 10);
+      const dailyEnergy = energyByDate.get(activityDate);
+      return {
+        ...activity,
+        total_daily_calories: dailyEnergy?.total_calories ?? null,
+        active_daily_calories: dailyEnergy?.active_calories ?? null
+      };
+    });
+  }, [data]);
 
   return (
     <div>
@@ -144,7 +157,7 @@ export function GarminDataView() {
           <DataTable title="Trainingsbelastung & Recovery" rows={data?.health.recovery ?? []} columns={recoveryColumns} empty="Keine Recovery-Daten im Zeitraum." />
         </div>
       ) : tab === "activities" ? (
-        <DataTable title="Garmin-Aktivitäten" rows={data?.activities ?? []} columns={activityColumns} empty="Keine Garmin-Aktivitäten im Zeitraum." />
+        <DataTable title="Garmin-Aktivitäten" rows={activitiesWithDailyEnergy} columns={activityColumns} empty="Keine Garmin-Aktivitäten im Zeitraum." />
       ) : (
         <DataTable title="Persönliche Trainingszonen" rows={data?.trainingZones ?? []} columns={zoneColumns} empty="Noch keine Trainingszonen synchronisiert." />
       )}
@@ -213,7 +226,8 @@ const recoveryColumns: Column[] = [
 const activityColumns: Column[] = [
   { key: "start_date", label: "Start", format: dateTimeValue }, { key: "name", label: "Aktivität" }, { key: "sport_type", label: "Sport" },
   { key: "distance_meters", label: "Distanz km", format: (value) => typeof value === "number" ? (value / 1000).toLocaleString("de-DE", { maximumFractionDigits: 2 }) : "–" },
-  { key: "moving_time_seconds", label: "Bewegungszeit", format: durationValue }, { key: "calories", label: "kcal", format: numberValue },
+  { key: "moving_time_seconds", label: "Bewegungszeit", format: durationValue }, { key: "total_daily_calories", label: "Tagesverbrauch kcal", format: numberValue },
+  { key: "calories", label: "Aktivitäts-kcal", format: numberValue },
   { key: "average_heartrate", label: "Ø Puls", format: numberValue }, { key: "max_heartrate", label: "Max Puls", format: numberValue },
   { key: "average_pace_seconds_per_km", label: "Ø Pace", format: paceValue }, { key: "elevation_gain_meters", label: "Höhenmeter", format: numberValue },
   { key: "training_load", label: "Trainingslast", format: numberValue }, { key: "device_name", label: "Gerät" }

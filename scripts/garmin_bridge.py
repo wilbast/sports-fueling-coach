@@ -140,7 +140,10 @@ def sync(payload: dict[str, Any]) -> dict[str, Any]:
                     for current in iter_days(start_date, min(end_date, start_date + timedelta(days=max_days - 1))):
                         records.append(record(definition, current, current, call_method(method, current.isoformat())))
                 elif strategy == "date_range":
-                    records.append(record(definition, start_date, end_date, call_method(method, start_date.isoformat(), end_date.isoformat())))
+                    result = call_method(method, start_date.isoformat(), end_date.isoformat())
+                    if definition.get("dataDomain") == "activities":
+                        result = enrich_activity_summaries(api, result)
+                    records.append(record(definition, start_date, end_date, result))
                 else:
                     errors.append(endpoint_error(definition, "unknown_parameter_strategy", "Unbekannte Parameterstrategie."))
             except Exception as exc:  # noqa: BLE001 - provider endpoints are best effort
@@ -272,6 +275,58 @@ def read_optional_profile(api: Any) -> dict[str, Any]:
 
 def call_method(method: Callable[..., Any], *args: Any) -> Any:
     return to_jsonable(method(*args))
+
+
+def enrich_activity_summaries(api: Any, payload: Any) -> Any:
+    """Add Garmin's per-activity summary fields without making the sync brittle."""
+    activities = payload if isinstance(payload, list) else None
+    if activities is None and isinstance(payload, dict):
+        candidate = payload.get("activities") or payload.get("activityList")
+        activities = candidate if isinstance(candidate, list) else None
+    if activities is None:
+        return payload
+
+    get_activity = getattr(api, "get_activity", None)
+    if not callable(get_activity):
+        return payload
+
+    enriched: list[Any] = []
+    for item in activities:
+        if not isinstance(item, dict):
+            enriched.append(item)
+            continue
+        activity_id = item.get("activityId") or item.get("activityIdStr") or item.get("id")
+        if not activity_id:
+            enriched.append(item)
+            continue
+        try:
+            details = call_method(get_activity, str(activity_id))
+            enriched.append(merge_activity_summary(item, details))
+        except Exception:  # noqa: BLE001 - one unavailable detail must not fail a sync window
+            enriched.append(item)
+
+    if isinstance(payload, list):
+        return enriched
+    result = dict(payload)
+    target_key = "activities" if isinstance(payload.get("activities"), list) else "activityList"
+    result[target_key] = enriched
+    return result
+
+
+def merge_activity_summary(activity: dict[str, Any], details: Any) -> dict[str, Any]:
+    if not isinstance(details, dict):
+        return activity
+    summary = details.get("summaryDTO")
+    summary_values = summary if isinstance(summary, dict) else {}
+    activity_values = details.get("activity")
+    nested_activity = activity_values if isinstance(activity_values, dict) else {}
+    return {
+        **activity,
+        **details,
+        **nested_activity,
+        **summary_values,
+        "garminActivityDetail": details,
+    }
 
 
 def record(definition: dict[str, Any], start: date | None, end: date | None, payload: Any) -> dict[str, Any]:

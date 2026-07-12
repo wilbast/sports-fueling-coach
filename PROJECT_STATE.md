@@ -118,6 +118,8 @@ Weitere Bereiche:
 - Standards: Training nach Sport/Laufart und Fueling nach Mahlzeitenkategorie gruppiert; Trainingsstandards und Standardwochen sind bearbeitbar
 - Garmin Coach Health: Schlaf, HRV, Herzfrequenz, Stress, Body Battery, Atmung, SpO2, Intensitätsminuten, Readiness, Recovery, Trainingslast/-status und Performancewerte fließen strukturiert in Empfehlungen ein
 - Garmin-Datenansicht: eigener Menüpunkt `/garmin` mit Zeitraumwahl, kategorisierten Gesundheitstabellen und Garmin-Aktivitäten
+- Garmin-Aktivitätsdetails: Listenimporte werden pro Aktivität um die Garmin-Zusammenfassung ergänzt; Pace und Trainingslast werden normalisiert und in Tages-/Trainingsansichten sichtbar angezeigt
+- Garmin-kcal: Tagesgesamtverbrauch ist der führende Wert; Aktivitäts-kcal werden nur separat und ausdrücklich als Aktivitätswert dargestellt
 - Dashboard 2.0: `/insights` nutzt eine typisierte Mock-API, Recharts, Framer Motion, Zeitraumumschaltung, Skeletons und einen eigenständigen responsiven Dark-Mode-Rahmen
 - Coach-Kontext: externe Aktivitäten und Trainingszonen werden serverseitig aus Supabase geladen, mit erweiterten Strava-Kriterien strukturiert zusammengefasst und als Ist-plus-Zukunft-Bewertung in den Wochenumfang einbezogen; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
 - Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros

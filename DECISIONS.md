@@ -353,3 +353,9 @@ Körper-, Gewichts- und Flüssigkeitsmodule werden trotz ursprünglichem Designb
 Providerübergreifende Aktivitäten mit gleicher normalisierter Sportart und einem Startzeitpunkt innerhalb von zwei Minuten werden als dieselbe reale Einheit behandelt. Garmin bleibt kanonisch, Strava ergänzt fehlende Leistungs- und Zonendaten, aber niemals Garmin-kcal. Dadurch werden Aktivitätsanzahl, Wochenumfang und Belastung nur einmal gezählt.
 
 Für den Tagesverbrauch hat ein normalisierter Garmin-Wert aus `daily_health_summaries.total_calories` Vorrang vor manuellem Forecast, Standardverbrauch und geplantem Aktivitätsverbrauch. Fehlt dieser Wert, gilt weiter die Kette manueller Gesamtforecast, tatsächliche Aktivitäts-kcal, geplante Aktivität, Basisverbrauch. Garmin-Aktivitäten leiten Pace notfalls aus Distanz und Bewegungszeit ab; Trainingslast berücksichtigt insbesondere `activityTrainingLoad`.
+
+### ADR-039: Garmin-Aktivitäten werden mit Einzelzusammenfassungen angereichert
+
+Die Aktivitätsliste bleibt der Einstiegspunkt für Datumsfenster. Pro gefundener Aktivität lädt die isolierte Python-Bridge zusätzlich die Garmin-Aktivitätszusammenfassung über `get_activity`. Detailfehler bleiben auf die einzelne Aktivität begrenzt. `summaryDTO`, verschachtelte Aktivitätsdaten und Listenwerte werden für die providerneutrale Normalisierung zusammengeführt.
+
+Damit stehen insbesondere `activityTrainingLoad`, Durchschnittsgeschwindigkeit, Bewegungsdauer und daraus abgeleitete Durchschnittspace zuverlässiger zur Verfügung. In der UI wird Tagesgesamtverbrauch als führender kcal-Wert angezeigt; Aktivitäts-kcal bleiben separat gekennzeichnet und werden nicht als Tagesverbrauch ausgegeben.

@@ -662,15 +662,15 @@ async function normalizeActivities(userId: string, _connectionId: string, rawRec
     const rawStartDate = firstString(activity.startTimeGMT, activity.startTimeLocal, activity.beginTimestamp, activity.startTime);
     const startDate = rawStartDate ? normalizeGarminTimestamp(rawStartDate) : new Date().toISOString();
     const rawLocalStartDate = firstString(activity.startTimeLocal, activity.startTime);
-    const movingTimeSeconds = firstInteger(activity.movingDuration, activity.movingTime, activity.duration);
-    const elapsedTimeSeconds = firstInteger(activity.elapsedDuration, activity.elapsedTime, activity.duration);
-    const distanceMeters = firstNumber(activity.distance, activity.distanceMeters) ?? null;
-    const averageSpeed = firstNumber(activity.averageSpeed, activity.avgSpeed) ?? null;
-    const maxSpeed = firstNumber(activity.maxSpeed) ?? null;
-    const averagePace = firstNumber(activity.averagePace, activity.avgPace)
+    const movingTimeSeconds = deepFirstInteger(activity, ["movingDuration", "movingTime", "movingDurationSeconds", "movingTimeSeconds", "duration", "durationInSeconds"]);
+    const elapsedTimeSeconds = deepFirstInteger(activity, ["elapsedDuration", "elapsedTime", "elapsedDurationSeconds", "elapsedTimeSeconds", "duration", "durationInSeconds"]);
+    const distanceMeters = deepFirstNumber(activity, ["distance", "distanceMeters", "distanceInMeters"]) ?? null;
+    const averageSpeed = deepFirstNumber(activity, ["averageSpeed", "avgSpeed", "averageSpeedMetersPerSecond"]) ?? null;
+    const maxSpeed = deepFirstNumber(activity, ["maxSpeed", "maxSpeedMetersPerSecond"]) ?? null;
+    const averagePace = deepFirstNumber(activity, ["averagePace", "avgPace", "averagePaceSecondsPerKm"])
       ?? calculatePaceSecondsPerKm(distanceMeters, movingTimeSeconds)
       ?? calculatePaceFromSpeed(averageSpeed);
-    const maxPace = firstNumber(activity.maxPace, activity.bestPace)
+    const maxPace = deepFirstNumber(activity, ["maxPace", "bestPace", "maxPaceSecondsPerKm"])
       ?? calculatePaceFromSpeed(maxSpeed);
     const { error } = await supabase.from("activities").upsert({
       user_id: userId,
@@ -688,7 +688,7 @@ async function normalizeActivities(userId: string, _connectionId: string, rawRec
       moving_time_seconds: movingTimeSeconds,
       distance_meters: distanceMeters,
       elevation_gain_meters: firstNumber(activity.elevationGain, activity.totalElevationGain) ?? null,
-      calories: firstNumber(activity.calories, activity.activeKilocalories, activity.caloriesConsumed) ?? null,
+      calories: deepFirstNumber(activity, ["calories", "activeKilocalories", "caloriesConsumed", "activeCalories"]) ?? null,
       average_speed_mps: averageSpeed,
       max_speed_mps: maxSpeed,
       average_pace_seconds_per_km: averagePace,
@@ -700,7 +700,7 @@ async function normalizeActivities(userId: string, _connectionId: string, rawRec
       normalized_power: firstNumber(activity.normPower, activity.normalizedPower) ?? null,
       average_cadence: firstNumber(activity.averageRunningCadenceInStepsPerMinute, activity.averageBikeCadenceInRevPerMinute, activity.averageCadence) ?? null,
       max_cadence: firstNumber(activity.maxRunningCadenceInStepsPerMinute, activity.maxBikeCadenceInRevPerMinute, activity.maxCadence) ?? null,
-      training_load: firstNumber(activity.activityTrainingLoad, activity.trainingLoad, activity.exerciseLoad) ?? null,
+      training_load: deepFirstNumber(activity, ["activityTrainingLoad", "trainingLoad", "exerciseLoad", "trainingLoadValue"]) ?? null,
       temperature_celsius: firstNumber(activity.minTemperature, activity.averageTemperature) ?? null,
       device_name: firstString(activity.deviceName) ?? null,
       is_private: Boolean(nestedValue(activity.privacy, "typeKey") === "private"),

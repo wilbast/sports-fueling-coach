@@ -67,6 +67,7 @@
 - Trainingsbearbeitung stabilisiert und persistente Bearbeitung für Trainingsstandards sowie Standardwochen ergänzt.
 - Providerübergreifende Garmin-/Strava-Dubletten nach Sportart und Startzeit konsolidiert.
 - Garmin-Pace, Aktivitätsdauer, Herzfrequenz, Leistung und Trainingslast robuster normalisiert; Garmin-Tagesverbrauch priorisiert.
+- Garmin-Aktivitätslisten um Einzelzusammenfassungen für Trainingslast und Durchschnittspace angereichert; Tagesgesamt- und Aktivitäts-kcal getrennt dargestellt.
 - Trainings- und Fuelingstandards nach fachlichen Kategorien gruppiert.
 
 ## P2

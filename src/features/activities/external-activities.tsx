@@ -14,6 +14,8 @@ export type ExternalActivitySummary = {
   startDateLocal?: string | null;
   distanceMeters?: number | null;
   calories?: number | null;
+  garminDailyTotalCalories?: number | null;
+  garminDailyActiveCalories?: number | null;
   movingTimeSeconds?: number | null;
   elapsedTimeSeconds?: number | null;
   averageHeartrate?: number | null;
@@ -149,11 +151,13 @@ function ExternalActivityCard({ activity }: { activity: ExternalActivitySummary 
         <Pill tone={intensity.tone}>{intensity.label}</Pill>
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-5">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         <Metric icon={Route} label="Länge" value={formatDistance(activity.distanceMeters)} />
-        <Metric icon={Activity} label="KCAL" value={formatCalories(activity.calories, activity)} />
+        <Metric icon={Gauge} label="Ø Pace" value={formatPace(activity.averagePaceSecondsPerKm)} />
+        <Metric icon={Activity} label="Gesamt-kcal" value={formatDailyCalories(activity)} />
         <Metric icon={Timer} label="Dauer" value={formatDuration(activity.movingTimeSeconds ?? activity.elapsedTimeSeconds)} />
         <Metric icon={HeartPulse} label="Ø Puls" value={formatHeartRate(activity.averageHeartrate)} />
+        <Metric icon={Gauge} label="Trainingslast" value={formatTrainingLoad(activity.trainingLoad)} />
         <Metric icon={Gauge} label="Intensität" value={intensity.detail} />
       </div>
     </article>
@@ -187,10 +191,11 @@ function activityDateKey(activity: ExternalActivitySummary): string {
 function inferActivityIntensity(activity: ExternalActivitySummary): { label: string; detail: string; tone: "green" | "amber" | "red" | "neutral" } {
   const effort = activity.relativeEffort ?? activity.trainingLoad;
   if (typeof effort === "number" && Number.isFinite(effort)) {
-    if (effort >= 80) return { label: "hart", detail: `RE ${Math.round(effort)}`, tone: "red" };
-    if (effort >= 35) return { label: "moderat", detail: `RE ${Math.round(effort)}`, tone: "amber" };
+    const detail = activity.relativeEffort != null ? `RE ${Math.round(effort)}` : `Last ${Math.round(effort)}`;
+    if (effort >= 80) return { label: "hart", detail, tone: "red" };
+    if (effort >= 35) return { label: "moderat", detail, tone: "amber" };
 
-    return { label: "locker", detail: `RE ${Math.round(effort)}`, tone: "green" };
+    return { label: "locker", detail, tone: "green" };
   }
 
   const heartRate = activity.averageHeartrate;
@@ -228,6 +233,31 @@ function formatCalories(value: number | null | undefined, activity?: ExternalAct
   const estimate = estimateCalories(activity);
 
   return estimate > 0 ? `ca. ${Math.round(estimate).toLocaleString("de-DE")} kcal` : "offen";
+}
+
+function formatDailyCalories(activity: ExternalActivitySummary): string {
+  const total = activity.garminDailyTotalCalories;
+  const active = activity.calories;
+  if (typeof total === "number" && total > 0) {
+    const totalLabel = `${Math.round(total).toLocaleString("de-DE")} kcal`;
+    return typeof active === "number" && active > 0
+      ? `${totalLabel} · ${Math.round(active).toLocaleString("de-DE")} aktiv`
+      : totalLabel;
+  }
+  const activityCalories = formatCalories(active, activity);
+  return activityCalories === "offen" ? "noch offen" : `Gesamt offen · ${activityCalories} aktiv`;
+}
+
+function formatPace(value?: number | null): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "offen";
+  const rounded = Math.round(value);
+  return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")} min/km`;
+}
+
+function formatTrainingLoad(value?: number | null): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.round(value).toLocaleString("de-DE")
+    : "offen";
 }
 
 function estimateCalories(activity: ExternalActivitySummary): number {
