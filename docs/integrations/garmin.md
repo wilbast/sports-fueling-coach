@@ -2,7 +2,7 @@
 
 Status: experimentell, Feature Flag `GARMIN_INTEGRATION_ENABLED=false` by default.
 
-Diese Integration verwendet keine offiziell von Garmin bereitgestellte Programmierschnittstelle. Sie nutzt serverseitig die Python-Bibliothek `garminconnect` aus `requirements-garmin.txt`. Änderungen an Garmin Connect oder an der Bibliothek können die Synchronisation vorübergehend beeinträchtigen.
+Diese Integration verwendet keine offiziell von Garmin bereitgestellte Programmierschnittstelle. Sie nutzt serverseitig `garminconnect` 0.3.x mit nativem DI-OAuth-Login aus `requirements-garmin.txt`. Änderungen an Garmin Connect oder an der Bibliothek können die Synchronisation vorübergehend beeinträchtigen.
 
 ## Architektur
 

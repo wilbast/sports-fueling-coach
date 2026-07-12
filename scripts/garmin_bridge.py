@@ -183,11 +183,13 @@ def import_garmin() -> Any:
 
 
 def create_login_client(Garmin: Any, email: str, password: str, mfa_code: str | None) -> Any:
-    callback: Callable[[], str] | None = (lambda: str(mfa_code)) if mfa_code else None
+    def prompt_mfa() -> str:
+        if not mfa_code:
+            raise RuntimeError("MFA_REQUIRED")
+        return str(mfa_code).strip()
+
     try:
-        if callback:
-            return Garmin(email, password, prompt_mfa=callback)
-        return Garmin(email, password)
+        return Garmin(email, password, prompt_mfa=prompt_mfa)
     except TypeError:
         return Garmin(email, password)
 
