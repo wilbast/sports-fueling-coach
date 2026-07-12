@@ -14,7 +14,9 @@ Diese Integration verwendet keine offiziell von Garmin bereitgestellte Programmi
   - `POST /api/integrations/garmin/sync`
   - `POST /api/integrations/garmin/reauthenticate`
   - `DELETE /api/integrations/garmin`
-  - `GET /api/cron/garmin-sync`
+  - `POST /api/internal/garmin/scheduler` (QStash-signiert)
+  - `POST /api/internal/garmin/jobs/sync` (QStash-signiert)
+  - `GET /api/cron/garmin-sync` (Legacy-/Notfall-Dispatcher)
 - Provider: `src/lib/integrations/garmin/provider.ts`
 - Verschlüsselung: `src/lib/integrations/garmin/crypto.ts`
 - Read-Allowlist: `src/lib/integrations/garmin/registry.ts`
@@ -32,6 +34,7 @@ Wichtige Tabellen:
 - `garmin_auth_attempts`: kurzlebige MFA-Loginvorgänge
 - `garmin_sync_runs`: persistentes Sync-Protokoll
 - `garmin_sync_checkpoints`: wiederaufnehmbare Backfill-Checkpoints
+- `garmin_sync_jobs`: persistente, idempotente QStash-Jobs und Backfill-Fenster
 - `garmin_raw_records`: verlustfreie Raw-JSON-Antworten mit Payload-Hash
 - `garmin_activity_files`: Metadaten für FIT/GPX/TCX/CSV/ZIP-Dateien, sobald Object Storage angebunden wird
 - `daily_health_summaries`, `sleep_summaries`, `hrv_summaries`, `recovery_training_states`: normalisierte Kernmetriken
@@ -47,24 +50,25 @@ Wichtige Tabellen:
 - Verschlüsselung: AES-256-GCM mit `GARMIN_TOKEN_ENCRYPTION_KEY` oder `INTEGRATION_ENCRYPTION_KEY`.
 - Read-only-Allowlist blockiert Methoden mit Präfixen wie `create`, `add`, `set`, `update`, `delete`, `upload`, `schedule`.
 
-## Sync-Strategie
+## Sync-Strategie mit QStash
 
-- Initialer Sync startet nach erfolgreicher Verbindung im Hintergrund.
-- Manueller Sync nutzt denselben inkrementellen Pfad.
-- Cron-Endpoint `/api/cron/garmin-sync` synchronisiert fällige Accounts.
-- Standard-Lookback: letzte 3 Tage, weil Garmin Werte nachträglich ergänzt.
-- Pro Account wird über laufende `garmin_sync_runs` ein paralleler Sync verhindert.
-- Nicht verfügbare Endpunkte werden als Teilfehler protokolliert und stoppen nicht den kompletten Lauf.
+1. Ein QStash-Schedule ruft stündlich `POST /api/internal/garmin/scheduler` auf.
+2. Der Scheduler liest nur fällige Verbindungen und erzeugt pro Verbindung einen persistenten `garmin_sync_jobs`-Datensatz.
+3. Für jeden Datensatz publiziert er einen separat signierten QStash-Job an `POST /api/internal/garmin/jobs/sync`.
+4. Der Worker verarbeitet genau ein kurzes Datumsfenster. QStash Flow Control begrenzt jede Verbindung auf einen parallelen Job.
+5. Ein erfolgreicher Backfill-Job erzeugt das unmittelbar vorherige Fenster, bis `GARMIN_INITIAL_BACKFILL_DAYS` erreicht ist.
 
-## Scheduler-Hinweis
+Job-Payloads enthalten nur `jobId` und `connectionId`. Tokens, E-Mail-Adressen und Garmin-Rohdaten bleiben in Supabase. QStash-Signaturen werden mit Current- und Next-Key geprüft. Eindeutige Deduplication Keys machen wiederholte Zustellungen sicher. Abgebrochene `RUNNING`-Jobs können nach Ablauf eines kurzen Leases erneut verarbeitet werden.
 
-Der Code stellt einen stündlich nutzbaren Cron-Endpoint bereit. Auf Vercel Hobby kann `vercel.json` aber nur einmal täglich ausgeführt werden. Für echten stündlichen Betrieb gibt es drei Optionen:
+## QStash einmalig einrichten
 
-1. Vercel Pro mit hourly cron.
-2. Externer Scheduler, der `GET /api/cron/garmin-sync` mit `Authorization: Bearer <CRON_SECRET>` stündlich aufruft.
-3. Separater Worker/Queue-Dienst.
+Migration `supabase/007_garmin_qstash_jobs.sql` ausführen und in Vercel `APP_URL`, `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY` sowie `QSTASH_NEXT_SIGNING_KEY` setzen. Danach:
 
-`vercel.json` bleibt Hobby-kompatibel, damit Deployments nicht an der Cron-Grenze scheitern.
+```bash
+APP_URL=https://deine-produktions-domain.example QSTASH_TOKEN=... pnpm garmin:qstash:configure
+```
+
+Der feste Schedule-Identifier `sports-fueling-coach-garmin-hourly` macht den Befehl wiederholbar. `0 * * * *` läuft stündlich in UTC. `vercel.json` bleibt Hobby-kompatibel.
 
 ## Environment
 
@@ -75,10 +79,15 @@ GARMIN_PYTHON_BIN=python3
 GARMIN_SYNC_INTERVAL_MINUTES=60
 GARMIN_SYNC_LOOKBACK_DAYS=3
 GARMIN_INITIAL_BACKFILL_CHUNK_DAYS=7
+GARMIN_INITIAL_BACKFILL_DAYS=365
 GARMIN_MAX_CONCURRENT_ACCOUNTS=2
 GARMIN_REQUEST_TIMEOUT_SECONDS=30
 SUPABASE_SERVICE_ROLE_KEY=...
 CRON_SECRET=...
+APP_URL=https://deine-produktions-domain.example
+QSTASH_TOKEN=...
+QSTASH_CURRENT_SIGNING_KEY=...
+QSTASH_NEXT_SIGNING_KEY=...
 ```
 
 Python-Dependency:
@@ -101,5 +110,5 @@ Ein Update von `garminconnect` darf erst übernommen werden, nachdem der Registr
 
 - Echte Garmin-Login-/MFA-Flows wurden lokal nicht mit einem echten Account getestet.
 - FIT/GPX/TCX/CSV-Dateien sind als Metadatenmodell vorbereitet, aber Object-Storage-Download ist noch nicht produktiv verdrahtet.
-- Der vollständige historische Backfill ist checkpointfähig modelliert, wird im aktuellen Handler aber chunkweise über den Initial-Sync angestoßen.
+- Der historische Backfill läuft standardmäßig 365 Tage zurück und wird in 7-Tage-Jobs zerlegt; beide Werte sind konfigurierbar.
 - Automatisierte Mock-Integrationstests sind vorbereitet durch den Bridge-/Registry-Schnitt, aber noch nicht vollständig ausgeschrieben.

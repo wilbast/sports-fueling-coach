@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectGarminAccount } from "@/lib/integrations/garmin/provider";
+import { enqueueGarminSyncForUser } from "@/lib/integrations/garmin/jobs";
 import { createClient as createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -19,7 +20,9 @@ export async function POST(request: NextRequest) {
   if (!email || !password) return NextResponse.json({ error: "Garmin-E-Mail oder Passwort fehlt." }, { status: 400 });
 
   try {
-    return NextResponse.json(await connectGarminAccount(user.id, { email, password }));
+    const result = await connectGarminAccount(user.id, { email, password });
+    const queuedSync = result.status === "CONNECTED" ? await enqueueGarminSyncForUser(user.id, "initial") : undefined;
+    return NextResponse.json({ ...result, queuedSync });
   } catch (error) {
     return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }

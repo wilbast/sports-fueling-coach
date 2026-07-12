@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { syncConnectedGarminAccountsForCron } from "@/lib/integrations/garmin/provider";
+import { dispatchDueGarminJobs } from "@/lib/integrations/garmin/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     return NextResponse.json({
       ok: true,
-      ...(await syncConnectedGarminAccountsForCron({
+      ...(await dispatchDueGarminJobs({
         force: request.nextUrl.searchParams.get("force") === "1"
       }))
     });

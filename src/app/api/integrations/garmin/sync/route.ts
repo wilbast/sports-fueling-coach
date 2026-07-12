@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { syncGarminAccount } from "@/lib/integrations/garmin/provider";
+import { enqueueGarminSyncForUser } from "@/lib/integrations/garmin/jobs";
 import { createClient as createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
 
   try {
-    return NextResponse.json(await syncGarminAccount(user.id, "MANUAL", "manual"));
+    return NextResponse.json({ queued: true, ...(await enqueueGarminSyncForUser(user.id, "manual")) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Garmin-Synchronisation fehlgeschlagen." }, { status: 500 });
   }

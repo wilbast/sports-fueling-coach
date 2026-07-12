@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { completeGarminMfa } from "@/lib/integrations/garmin/provider";
+import { enqueueGarminSyncForUser } from "@/lib/integrations/garmin/jobs";
 import { createClient as createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -19,7 +20,9 @@ export async function POST(request: NextRequest) {
   if (!attemptId || !mfaCode) return NextResponse.json({ error: "MFA-Vorgang oder Code fehlt." }, { status: 400 });
 
   try {
-    return NextResponse.json(await completeGarminMfa(user.id, { attemptId, mfaCode }));
+    const result = await completeGarminMfa(user.id, { attemptId, mfaCode });
+    const queuedSync = await enqueueGarminSyncForUser(user.id, "initial");
+    return NextResponse.json({ ...result, queuedSync });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Garmin MFA fehlgeschlagen." }, { status: 500 });
   }

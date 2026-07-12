@@ -109,7 +109,8 @@ Weitere Bereiche:
 - Zeitabhängige Coach-Impulse: Today, Training und Fueling zeigen 06:00-/14:00-/21:00-Zusammenfassungen aus aktuellem Seitenkontext
 - Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale, manuelle und tägliche Vercel-Hobby-Cron-Synchronisation um `23:00 UTC`, providerneutrale Aktivitätstabellen
 - Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `activity_zones`, `training_zones`, `equipment`, `sync_jobs`
-- Garmin Connect: experimentelle inoffizielle Integration hinter Feature Flag mit verschlüsselten Session-Payloads, MFA-Vorgängen, Raw Records, normalisierten Health-/Sleep-/HRV-/Recovery-Tabellen und Cron-Endpoint
+- Garmin Connect: experimentelle inoffizielle Integration hinter Feature Flag mit verschlüsselten Session-Payloads, MFA, Raw Records und normalisierten Health-/Sleep-/HRV-/Recovery-Tabellen
+- Garmin Jobs: stündlicher QStash-Scheduler, signierte Einzeljobs pro Verbindung sowie wiederaufnehmbare Erstimporte und Backfills in kurzen Datumsfenstern
 - Coach-Kontext: externe Aktivitäten und Trainingszonen werden serverseitig aus Supabase geladen, mit erweiterten Strava-Kriterien strukturiert zusammengefasst und als Ist-plus-Zukunft-Bewertung in den Wochenumfang einbezogen; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
 - Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros
 - Meal-Log-Metadaten: Kategorie und Hauptmahlzeit werden in `metadata` gespeichert und in Coach-Kontext, Today und Fueling-UI genutzt

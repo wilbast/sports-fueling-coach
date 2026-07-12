@@ -8,11 +8,13 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "garmin:registry": "node tests/garmin/registry-drift.mjs"
+    "garmin:registry": "node tests/garmin/registry-drift.mjs",
+    "garmin:qstash:configure": "node scripts/configure-qstash-garmin.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.0",
+    "@upstash/qstash": "^2.11.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "next": "^14.2.0",

@@ -229,5 +229,6 @@ Umgesetzt:
 - normalisierte Tabellen für Daily Health, Sleep, HRV und Recovery
 - Garmin-Aktivitäten im bestehenden `activities`-Modell
 - Settings-UI mit Status, Connect, MFA, Sync und Disconnect
-- Cron-Endpoint für stündlichen externen Scheduler
+- stündlicher QStash-Scheduler mit signierten Einzeljobs pro Verbindung
+- wiederaufnehmbare Erstimporte und Backfills in konfigurierbaren Datumsfenstern
 - technische Dokumentation und Registry-Drift-Check

@@ -143,6 +143,10 @@ Garmin ist als experimentelle, inoffizielle Integration vorbereitet. Details ste
 - Migration: `supabase/006_garmin_connect.sql`
 - API: `/api/integrations/garmin/*`
 - Cron-Endpoint: `/api/cron/garmin-sync`
+- Stündlicher Dispatcher: Upstash QStash über `/api/internal/garmin/scheduler`
+- Wiederaufnehmbare Einzeljobs: `/api/internal/garmin/jobs/sync`, Migration `supabase/007_garmin_qstash_jobs.sql`
+
+QStash wird einmalig mit `pnpm garmin:qstash:configure` eingerichtet. Benötigt werden `APP_URL`, `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY` und `QSTASH_NEXT_SIGNING_KEY`.
 
 Garmin-Sessiondaten werden serverseitig mit `GARMIN_TOKEN_ENCRYPTION_KEY` verschlüsselt. Auf Vercel Hobby kann der stündliche Sync nicht über `vercel.json` aktiviert werden; nutze dafür Vercel Pro oder einen externen Scheduler mit `CRON_SECRET`.
 

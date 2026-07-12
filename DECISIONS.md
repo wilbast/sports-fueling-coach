@@ -329,3 +329,7 @@ Garmin Connect wird hinter `GARMIN_INTEGRATION_ENABLED` als experimenteller Prov
 Begründung:
 
 Garmin Connect stellt für diesen Anwendungsfall keine offizielle öffentliche API bereit. Deshalb braucht die Integration eine harte Sicherheitsgrenze: Read-only-Allowlist, Blocklist für schreibende Methoden, keine Credentials im Client, keine Raw Payloads in Logs und keine direkte Coach-Nutzung von Garmin-JSON. Rohdaten werden in `garmin_raw_records` archiviert, Kernsignale normalisiert und der Coach erhält nur serverseitig gebaute Zusammenfassungen. Für stündliche Synchronisation stellt die App `/api/cron/garmin-sync` bereit; auf Vercel Hobby muss dieser Endpoint extern oder mit Vercel Pro stündlich getriggert werden.
+
+### ADR-034: QStash als Garmin-Scheduler und Job-Dispatcher
+
+Der stündliche Garmin-Takt wird von Upstash QStash ausgelöst. Der Scheduler führt keine Provider-Abfragen aus, sondern persistiert und publiziert pro fälliger Verbindung einen signierten Einzeljob. Historische Importe werden in kleine, rückwärts verkettete Datumsfenster zerlegt. Datenbank- und QStash-Deduplication, ein Job-Lease sowie per-Connection Flow Control ermöglichen idempotente Wiederaufnahme ohne lange Vercel Functions. QStash erhält ausschließlich technische IDs; Secrets und Gesundheitsdaten bleiben in Supabase.

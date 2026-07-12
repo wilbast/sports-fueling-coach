@@ -4,6 +4,7 @@ import { getMissingSupabaseEnvVars, isSupabaseConfigured } from "@/lib/supabase/
 import { decryptGarminSecret, encryptGarminSecret, getMissingGarminEncryptionEnvVars, isGarminEncryptionConfigured, maskGarminEmail } from "@/lib/integrations/garmin/crypto";
 import { runGarminLogin, runGarminSync, type GarminBridgeRecord } from "@/lib/integrations/garmin/bridge";
 import { assertGarminReadRegistryIsSafe, getGarminReadRegistry } from "@/lib/integrations/garmin/registry";
+import { getMissingQStashEnvVars } from "@/lib/integrations/garmin/qstash";
 
 type GarminConnectionStatus =
   | "DISCONNECTED"
@@ -108,7 +109,8 @@ export function getMissingGarminEnvVars(): string[] {
   return [
     ...getMissingSupabaseEnvVars(),
     ...(isServiceRoleConfigured() ? [] : ["SUPABASE_SERVICE_ROLE_KEY oder SUPABASE_SERVICE_KEY"]),
-    ...getMissingGarminEncryptionEnvVars()
+    ...getMissingGarminEncryptionEnvVars(),
+    ...getMissingQStashEnvVars()
   ];
 }
 
@@ -213,7 +215,6 @@ export async function connectGarminAccount(userId: string, input: { email: strin
   }
 
   const connectionId = await persistConnectedGarminAccount(userId, input.email, login.tokenPayload, login.profile);
-  void syncGarminAccount(userId, "INITIAL", "connect").catch(() => undefined);
 
   return {
     status: "CONNECTED" as const,
@@ -253,7 +254,6 @@ export async function completeGarminMfa(userId: string, input: { attemptId: stri
     encrypted_password: encryptGarminSecret("__consumed__")
   }).eq("id", input.attemptId);
   const connectionId = await persistConnectedGarminAccount(userId, email, login.tokenPayload, login.profile);
-  void syncGarminAccount(userId, "INITIAL", "connect_mfa").catch(() => undefined);
 
   return {
     status: "CONNECTED" as const,
@@ -262,22 +262,35 @@ export async function completeGarminMfa(userId: string, input: { attemptId: stri
 }
 
 export async function syncGarminAccount(userId: string, syncType: "INITIAL" | "HOURLY" | "MANUAL" | "BACKFILL" | "REPAIR", trigger: string): Promise<GarminSyncResult> {
-  assertGarminCanRun();
-  assertGarminReadRegistryIsSafe();
-  const supabase = createServiceRoleClient();
-  const connection = await loadConnectedConnection(userId);
-  const existingRun = await findRunningSync(userId, connection.id);
-  if (existingRun) {
-    throw new Error("Für diesen Garmin-Account läuft bereits eine Synchronisation.");
-  }
-
   const now = new Date();
   const lookbackDays = syncType === "INITIAL"
     ? Number.parseInt(process.env.GARMIN_INITIAL_BACKFILL_CHUNK_DAYS ?? "7", 10)
     : Number.parseInt(process.env.GARMIN_SYNC_LOOKBACK_DAYS ?? "3", 10);
   const endDate = toIsoDate(now);
   const startDate = toIsoDate(addDays(now, -Math.max(1, lookbackDays - 1)));
-  const syncRun = await createSyncRun(userId, connection.id, syncType, trigger, startDate, endDate);
+  const connection = await loadConnectedConnection(userId);
+  return syncGarminWindow({ userId, connectionId: connection.id, syncType, trigger, startDate, endDate });
+}
+
+export async function syncGarminWindow(input: {
+  userId: string;
+  connectionId: string;
+  syncType: "INITIAL" | "HOURLY" | "MANUAL" | "BACKFILL" | "REPAIR";
+  trigger: string;
+  startDate: string;
+  endDate: string;
+}): Promise<GarminSyncResult> {
+  assertGarminCanRun();
+  assertGarminReadRegistryIsSafe();
+  const supabase = createServiceRoleClient();
+  const connection = await loadConnectedConnection(input.userId);
+  if (connection.id !== input.connectionId) throw new Error("Garmin-Verbindung passt nicht zum Sync-Job.");
+  const existingRun = await findRunningSync(input.userId, connection.id);
+  if (existingRun) throw new Error("Für diesen Garmin-Account läuft bereits eine Synchronisation.");
+
+  const now = new Date();
+  const lookbackDays = Math.max(1, dateSpanDays(input.startDate, input.endDate));
+  const syncRun = await createSyncRun(input.userId, connection.id, input.syncType, input.trigger, input.startDate, input.endDate);
   const tokenPayload = decryptGarminSecret<Record<string, string>>(connection.encrypted_token_payload ?? "");
 
   await supabase.from("garmin_connections").update({
@@ -285,13 +298,22 @@ export async function syncGarminAccount(userId: string, syncType: "INITIAL" | "H
     connection_status: "CONNECTED"
   }).eq("id", connection.id);
 
-  const bridgeResult = await runGarminSync({
-    tokenPayload,
-    startDate,
-    endDate,
-    maxDays: lookbackDays,
-    registry: getGarminReadRegistry()
-  });
+  let bridgeResult;
+  try {
+    bridgeResult = await runGarminSync({
+      tokenPayload,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      maxDays: lookbackDays,
+      registry: getGarminReadRegistry()
+    });
+  } catch (error) {
+    await finishSyncRun(syncRun.id, "FAILED", {
+      errorCode: "garmin_bridge_failed",
+      errorMessage: error instanceof Error ? error.message : "Garmin Bridge fehlgeschlagen."
+    });
+    throw error;
+  }
 
   if (!bridgeResult.ok) {
     const status = bridgeResult.errorCode === "rate_limited"
@@ -303,13 +325,13 @@ export async function syncGarminAccount(userId: string, syncType: "INITIAL" | "H
       errorCode: bridgeResult.errorCode ?? "garmin_sync_failed",
       errorMessage: bridgeResult.message ?? "Garmin Sync fehlgeschlagen."
     });
-    await upsertConnectionStatus(userId, status === "REAUTH_REQUIRED" ? "REAUTH_REQUIRED" : status === "RATE_LIMITED" ? "RATE_LIMITED" : "ERROR", {
+    await upsertConnectionStatus(input.userId, status === "REAUTH_REQUIRED" ? "REAUTH_REQUIRED" : status === "RATE_LIMITED" ? "RATE_LIMITED" : "ERROR", {
       lastAuthErrorCode: bridgeResult.errorCode
     });
     throw new Error(bridgeResult.message ?? "Garmin Sync fehlgeschlagen.");
   }
 
-  const stats = await persistGarminRecords(userId, connection.id, syncRun.id, bridgeResult.records ?? []);
+  const stats = await persistGarminRecords(input.userId, connection.id, syncRun.id, bridgeResult.records ?? []);
   const errors = bridgeResult.errors ?? [];
   const finishedAt = new Date().toISOString();
   const status = errors.length > 0 ? "PARTIALLY_SUCCESSFUL" : "SUCCESS";
@@ -326,8 +348,11 @@ export async function syncGarminAccount(userId: string, syncType: "INITIAL" | "H
   await supabase.from("garmin_connections").update({
     connection_status: status === "SUCCESS" || status === "PARTIALLY_SUCCESSFUL" ? "CONNECTED" : "ERROR",
     last_successful_sync_at: finishedAt,
-    next_sync_after: addMinutes(new Date(), Number.parseInt(process.env.GARMIN_SYNC_INTERVAL_MINUTES ?? "60", 10)).toISOString(),
-    earliest_imported_date: startDate
+    next_sync_after: addMinutes(
+      new Date(),
+      Math.max(1, Number.parseInt(process.env.GARMIN_SYNC_INTERVAL_MINUTES ?? "60", 10) - 5)
+    ).toISOString(),
+    earliest_imported_date: earliestDate(connection.earliest_imported_date, input.startDate)
   }).eq("id", connection.id);
 
   return {
@@ -776,7 +801,7 @@ async function loadConnectedConnection(userId: string): Promise<GarminConnection
     .eq("provider", "garmin")
     .maybeSingle();
   const connection = data as GarminConnectionRow | null;
-  if (error || !connection || !connection.encrypted_token_payload || connection.connection_status !== "CONNECTED") {
+  if (error || !connection || !connection.encrypted_token_payload || !["CONNECTED", "RATE_LIMITED"].includes(connection.connection_status)) {
     throw new Error("Garmin ist nicht verbunden oder eine erneute Anmeldung ist erforderlich.");
   }
   return connection;
@@ -789,7 +814,7 @@ async function findRunningSync(userId: string, connectionId: string) {
     .eq("user_id", userId)
     .eq("connection_id", connectionId)
     .eq("status", "RUNNING")
-    .gte("started_at", addMinutes(new Date(), -45).toISOString())
+    .gte("started_at", addMinutes(new Date(), -3).toISOString())
     .limit(1)
     .maybeSingle();
   return data as { id: string } | null;
@@ -915,6 +940,16 @@ function addDays(date: Date, days: number): Date {
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+function dateSpanDays(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T00:00:00.000Z`).getTime();
+  const end = new Date(`${endDate}T00:00:00.000Z`).getTime();
+  return Math.floor((end - start) / 86400000) + 1;
+}
+
+function earliestDate(current: string | null, candidate: string): string {
+  return current && current < candidate ? current : candidate;
 }
 
 function sanitizeError(message: string): string {
