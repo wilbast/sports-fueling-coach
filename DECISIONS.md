@@ -359,3 +359,15 @@ Für den Tagesverbrauch hat ein normalisierter Garmin-Wert aus `daily_health_sum
 Die Aktivitätsliste bleibt der Einstiegspunkt für Datumsfenster. Pro gefundener Aktivität lädt die isolierte Python-Bridge zusätzlich die Garmin-Aktivitätszusammenfassung über `get_activity`. Detailfehler bleiben auf die einzelne Aktivität begrenzt. `summaryDTO`, verschachtelte Aktivitätsdaten und Listenwerte werden für die providerneutrale Normalisierung zusammengeführt.
 
 Damit stehen insbesondere `activityTrainingLoad`, Durchschnittsgeschwindigkeit, Bewegungsdauer und daraus abgeleitete Durchschnittspace zuverlässiger zur Verfügung. In der UI wird Tagesgesamtverbrauch als führender kcal-Wert angezeigt; Aktivitäts-kcal bleiben separat gekennzeichnet und werden nicht als Tagesverbrauch ausgegeben.
+
+### ADR-040: Produktwirkung hat Vorrang vor wörtlicher Umsetzung
+
+Anforderungen werden als Ausdruck eines Nutzerproblems verstanden und vor der Umsetzung fachlich, gestalterisch und technisch bewertet. Eine wörtliche Umsetzung darf begründet verändert werden, wenn eine andere Lösung verständlicher, fachlich korrekter, ergonomischer oder langfristig wartbarer ist. Der verbindliche Prüfrahmen steht in `PRODUCT_PRINCIPLES.md`.
+
+Das erhöht den Analyseaufwand und kann dazu führen, dass eine gewünschte Lösung nicht exakt in der beschriebenen Form entsteht. Im Gegenzug werden irreführende Kennzahlen, doppelte Informationen, lokale Sonderlösungen und unnötig komplexe Workflows vermieden. Wesentliche Abweichungen werden transparent mit Nutzen und Kompromiss dokumentiert.
+
+### ADR-041: Gemeinsamer Performance-Snapshot für Today, Training und Fueling
+
+Today, Training und Fueling lesen Gesundheits-, Recovery- und Energiedaten über einen gemeinsamen typisierten `DailyPerformanceSnapshot`. Garmin Training Readiness wird als Primärwert genutzt. Fehlt er, entsteht nur dann eine heuristische Einordnung, wenn mindestens zwei unabhängige Signale wie Schlaf, Body Battery, Stress oder HRV vorliegen; andernfalls zeigt die UI ausdrücklich eine unzureichende Datenlage.
+
+Die drei Seiten beantworten unterschiedliche Entscheidungen, teilen aber dieselben Quellen: Today priorisiert Tageszustand und nächste Aktion, Training trennt tatsächliche Leistung von offener Planung und Fueling nutzt dieselbe Tagesverbrauchs- und Makroberechnung wie Today. Wetter, Flüssigkeit, Ballaststoffe, Ernährungsqualität, Verletzungsrisiko und Race-Prognosen werden nicht aus fehlenden Daten erfunden. Sie werden erst prominent, wenn normalisierte Quellen und fachlich belastbare Berechnungen existieren. Das reduziert vorerst den Funktionsumfang, verhindert aber widersprüchliche oder scheinpräzise Empfehlungen.

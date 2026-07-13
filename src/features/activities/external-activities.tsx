@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, Gauge, HeartPulse, Route, Timer } from "lucide-react";
 import { Pill } from "@/components/ui";
+import type { DailyPerformanceSnapshot } from "@/domain/performance/types";
 
 export type ExternalActivitySummary = {
   id: string;
@@ -30,6 +31,7 @@ type UseExternalActivitiesResult = {
   isLoading: boolean;
   error: string | null;
   garminDailyEnergyByDate: Record<string, { totalCalories: number | null; activeCalories: number | null; restingCalories: number | null }>;
+  performanceByDate: Record<string, DailyPerformanceSnapshot>;
 };
 
 export function useExternalActivities(startDate: string, endDate: string): UseExternalActivitiesResult {
@@ -37,6 +39,7 @@ export function useExternalActivities(startDate: string, endDate: string): UseEx
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [garminDailyEnergyByDate, setGarminDailyEnergyByDate] = useState<UseExternalActivitiesResult["garminDailyEnergyByDate"]>({});
+  const [performanceByDate, setPerformanceByDate] = useState<UseExternalActivitiesResult["performanceByDate"]>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -49,17 +52,23 @@ export function useExternalActivities(startDate: string, endDate: string): UseEx
         const params = new URLSearchParams({ start: startDate, end: endDate });
         const response = await fetch(`/api/activities?${params.toString()}`);
         if (!response.ok) throw new Error("Aktivitäten konnten nicht geladen werden.");
-        const result = await response.json() as { activities?: ExternalActivitySummary[]; garminDailyEnergyByDate?: UseExternalActivitiesResult["garminDailyEnergyByDate"] };
+        const result = await response.json() as {
+          activities?: ExternalActivitySummary[];
+          garminDailyEnergyByDate?: UseExternalActivitiesResult["garminDailyEnergyByDate"];
+          performanceByDate?: UseExternalActivitiesResult["performanceByDate"];
+        };
 
         if (!cancelled) {
           setActivities(result.activities ?? []);
           setGarminDailyEnergyByDate(result.garminDailyEnergyByDate ?? {});
+          setPerformanceByDate(result.performanceByDate ?? {});
         }
       } catch {
         if (!cancelled) {
           setError("Importierte Aktivitäten konnten gerade nicht geladen werden.");
           setActivities([]);
           setGarminDailyEnergyByDate({});
+          setPerformanceByDate({});
         }
       } finally {
         if (!cancelled) {
@@ -91,7 +100,8 @@ export function useExternalActivities(startDate: string, endDate: string): UseEx
     activitiesByDate,
     isLoading,
     error,
-    garminDailyEnergyByDate
+    garminDailyEnergyByDate,
+    performanceByDate
   };
 }
 

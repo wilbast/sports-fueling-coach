@@ -1,5 +1,7 @@
 # Sports & Fueling Coach
 
+Produktentscheidungen folgen den verbindlichen [Produktprinzipien](PRODUCT_PRINCIPLES.md): Nutzerwirkung, fachliche Klarheit und ein konsistentes Gesamterlebnis haben Vorrang vor einer rein wörtlichen Umsetzung einzelner Anforderungen.
+
 Persönlicher Coach für Training, Ernährung, Fueling und sportliche Zielerreichung.
 
 ## Sprint 1
@@ -171,11 +173,14 @@ Garmin-Sessiondaten werden serverseitig mit `GARMIN_TOKEN_ENCRYPTION_KEY` versch
 
 ## Today Experience
 
-- Die Heute-Seite ist der tägliche Coach-Einstieg mit Briefing, Tageszielen, Tagesfortschritt, Aktivitäten, Ernährung, Coach-Empfehlungen, Morgenblick und Quick Actions
+- Die Heute-Seite beginnt mit einem typisierten Performance-Snapshot aus Schlaf, HRV, Ruhepuls, Body Battery, Stress, Bewegung und Recovery
+- Eine transparente Readiness-Bewertung nutzt Garmin Training Readiness direkt oder nur bei ausreichender Datenlage eine gekennzeichnete Heuristik
 - Fueling Quick Add ist direkt auf Heute sichtbar
 - Tagesbilanz zeigt kcal Input, Tagesverbrauch, Zielbereich, Protein-/Carb-/Fett-Fortschritt und was noch fehlt
 - Jede Coach-Empfehlung kann direkt mit dem Coach besprochen werden; Änderungen werden erst nach Bestätigung übernommen
-- Heute, Training und Fueling zeigen oben einen zeitabhängigen Coach-Impuls für 06:00, 14:00 und 21:00 Uhr als schnelle Zusammenfassung plus Empfehlung
+- Heute, Training und Fueling teilen ein konsistentes Performance-UI und dieselbe kanonische Energie-/Makroberechnung
+- Training trennt ausgewählten Tag, Ist-Leistung, offene Wochenplanung und 28-Tage-Trends
+- Fueling zeigt Tagesstatus, Gesamtverbrauch, Makrolücken und eine Log-basierte Wochenübersicht; leere Tage werden nicht als Defizit interpretiert
 
 ## Reviews
 

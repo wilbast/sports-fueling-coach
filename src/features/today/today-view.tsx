@@ -3,31 +3,39 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
+  Battery,
+  BedDouble,
+  Beef,
   Clock3,
   Dumbbell,
   Flame,
+  Footprints,
+  HeartPulse,
   ImagePlus,
   MessageCircle,
   Plus,
   ShieldCheck,
   Sparkles,
   Sunrise,
-  Target,
   Utensils,
   Wheat
 } from "lucide-react";
-import { PageHeader, Panel, Pill, StatCard } from "@/components/ui";
+import { PageHeader, Panel, Pill } from "@/components/ui";
+import { PerformanceHero, RecommendationBand, SignalCard, SignalGrid } from "@/components/performance/performance-ui";
 import type { DailyBriefing } from "@/domain/briefing/types";
 import type { DailyNutritionSummary, MealLog } from "@/domain/nutrition/logs";
+import type { ReadinessAssessment } from "@/domain/performance/insights";
+import type { DailyPerformanceSnapshot } from "@/domain/performance/types";
 import { ExternalActivityList, type ExternalActivitySummary } from "@/features/activities/external-activities";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
-import { TimedCoachBriefing } from "@/features/coach/timed-coach-briefing";
 import { MealLogList, type MealLogUpdateInput } from "@/features/nutrition/meal-log-list";
 
 type TodayViewProps = {
   selectedDate: string;
   briefing: DailyBriefing;
+  performanceSnapshot?: DailyPerformanceSnapshot;
+  readiness: ReadinessAssessment;
   calendar?: React.ReactNode;
   externalActivities?: ExternalActivitySummary[];
   externalActivitiesLoading?: boolean;
@@ -54,6 +62,8 @@ type CoachRecommendation = {
 export function TodayView({
   selectedDate,
   briefing,
+  performanceSnapshot,
+  readiness,
   calendar,
   externalActivities = [],
   externalActivitiesLoading = false,
@@ -72,8 +82,6 @@ export function TodayView({
   const garminEnergyActive = briefing.nutritionTarget.energyExpenditure.source === "garmin";
   const [activeRecommendation, setActiveRecommendation] = useState<CoachRecommendation | null>(null);
   const coachRecommendations = createCoachRecommendations(briefing, nutritionSummary);
-  const fatTarget = createFatTarget(nutritionSummary);
-  const fatProgress = percent(nutritionSummary.intake.fatGrams, fatTarget);
 
   return (
     <div>
@@ -98,100 +106,39 @@ export function TodayView({
         }
       />
 
-      <TimedCoachBriefing
-        page="today"
-        selectedDate={selectedDate}
-        focus={briefing.focus}
-        plannedWorkoutCount={briefing.workouts.length}
-        actualActivityCount={externalActivities.length}
-        actualRunningKm={sumRunningActivityKm(externalActivities)}
-        mealCount={nutritionLogs.length}
-        caloriesIntake={nutritionSummary.intake.calories}
-        caloriesTargetMax={nutritionSummary.targets.caloriesMax}
-        proteinRemaining={nutritionSummary.deltas.proteinRemaining}
-        carbsRemaining={nutritionSummary.deltas.carbsRemaining}
-      />
-
       {calendar}
 
-      <section className="mb-6 rounded-lg border border-[#263449] bg-[#111827] p-5 text-white shadow-soft sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="mb-4 flex flex-wrap gap-2">
-              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                Fokus: {briefing.focus}
-              </span>
-              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                Energiebedarf: {briefing.nutritionTarget.energyDemand}
-              </span>
-              {briefing.raceContext ? (
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                  {briefing.raceContext}
-                </span>
-              ) : null}
-            </div>
-            <h2 className="max-w-3xl text-2xl font-semibold tracking-normal sm:text-3xl">
-              {briefing.heroTitle}
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
-              Der Coach bewertet Training, Alltag und Fueling als ruhigen Entscheidungsrahmen
-              für den Tag.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">
-              Belastbarkeit
-            </p>
-            <p className="mt-2 text-xl font-semibold">{briefing.readiness}</p>
-          </div>
-        </div>
-      </section>
+      <PerformanceHero
+        eyebrow={`Tagesstatus · ${performanceSnapshot?.source === "garmin" ? "Garmin" : "transparente Schätzung"}`}
+        title={readiness.label}
+        summary={readiness.recommendation}
+        score={readiness.score}
+        scoreLabel="Trainingsbereitschaft"
+        tone={readiness.tone}
+        confidence={translateConfidence(readiness.confidence)}
+        reasons={readiness.reasons}
+      />
 
-      <section className="mb-8 grid gap-3 md:grid-cols-3">
-        {briefing.metrics.map((metric) => (
-          <StatCard
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            unit={metric.unit}
-            note={metric.note}
-            tone={metric.tone}
-          />
-        ))}
-      </section>
+      <SignalGrid>
+        <SignalCard icon={BedDouble} label="Schlaf" value={formatSleep(performanceSnapshot?.sleep.durationSeconds)} detail={performanceSnapshot?.sleep.score ? `Schlafscore ${Math.round(performanceSnapshot.sleep.score)}` : "Noch kein aktueller Schlafscore"} tone="blue" />
+        <SignalCard icon={HeartPulse} label="HRV / Ruhepuls" value={formatHrv(performanceSnapshot)} detail={formatRestingHeartRate(performanceSnapshot)} tone={readiness.tone === "red" ? "red" : "green"} />
+        <SignalCard icon={Battery} label="Body Battery" value={formatOptionalNumber(performanceSnapshot?.vitals.bodyBatteryEnd)} detail={formatStress(performanceSnapshot)} tone={readiness.tone} />
+        <SignalCard icon={Footprints} label="Bewegung" value={formatOptionalNumber(performanceSnapshot?.movement.steps)} detail={`${externalActivities.length} Aktivität${externalActivities.length === 1 ? "" : "en"} durchgeführt`} tone="neutral" />
+      </SignalGrid>
 
-      <Panel className="mb-6">
-        <div className="mb-4 flex items-center gap-2">
-          <Target className="h-5 w-5 text-coach-600" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-ink">Tagesfortschritt</h2>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <BalanceRow
-            label="Kalorien"
-            value={`${formatNumber(nutritionSummary.intake.calories)} kcal`}
-            detail={`${formatNumber(Math.max(0, nutritionSummary.targets.caloriesMax - nutritionSummary.intake.calories))} kcal bis Zielobergrenze`}
-            progress={nutritionSummary.progress.calories}
-          />
-          <BalanceRow
-            label="Protein"
-            value={`${formatNumber(nutritionSummary.intake.proteinGrams)} / ${formatNumber(nutritionSummary.targets.proteinMin)} g`}
-            detail={`Rest ca. ${formatNumber(nutritionSummary.deltas.proteinRemaining)} g`}
-            progress={nutritionSummary.progress.protein}
-          />
-          <BalanceRow
-            label="Carbs"
-            value={`${formatNumber(nutritionSummary.intake.carbohydrateGrams)} / ${formatNumber(nutritionSummary.targets.carbsMin)} g`}
-            detail={`Rest ca. ${formatNumber(nutritionSummary.deltas.carbsRemaining)} g`}
-            progress={nutritionSummary.progress.carbs}
-          />
-          <BalanceRow
-            label="Fett"
-            value={`${formatNumber(nutritionSummary.intake.fatGrams)} / ${formatNumber(fatTarget)} g`}
-            detail={`Rest ca. ${formatNumber(Math.max(0, fatTarget - nutritionSummary.intake.fatGrams))} g`}
-            progress={fatProgress}
-          />
-        </div>
-      </Panel>
+      <RecommendationBand
+        title="Dein Plan für heute"
+        body={briefing.coachHint}
+        reasons={[briefing.focus, `${briefing.workouts.length} geplant`, `${externalActivities.length} durchgeführt`, briefing.nutritionTarget.energyDemand]}
+        tone={readiness.tone}
+      />
+
+      <SignalGrid className="mt-5">
+        <SignalCard icon={Flame} label="Gesamtverbrauch" value={formatNumber(nutritionSummary.expenditureCalories)} unit="kcal" detail={describeEnergySource(briefing.nutritionTarget.energyExpenditure.source)} tone="amber" />
+        <SignalCard icon={Utensils} label="Aufgenommen" value={formatNumber(nutritionSummary.intake.calories)} unit="kcal" detail={`${formatSigned(nutritionSummary.deltas.caloriesVsExpenditure)} kcal gegenüber Verbrauch`} tone="blue" progress={nutritionSummary.progress.calories} />
+        <SignalCard icon={Beef} label="Protein" value={`${formatNumber(nutritionSummary.intake.proteinGrams)} / ${formatNumber(nutritionSummary.targets.proteinMin)}`} unit="g" detail={`Noch ca. ${formatNumber(nutritionSummary.deltas.proteinRemaining)} g`} tone="green" progress={nutritionSummary.progress.protein} />
+        <SignalCard icon={Wheat} label="Kohlenhydrate" value={`${formatNumber(nutritionSummary.intake.carbohydrateGrams)} / ${formatNumber(nutritionSummary.targets.carbsMin)}`} unit="g" detail={`Noch ca. ${formatNumber(nutritionSummary.deltas.carbsRemaining)} g`} tone="amber" progress={nutritionSummary.progress.carbs} />
+      </SignalGrid>
 
       <div className="mb-6 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <section>
@@ -279,7 +226,7 @@ export function TodayView({
         </section>
       </div>
 
-      <section className="mb-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
+      <section className="mb-6">
         <Panel>
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-ink">Heute gegessen</h2>
@@ -310,62 +257,7 @@ export function TodayView({
           />
         </Panel>
 
-        <Panel>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-ink">Tagesbilanz</h2>
-            <Pill tone="amber">Input vs. Output</Pill>
-          </div>
-          <div className="grid gap-3">
-            <BalanceRow
-              label="kcal aufgenommen"
-              value={`${formatNumber(nutritionSummary.intake.calories)} kcal`}
-              detail={`Ziel ${formatNumber(nutritionSummary.targets.caloriesMin)}-${formatNumber(nutritionSummary.targets.caloriesMax)} kcal`}
-              progress={nutritionSummary.progress.calories}
-            />
-            <BalanceRow
-              label="geschätzter Tagesverbrauch"
-              value={`${formatNumber(nutritionSummary.expenditureCalories)} kcal`}
-              detail={`Aufnahme vs. Verbrauch: ${formatSigned(nutritionSummary.deltas.caloriesVsExpenditure)} kcal`}
-              progress={Math.min(100, Math.round((nutritionSummary.intake.calories / Math.max(1, nutritionSummary.expenditureCalories)) * 100))}
-            />
-            <BalanceRow
-              label="Protein"
-              value={`${formatNumber(nutritionSummary.intake.proteinGrams)} / ${formatNumber(nutritionSummary.targets.proteinMin)} g`}
-              detail={`Rest ca. ${formatNumber(nutritionSummary.deltas.proteinRemaining)} g`}
-              progress={nutritionSummary.progress.protein}
-            />
-            <BalanceRow
-              label="Kohlenhydrate"
-              value={`${formatNumber(nutritionSummary.intake.carbohydrateGrams)} / ${formatNumber(nutritionSummary.targets.carbsMin)} g`}
-              detail={`Rest ca. ${formatNumber(nutritionSummary.deltas.carbsRemaining)} g`}
-              progress={nutritionSummary.progress.carbs}
-            />
-            <BalanceRow
-              label="Fett"
-              value={`${formatNumber(nutritionSummary.intake.fatGrams)} / ${formatNumber(fatTarget)} g`}
-              detail={`Rest ca. ${formatNumber(Math.max(0, fatTarget - nutritionSummary.intake.fatGrams))} g`}
-              progress={fatProgress}
-            />
-          </div>
-        </Panel>
       </section>
-
-      <Panel className="mb-6 bg-coach-50">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-coach-700">
-            <Sparkles className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-ink">Was fehlt noch?</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Heute fehlen noch ca. {formatNumber(nutritionSummary.deltas.proteinRemaining)} g Protein und {formatNumber(nutritionSummary.deltas.carbsRemaining)} g Kohlenhydrate.
-              {" "}{briefing.workouts.length > 0
-                ? "Da heute Training geplant oder berücksichtigt ist, sollten die fehlenden Kohlenhydrate nicht zu stark reduziert werden."
-                : "Ohne harte Einheit kannst du die Kohlenhydrate flexibler halten, Protein bleibt der wichtigste Anker."}
-            </p>
-          </div>
-        </div>
-      </Panel>
 
       {fuelingQuickAdd ? (
         <div className="mb-6">
@@ -511,34 +403,6 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function BalanceRow({
-  label,
-  value,
-  detail,
-  progress
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  progress: number;
-}) {
-  return (
-    <div className="rounded-xl bg-canvas px-3 py-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-semibold text-ink">{label}</p>
-        <p className="text-sm font-semibold text-ink">{value}</p>
-      </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
-        <div
-          className="h-full rounded-full bg-coach-600"
-          style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
-        />
-      </div>
-      <p className="mt-2 text-xs leading-5 text-muted">{detail} · {Math.round(progress)}%</p>
-    </div>
-  );
-}
-
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(value);
 }
@@ -548,10 +412,45 @@ function formatSigned(value: number): string {
   return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : formatted;
 }
 
-function createFatTarget(nutritionSummary: DailyNutritionSummary): number {
-  if (typeof nutritionSummary.targets.fatMin === "number") return nutritionSummary.targets.fatMin;
+function formatSleep(seconds?: number | null): string {
+  if (!seconds) return "–";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return `${hours}:${String(minutes).padStart(2, "0")} h`;
+}
 
-  return Math.round(Math.max(45, nutritionSummary.targets.caloriesMin * 0.22 / 9));
+function formatHrv(snapshot?: DailyPerformanceSnapshot): string {
+  const value = snapshot?.vitals.hrvNightlyAverage ?? snapshot?.sleep.averageHrv;
+  return value ? `${Math.round(value)} ms` : "–";
+}
+
+function formatRestingHeartRate(snapshot?: DailyPerformanceSnapshot): string {
+  return snapshot?.vitals.restingHeartRate
+    ? `Ruhepuls ${Math.round(snapshot.vitals.restingHeartRate)} bpm`
+    : "Noch kein aktueller Ruhepuls";
+}
+
+function formatStress(snapshot?: DailyPerformanceSnapshot): string {
+  const stress = snapshot?.vitals.averageStress ?? snapshot?.sleep.averageStress;
+  return stress != null ? `Stressindex ${Math.round(stress)}` : "Noch kein aktueller Stresswert";
+}
+
+function formatOptionalNumber(value?: number | null): string {
+  return value != null && Number.isFinite(value) ? formatNumber(value) : "–";
+}
+
+function translateConfidence(confidence: ReadinessAssessment["confidence"]): string {
+  if (confidence === "high") return "hoch";
+  if (confidence === "medium") return "mittel";
+  return "niedrig";
+}
+
+function describeEnergySource(source: DailyBriefing["nutritionTarget"]["energyExpenditure"]["source"]): string {
+  if (source === "garmin") return "Garmin-Gesamtverbrauch führt";
+  if (source === "manual_forecast") return "Manueller Tagesforecast";
+  if (source === "actual") return "Basis plus tatsächliche Aktivitäten";
+  if (source === "planned") return "Basis plus geplante Aktivitäten";
+  return "Geschätzter Basisverbrauch";
 }
 
 async function noopUpdateMealLog(): Promise<MealLog | null> {
@@ -560,12 +459,6 @@ async function noopUpdateMealLog(): Promise<MealLog | null> {
 
 async function noopDeleteMealLog(): Promise<boolean> {
   return false;
-}
-
-function percent(value: number, target: number): number {
-  if (target <= 0) return 0;
-
-  return Math.max(0, Math.min(160, Math.round((value / target) * 100)));
 }
 
 function sumRunningActivityKm(activities: ExternalActivitySummary[]): number {

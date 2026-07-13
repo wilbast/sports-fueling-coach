@@ -9,6 +9,7 @@ import { useExternalActivities } from "@/features/activities/external-activities
 import { TodayView } from "@/features/today/today-view";
 import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
 import { createDailyNutritionSummary } from "@/domain/nutrition/logs";
+import { assessReadiness } from "@/domain/performance/insights";
 import { useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
 
 type TodayPageClientProps = {
@@ -20,15 +21,18 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
   const activeDate = date ?? state.selectedDate;
   const dayPlan = getDayPlanByDate(state.weekPlan, activeDate);
   const tomorrowDate = addDays(activeDate, 1);
+  const historyStart = addDays(activeDate, -13);
   const tomorrowPlan = state.weekPlans
     .flatMap((week) => week.days)
     .find((day) => day.date === tomorrowDate);
   const {
+    activities,
     activitiesByDate,
     garminDailyEnergyByDate,
+    performanceByDate,
     isLoading: activitiesLoading,
     error: activitiesError
-  } = useExternalActivities(activeDate, activeDate);
+  } = useExternalActivities(historyStart, activeDate);
   const {
     logs: nutritionLogs,
     isLoading: nutritionLogsLoading,
@@ -56,11 +60,17 @@ export function TodayPageClient({ date }: TodayPageClientProps) {
     () => createDailyNutritionSummary(nutritionLogs, briefing.nutritionTarget),
     [briefing.nutritionTarget, nutritionLogs]
   );
+  const readiness = useMemo(
+    () => assessReadiness(performanceByDate[activeDate], activities, dayPlan.workouts),
+    [activeDate, activities, dayPlan.workouts, performanceByDate]
+  );
 
   return (
     <TodayView
       selectedDate={activeDate}
       briefing={briefing}
+      performanceSnapshot={performanceByDate[activeDate]}
+      readiness={readiness}
       calendar={<WeekCalendar variant="compact" />}
       externalActivities={activitiesByDate[activeDate] ?? []}
       externalActivitiesLoading={activitiesLoading}

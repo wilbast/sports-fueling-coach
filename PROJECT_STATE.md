@@ -106,7 +106,8 @@ Weitere Bereiche:
 - Coach-Modi: `coach`, `planning`, `change`; Planänderungen werden erst nach Bestätigung angewendet
 - Coach-Historie: `coach_chat_messages` speichert User-/Coach-Nachrichten RLS-geschützt pro Nutzer und Thread
 - Coach-Streaming: `/api/coach?stream=1` liefert `delta`-Events für Live-Text und ein finales `CoachPlanResponse`-Objekt
-- Zeitabhängige Coach-Impulse: Today, Training und Fueling zeigen 06:00-/14:00-/21:00-Zusammenfassungen aus aktuellem Seitenkontext
+- Performance-Snapshot: Today und Training erhalten Schlaf, HRV, Ruhepuls, Stress, Body Battery, Bewegung, Energie und Recovery typisiert über `/api/activities`
+- Readiness: Garmin Training Readiness führt; eine Heuristik erscheint nur bei mindestens zwei unabhängigen Signalen, sonst wird die fehlende Datenlage transparent gezeigt
 - Externe Sportintegrationen: Strava OAuth, Token-Refresh, initiale, manuelle und tägliche Vercel-Hobby-Cron-Synchronisation um `23:00 UTC`, providerneutrale Aktivitätstabellen
 - Integrationsdaten: `external_connections`, `external_source_tokens`, `activities`, `activity_streams`, `activity_zones`, `training_zones`, `equipment`, `sync_jobs`
 - Garmin Connect: experimentelle inoffizielle Integration hinter Feature Flag mit verschlüsselten Session-Payloads, MFA, Raw Records und normalisierten Health-/Sleep-/HRV-/Recovery-Tabellen
@@ -122,7 +123,8 @@ Weitere Bereiche:
 - Garmin-kcal: Tagesgesamtverbrauch ist der führende Wert; Aktivitäts-kcal werden nur separat und ausdrücklich als Aktivitätswert dargestellt
 - Dashboard 2.0: `/insights` nutzt eine typisierte Mock-API, Recharts, Framer Motion, Zeitraumumschaltung, Skeletons und einen eigenständigen responsiven Dark-Mode-Rahmen
 - Coach-Kontext: externe Aktivitäten und Trainingszonen werden serverseitig aus Supabase geladen, mit erweiterten Strava-Kriterien strukturiert zusammengefasst und als Ist-plus-Zukunft-Bewertung in den Wochenumfang einbezogen; der AI-Provider greift weder auf Strava noch direkt auf Supabase zu
-- Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; die Heute-Seite zeigt Tagesbilanz, Input-vs.-Output, Protein-/Carb-Fortschritt und fehlende Makros
+- Nutrition: geloggte Mahlzeiten liegen für eingeloggte Nutzer in `meal_logs`; Today und Fueling nutzen dieselbe Tagesverbrauchs-, Ziel- und Protein-/Carb-Berechnung
+- Training Analytics: Training trennt ausgewählten Tag, tatsächliche Aktivitäten, offene Wochenplanung, Wochenprognose und 28-Tage-Ist-Trends
 - Meal-Log-Metadaten: Kategorie und Hauptmahlzeit werden in `metadata` gespeichert und in Coach-Kontext, Today und Fueling-UI genutzt
 - Coach Page Context: `/api/coach` akzeptiert `pageContext` und schärft die Empfehlung je nach App-Bereich
 - Context Builder: Page Context wird serverseitig in die Kontextstrategie aufgenommen und beeinflusst Domain-Fokus, Morgenblick und Deep Context
@@ -140,7 +142,8 @@ Weitere Bereiche:
 - Dashboard 2.0 nutzt bewusst gekennzeichnete Mockdaten; die serverseitige Aggregation echter App-, Garmin-, Strava- und Ernährungsdaten steht noch aus.
 - Es gibt noch keine automatisierten Unit-Tests.
 - Der Coach bietet übernehmbare Vorschläge, hat aber noch keine Undo-Historie.
-- Schlaf, Krankheit, Alkohol und Regeneration sind noch keine echten Zeitreihen. Wasser wird bewusst nicht getrackt.
+- Krankheit und Alkohol sind noch keine echten Zeitreihen. Garmin-Schlaf, HRV und Recovery sind normalisiert; Wasser wird bewusst nicht getrackt.
+- Wetter, Verletzungsrisiko, Ernährungsqualität und Race-Prognosen werden mangels belastbarer normalisierter Ableitung noch nicht als Steuerungskennzahlen ausgegeben.
 - Trainingstage und Wochenumfang werden nur so gut bewertet wie die importierten Ist-Aktivitäten; ohne Sync bleibt die Planung Referenz.
 - Alte Coach-Antworten werden als Textverlauf wiederhergestellt; frühere Vorschlagsbuttons werden nach Reload nicht rekonstruiert.
 - Strava-Synchronisation ist implementiert, aber ohne echte Strava-Credentials und produktive Supabase-Migration nicht live verifiziert.

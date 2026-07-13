@@ -14,7 +14,6 @@
 - Normalisierte Zeitreihen für Schlaf, Krankheit, Alkohol und Regeneration ergänzen.
 - Dashboard-API von Mockdaten auf serverseitig aggregierte Supabase-, Garmin-, Strava- und Ernährungsdaten umstellen.
 - Coach-Audit-Trail und Undo für übernommene Änderungen bauen.
-- Tagesbewertung erst nach belastbarer Datenbasis aktivieren.
 
 ## P1
 
@@ -69,6 +68,10 @@
 - Garmin-Pace, Aktivitätsdauer, Herzfrequenz, Leistung und Trainingslast robuster normalisiert; Garmin-Tagesverbrauch priorisiert.
 - Garmin-Aktivitätslisten um Einzelzusammenfassungen für Trainingslast und Durchschnittspace angereichert; Tagesgesamt- und Aktivitäts-kcal getrennt dargestellt.
 - Trainings- und Fuelingstandards nach fachlichen Kategorien gruppiert.
+- Gemeinsamen Performance-Snapshot für Today, Training und Fueling eingeführt.
+- Readiness mit Garmin-Priorität, Datenvertrauen und transparentem Fallback umgesetzt.
+- Training um Ist-/Plan-Prognose und 28-Tage-Pace-, Puls-, Last- und Konstanzwerte ergänzt.
+- Fueling und Today auf eine gemeinsame Tagesverbrauchs- und Makroberechnung konsolidiert.
 
 ## P2
 

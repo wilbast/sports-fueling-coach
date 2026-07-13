@@ -1,17 +1,19 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Beef, BookmarkPlus, History, MessageCircle, Plus, Salad, Soup, Utensils, Wheat } from "lucide-react";
+import { Beef, BookmarkPlus, Flame, History, MessageCircle, Plus, Salad, Soup, Utensils, Wheat } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
-import type { MealLog } from "@/domain/nutrition/logs";
+import { PerformanceHero, RecommendationBand, SignalCard, SignalGrid, TrendBars } from "@/components/performance/performance-ui";
+import { createDailyBriefing } from "@/domain/briefing/create-daily-briefing";
+import { createDailyNutritionSummary, type DailyNutritionSummary, type MealLog } from "@/domain/nutrition/logs";
 import { estimateMealLogTime, inferMealCategory, mealCategoryOptions, mealCategoryToRole } from "@/domain/nutrition/meal-timing";
 import type { MealPlanSlot, MealTemplate } from "@/domain/nutrition/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import { WeekCalendar } from "@/features/calendar/week-calendar";
 import { useAppState } from "@/features/app-state/app-state-provider";
+import { useExternalActivities } from "@/features/activities/external-activities";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
-import { TimedCoachBriefing } from "@/features/coach/timed-coach-briefing";
 import { QuickFuelingPanel } from "@/features/fueling/quick-fueling-panel";
 import { MealLogList } from "@/features/nutrition/meal-log-list";
 import { NUTRITION_LOGS_UPDATED_EVENT, loadLocalMealLogsForDate, useNutritionLogs } from "@/features/nutrition/use-nutrition-logs";
@@ -34,7 +36,28 @@ export function FuelingView() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const { logs: selectedDayLogs, isLoading: logsLoading, error: logsError, addLog, updateLog, deleteLog } = useNutritionLogs(selectedDay.date);
   const weeklyLogs = useWeekMealLogs(state.weekPlan.days.map((day) => day.date));
-  const selectedDayLoggedTotals = useMemo(() => calculateMealLogTotals(selectedDayLogs), [selectedDayLogs]);
+  const {
+    activitiesByDate,
+    garminDailyEnergyByDate
+  } = useExternalActivities(selectedDay.date, selectedDay.date);
+  const briefing = useMemo(() => createDailyBriefing({
+    profile: state.profile,
+    goals: state.goals,
+    dayPlan: selectedDay,
+    mealTemplates: state.mealTemplates,
+    actualActivities: activitiesByDate[selectedDay.date] ?? [],
+    garminDailyTotalCalories: garminDailyEnergyByDate[selectedDay.date]?.totalCalories,
+    energySettings: state.energySettings
+  }), [activitiesByDate, garminDailyEnergyByDate, selectedDay, state.energySettings, state.goals, state.mealTemplates, state.profile]);
+  const nutritionSummary = useMemo(
+    () => createDailyNutritionSummary(selectedDayLogs, briefing.nutritionTarget),
+    [briefing.nutritionTarget, selectedDayLogs]
+  );
+  const fuelingScore = calculateFuelingScore(nutritionSummary.progress);
+  const weeklyNutrition = useMemo(
+    () => state.weekPlan.days.map((day) => calculateMealLogTotals(weeklyLogs.logs.filter((log) => log.date === day.date))),
+    [state.weekPlan.days, weeklyLogs.logs]
+  );
 
   async function submitTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -140,8 +163,8 @@ export function FuelingView() {
     <div>
       <PageHeader
         eyebrow="Fueling"
-        title="Mahlzeiten und Standards"
-        description="Grobe Planung über Standardmahlzeiten, Portionen, Makros und Trainingszeitpunkt."
+        title="Fueling steuern"
+        description="Essen loggen, Tagesbedarf verstehen und die nächste Mahlzeit passend zur Belastung wählen."
         action={
           <div className="grid gap-2 sm:grid-cols-2">
             <CoachRecommendationButton
@@ -160,32 +183,32 @@ export function FuelingView() {
         }
       />
 
-      <TimedCoachBriefing
-        page="fueling"
-        selectedDate={selectedDay.date}
-        focus={selectedDay.focus}
-        mealCount={selectedDayLogs.length}
-        caloriesIntake={selectedDayLoggedTotals.calories}
-        proteinRemaining={Math.max(0, estimateProteinTarget(state.profile.bodyMetrics.weightKg) - selectedDayLoggedTotals.protein)}
-        carbsRemaining={Math.max(0, estimateCarbsTarget(selectedDay.workouts.length) - selectedDayLoggedTotals.carbs)}
-      />
-
       <WeekCalendar variant="compact" />
 
-      <section className="mb-6 grid gap-3 sm:grid-cols-2">
-        <Panel>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Geloggt</p>
-          <p className="mt-3 text-2xl font-semibold text-ink">{selectedDayLoggedTotals.calories} kcal</p>
-          <p className="mt-2 text-sm text-muted">
-            {selectedDayLogs.length} Einträge · {selectedDayLoggedTotals.protein} g Protein · {selectedDayLoggedTotals.carbs} g Carbs
-          </p>
-        </Panel>
-        <Panel>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Aktiver Tag</p>
-          <p className="mt-3 text-2xl font-semibold text-ink">{formatShortDate(selectedDay.date)}</p>
-          <p className="mt-2 text-sm text-muted">{selectedDay.focus}</p>
-        </Panel>
-      </section>
+      <PerformanceHero
+        eyebrow={`Fueling-Status · ${formatShortDate(selectedDay.date)}`}
+        title={createFuelingStatusTitle(nutritionSummary.deltas.proteinRemaining, nutritionSummary.deltas.carbsRemaining, selectedDayLogs.length)}
+        summary={createFuelingNextStep(nutritionSummary, selectedDay.workouts.length)}
+        score={selectedDayLogs.length ? fuelingScore : undefined}
+        scoreLabel="Zielabdeckung"
+        tone={fuelingScore >= 75 ? "green" : fuelingScore >= 45 ? "amber" : "neutral"}
+        confidence={selectedDayLogs.length ? "aus geloggten Mahlzeiten" : "noch keine Logs"}
+        reasons={[`${selectedDayLogs.length} Einträge`, `${selectedDay.workouts.length} Einheiten geplant`, briefing.nutritionTarget.energyExpenditure.source === "garmin" ? "Garmin-Gesamtverbrauch" : "Verbrauch geschätzt"]}
+      />
+
+      <SignalGrid>
+        <SignalCard icon={Utensils} label="Aufgenommen" value={formatNumber(nutritionSummary.intake.calories)} unit="kcal" detail={`Ziel ${formatNumber(nutritionSummary.targets.caloriesMin)}–${formatNumber(nutritionSummary.targets.caloriesMax)} kcal`} tone="blue" progress={nutritionSummary.progress.calories} />
+        <SignalCard icon={Flame} label="Gesamtverbrauch" value={formatNumber(nutritionSummary.expenditureCalories)} unit="kcal" detail={describeEnergySource(briefing.nutritionTarget.energyExpenditure.source)} tone="amber" />
+        <SignalCard icon={Beef} label="Protein" value={`${formatNumber(nutritionSummary.intake.proteinGrams)} / ${formatNumber(nutritionSummary.targets.proteinMin)}`} unit="g" detail={`${formatProteinPerKg(nutritionSummary.intake.proteinGrams, state.profile.bodyMetrics.weightKg)} g/kg · noch ca. ${formatNumber(nutritionSummary.deltas.proteinRemaining)} g`} tone="green" progress={nutritionSummary.progress.protein} />
+        <SignalCard icon={Wheat} label="Kohlenhydrate" value={`${formatNumber(nutritionSummary.intake.carbohydrateGrams)} / ${formatNumber(nutritionSummary.targets.carbsMin)}`} unit="g" detail={`Noch ca. ${formatNumber(nutritionSummary.deltas.carbsRemaining)} g`} tone="amber" progress={nutritionSummary.progress.carbs} />
+      </SignalGrid>
+
+      <RecommendationBand
+        title="Nächste sinnvolle Fueling-Entscheidung"
+        body={createFuelingNextStep(nutritionSummary, selectedDay.workouts.length)}
+        reasons={[briefing.focus, `${formatNumber(nutritionSummary.deltas.proteinRemaining)} g Protein offen`, `${formatNumber(nutritionSummary.deltas.carbsRemaining)} g Carbs offen`]}
+        tone={nutritionSummary.deltas.proteinRemaining > 30 || nutritionSummary.deltas.carbsRemaining > 80 ? "amber" : "green"}
+      />
 
       {statusMessage ? (
         <div className="mb-6 rounded-xl border border-coach-100 bg-coach-50 px-3 py-3 text-sm font-medium text-coach-800">
@@ -197,7 +220,7 @@ export function FuelingView() {
         <QuickFuelingPanel date={selectedDay.date} />
       </div>
 
-      <section className="mb-6 grid gap-6">
+      <section className="mb-6">
         <Panel>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -216,16 +239,6 @@ export function FuelingView() {
             onDelete={deleteLog}
           />
         </Panel>
-
-        <Panel>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-ink">Rezepte</h2>
-            <Pill tone="neutral">vorbereitet</Pill>
-          </div>
-          <p className="text-sm leading-6 text-muted">
-            Rezepte sind als Datenmodell vorbereitet. Für die Bedienung bleibt Fueling aktuell bewusst bei Standardmahlzeiten, Chat-Schätzung und Tageslogs. Die Rezeptverwaltung sollte als eigener Sprint folgen, damit Portionen, Zutaten und Nährwerte sauber editierbar sind.
-          </p>
-        </Panel>
       </section>
 
       <details className="mb-6 rounded-2xl border border-line bg-white p-4 shadow-soft sm:p-5">
@@ -239,6 +252,23 @@ export function FuelingView() {
 
         <div className="mt-5 grid gap-6">
           <WeekCalendar />
+
+          <Panel>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Tagesaufnahme</p>
+                <h3 className="mt-1 text-lg font-semibold text-ink">Kalorien dieser Woche</h3>
+              </div>
+              <Pill tone="blue">echte Logs</Pill>
+            </div>
+            <TrendBars
+              values={weeklyNutrition.map((day) => day.calories)}
+              labels={state.weekPlan.days.map((day) => formatWeekday(day.date))}
+              tone="blue"
+              formatValue={(value) => `${formatNumber(value)} kcal`}
+            />
+            <p className="mt-3 text-xs leading-5 text-muted">Leere Tage bedeuten fehlende Logs, nicht automatisch Fasten oder ein Kaloriendefizit.</p>
+          </Panel>
 
           <Panel>
             <div className="mb-4 flex items-center gap-2">
@@ -434,12 +464,56 @@ function calculateMealLogTotals(logs: MealLog[]) {
   });
 }
 
-function estimateProteinTarget(weightKg: number): number {
-  return Math.round(weightKg * 1.9);
+function calculateFuelingScore(progress: DailyNutritionSummary["progress"]): number {
+  const calories = Math.min(100, progress.calories);
+  const protein = Math.min(100, progress.protein);
+  const carbs = Math.min(100, progress.carbs);
+  return Math.round(calories * 0.3 + protein * 0.4 + carbs * 0.3);
 }
 
-function estimateCarbsTarget(workoutCount: number): number {
-  return workoutCount > 0 ? 250 : 180;
+function createFuelingStatusTitle(proteinRemaining: number, carbsRemaining: number, logCount: number): string {
+  if (!logCount) return "Erste Mahlzeit loggen, dann wird es persönlich";
+  if (proteinRemaining <= 15 && carbsRemaining <= 35) return "Tagesziele sind weitgehend abgesichert";
+  if (proteinRemaining > 30) return "Protein ist heute der wichtigste Hebel";
+  if (carbsRemaining > 80) return "Kohlenhydrate gezielt ums Training platzieren";
+  return "Noch eine ausgewogene Mahlzeit einplanen";
+}
+
+function createFuelingNextStep(summary: DailyNutritionSummary, workoutCount: number): string {
+  if (summary.intake.calories === 0) {
+    return workoutCount > 0
+      ? "Logge die erste Mahlzeit. Danach kann der Coach Energie und Makros passend zur heutigen Belastung steuern."
+      : "Logge die erste Mahlzeit, damit Tagesbilanz und Empfehlungen nicht auf Annahmen beruhen.";
+  }
+  if (summary.deltas.proteinRemaining > 30 && summary.deltas.carbsRemaining > 80) {
+    return workoutCount > 0
+      ? `Als Nächstes etwa 30–40 g Protein plus eine gut verträgliche Kohlenhydratquelle einplanen. Noch offen: ca. ${formatNumber(summary.deltas.proteinRemaining)} g Protein und ${formatNumber(summary.deltas.carbsRemaining)} g Kohlenhydrate.`
+      : "Eine proteinreiche Hauptmahlzeit schließen; Kohlenhydrate kannst du ohne harte Einheit nach Hunger verteilen.";
+  }
+  if (summary.deltas.proteinRemaining > 20) return "Die nächste Mahlzeit sollte eine klare Proteinquelle enthalten. Kalorien nicht isoliert auffüllen.";
+  if (summary.deltas.carbsRemaining > 60 && workoutCount > 0) return "Die verbleibenden Kohlenhydrate vor oder nach der Einheit platzieren, statt sie spät zufällig nachzuholen.";
+  return "Die wichtigsten Ziele sind gut abgedeckt. Den Rest nach Hunger, Tagesverbrauch und morgiger Belastung steuern.";
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatProteinPerKg(proteinGrams: number, weightKg: number): string {
+  if (!weightKg) return "–";
+  return (proteinGrams / weightKg).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function formatWeekday(date: string): string {
+  return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(new Date(`${date}T12:00:00`));
+}
+
+function describeEnergySource(source: "garmin" | "none" | "planned" | "actual" | "manual_forecast"): string {
+  if (source === "garmin") return "Garmin-Gesamtverbrauch führt";
+  if (source === "manual_forecast") return "Manueller Tagesforecast";
+  if (source === "actual") return "Basis plus tatsächliche Aktivitäten";
+  if (source === "planned") return "Basis plus geplante Aktivitäten";
+  return "Geschätzter Basisverbrauch";
 }
 
 function useWeekMealLogs(dates: string[]) {

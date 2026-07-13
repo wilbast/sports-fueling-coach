@@ -1,8 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Bike, BookmarkPlus, CircleDot, Dumbbell, Footprints, MessageCircle, Pencil, Plus, Waves, X, Zap } from "lucide-react";
+import { Activity, Bike, BookmarkPlus, CircleDot, Dumbbell, Footprints, Gauge, HeartPulse, MessageCircle, Pencil, Plus, Route, Waves, X, Zap } from "lucide-react";
 import { PageHeader, Panel, Pill } from "@/components/ui";
+import { PerformanceHero, RecommendationBand, SignalCard, SignalGrid, TrendBars } from "@/components/performance/performance-ui";
+import { assessReadiness, createTrainingTrend, trainingConsistency } from "@/domain/performance/insights";
+import type { DailyPerformanceSnapshot } from "@/domain/performance/types";
 import { getDayPlanByDate } from "@/domain/planning/week";
 import type { WorkoutTemplate } from "@/domain/standards/types";
 import {
@@ -26,7 +29,6 @@ import { useAppState } from "@/features/app-state/app-state-provider";
 import { ExternalActivityList, type ExternalActivitySummary, useExternalActivities } from "@/features/activities/external-activities";
 import { CoachChatPanel } from "@/features/coach/coach-chat-panel";
 import { CoachRecommendationButton } from "@/features/coach/coach-recommendation-button";
-import { TimedCoachBriefing } from "@/features/coach/timed-coach-briefing";
 
 const statusLabels: Record<WorkoutStatus, string> = {
   planned: "geplant",
@@ -63,16 +65,36 @@ export function TrainingView() {
   const weekEnd = state.weekPlan.days[state.weekPlan.days.length - 1]?.date ?? state.weekPlan.startsOn;
   const today = getBerlinDate();
   const overviewDate = today >= weekStart && today <= weekEnd ? today : selectedDay.date;
+  const historyStart = addDays(weekStart, -21);
   const {
     activities,
     activitiesByDate,
+    performanceByDate,
     isLoading: activitiesLoading,
     error: activitiesError
-  } = useExternalActivities(weekStart, weekEnd);
-  const trainingOverview = useMemo(
-    () => createTrainingOverview(state.weekPlan.days, activities, overviewDate),
-    [activities, overviewDate, state.weekPlan.days]
+  } = useExternalActivities(historyStart, weekEnd);
+  const weekActivities = useMemo(
+    () => activities.filter((activity) => {
+      const date = activityDateKey(activity);
+      return date >= weekStart && date <= weekEnd;
+    }),
+    [activities, weekEnd, weekStart]
   );
+  const trainingOverview = useMemo(
+    () => createTrainingOverview(state.weekPlan.days, weekActivities, overviewDate),
+    [overviewDate, state.weekPlan.days, weekActivities]
+  );
+  const trendDates = useMemo(() => createDateRange(addDays(overviewDate, -27), overviewDate), [overviewDate]);
+  const trainingTrend = useMemo(() => createTrainingTrend(activities, trendDates), [activities, trendDates]);
+  const currentWeekTrend = trainingTrend.slice(-7);
+  const selectedPerformance = findLatestPerformanceSnapshot(performanceByDate, selectedDay.date);
+  const readiness = useMemo(
+    () => assessReadiness(selectedPerformance, activities, selectedDay.workouts),
+    [activities, selectedDay.workouts, selectedPerformance]
+  );
+  const weeklyTrainingLoad = currentWeekTrend.reduce((sum, point) => sum + point.trainingLoad, 0);
+  const averagePace = averageDefined(trainingTrend.map((point) => point.averagePaceSecondsPerKm));
+  const averageHeartRate = averageDefined(trainingTrend.map((point) => point.averageHeartRate));
   const groupedStandards = useMemo(() => groupWorkoutStandards(state.standards.workouts), [state.standards.workouts]);
   const selectedDayActivities = activitiesByDate[selectedDay.date] ?? [];
   const selectedRemainingWorkouts = getRemainingPlannedWorkouts(selectedDay.workouts, selectedDay.date, overviewDate);
@@ -152,8 +174,8 @@ export function TrainingView() {
     <div>
       <PageHeader
         eyebrow="Training"
-        title="Training planen"
-        description="Geplante Einheiten liefern den Kontext für Energie, Protein, Kohlenhydrate und Erholung."
+        title="Training steuern"
+        description="Tatsächliche Belastung, offene Planung und Recovery in einer gemeinsamen Wochenprognose."
         action={
           <div className="grid gap-2 sm:grid-cols-2">
             <CoachRecommendationButton
@@ -172,18 +194,36 @@ export function TrainingView() {
         }
       />
 
-      <TimedCoachBriefing
-        page="training"
-        selectedDate={selectedDay.date}
-        focus={selectedDay.focus}
-        plannedWorkoutCount={trainingOverview.remainingWorkoutCount}
-        plannedRunningKm={trainingOverview.remainingRunningKm}
-        actualActivityCount={trainingOverview.completedActivityCount}
-        actualRunningKm={trainingOverview.completedRunningKm}
-        hardSessionCount={trainingOverview.remainingHardSessionCount}
+      <WeekCalendar variant="compact" />
+
+      <PerformanceHero
+        eyebrow={`Trainingssteuerung · ${formatShortDate(selectedDay.date)}`}
+        title={readiness.label}
+        summary={`${readiness.recommendation} Die aktuelle Wochenprognose liegt bei ${roundOne(trainingOverview.projectedRunningKm)} km.`}
+        score={readiness.score}
+        scoreLabel="Trainingsbereitschaft"
+        tone={readiness.tone}
+        confidence={translateConfidence(readiness.confidence)}
+        reasons={readiness.reasons}
       />
 
-      <WeekCalendar variant="compact" />
+      <SignalGrid>
+        <SignalCard icon={Footprints} label="Erledigt diese Woche" value={roundOne(trainingOverview.completedRunningKm)} unit="km" detail={`${trainingOverview.completedActivityCount} durchgeführte Einheiten`} tone="green" />
+        <SignalCard icon={Route} label="Wochenprognose" value={roundOne(trainingOverview.projectedRunningKm)} unit="km" detail={`${roundOne(trainingOverview.remainingRunningKm)} km noch geplant`} tone="blue" />
+        <SignalCard icon={Activity} label="Trainingsbelastung" value={weeklyTrainingLoad ? String(Math.round(weeklyTrainingLoad)) : "–"} detail={weeklyTrainingLoad ? "Summe aus durchgeführten Einheiten" : "Noch keine Belastungsdaten"} tone="amber" />
+        <SignalCard icon={Gauge} label="Konstanz · 28 Tage" value={`${trainingConsistency(trainingTrend)}%`} detail={`${trainingTrend.filter((point) => point.durationMinutes > 0).length} aktive Tage`} tone="neutral" />
+      </SignalGrid>
+
+      <RecommendationBand
+        title="Einordnung für den ausgewählten Tag"
+        body={selectedDayActivities.length > 0
+          ? "Die tatsächlich erledigte Belastung führt die Tagesbewertung. Offene Planung bleibt nur für die Prognose relevant."
+          : selectedRemainingWorkouts.length > 0
+            ? "Heute ist noch Training offen. Steuere die Einheit anhand der Recovery-Signale und des bereits absolvierten Wochenumfangs."
+            : "Heute ist keine Einheit offen. Regeneration schützt die Qualität der nächsten geplanten Belastung."}
+        reasons={[`${selectedDayActivities.length} durchgeführt`, `${selectedRemainingWorkouts.length} offen`, `${trainingOverview.remainingHardSessionCount} harte Reize offen`]}
+        tone={readiness.tone}
+      />
 
       <section className="mb-6 grid gap-6 lg:grid-cols-[1fr_0.82fr]">
         <div>
@@ -375,17 +415,25 @@ export function TrainingView() {
           </Panel>
 
           <Panel>
-            <h2 className="text-lg font-semibold text-ink">Coach-Einordnung</h2>
-            <p className="mt-3 text-sm leading-6 text-muted">
-              {selectedDayActivities.length > 0
-                ? "Für den aktiven Tag zählt jetzt die erledigte Belastung. Fueling und Regeneration sollten sich daran orientieren."
-                : selectedRemainingWorkouts.length > 0
-                  ? "Für den aktiven Tag ist noch Training offen. Platziere Energie und Protein um diese Einheit herum."
-                  : "Für den aktiven Tag ist kein offenes Training geplant. Nutze den Tag eher für Erholung, Alltag und sauberes Protein."}
-            </p>
-            <p className="mt-3 rounded-xl bg-canvas px-3 py-2 text-xs leading-5 text-muted">
-              Grundlage: {selectedDayActivities.length} durchgeführte Aktivität(en) und {selectedRemainingWorkouts.length} offene Einheit(en) am ausgewählten Tag.
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Tatsächliche Leistung</p>
+                <h2 className="mt-1 text-lg font-semibold text-ink">Letzte 7 Tage</h2>
+              </div>
+              <Pill tone="blue">Ist-Daten</Pill>
+            </div>
+            <TrendBars
+              values={currentWeekTrend.map((point) => point.runningKm)}
+              labels={currentWeekTrend.map((point) => formatWeekday(point.date))}
+              tone="blue"
+              formatValue={(value) => `${roundOne(value)} km`}
+            />
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <MiniMetric icon={Gauge} label="Ø Pace · 28 T." value={formatPace(averagePace)} />
+              <MiniMetric icon={HeartPulse} label="Ø Puls · 28 T." value={averageHeartRate ? `${Math.round(averageHeartRate)} bpm` : "–"} />
+              <MiniMetric icon={Activity} label="Akute Last" value={formatOptionalMetric(selectedPerformance?.recovery.acuteLoad)} />
+              <MiniMetric icon={Route} label="VO₂max Lauf" value={formatOptionalMetric(selectedPerformance?.recovery.vo2maxRunning)} />
+            </div>
           </Panel>
 
           <CoachChatPanel
@@ -684,6 +732,16 @@ function WorkoutRow({ workout, onStatus, onSaveAsStandard, onEdit, onRemove, com
   );
 }
 
+function MiniMetric({ icon: Icon, label, value }: { icon: typeof Activity; label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-canvas p-3">
+      <Icon className="h-4 w-4 text-coach-600" aria-hidden="true" />
+      <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+    </div>
+  );
+}
+
 function iconForSport(sport: SportType) {
   if (sport === "running") return Footprints;
   if (sport === "cycling") return Bike;
@@ -722,6 +780,55 @@ function formatLongDate(date: string): string {
 
 function roundOne(value: number): string {
   return value.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+}
+
+function addDays(date: string, days: number): string {
+  const next = new Date(`${date}T12:00:00`);
+  next.setDate(next.getDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+function createDateRange(start: string, end: string): string[] {
+  const dates: string[] = [];
+  let cursor = start;
+  while (cursor <= end && dates.length < 60) {
+    dates.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+  return dates;
+}
+
+function averageDefined(values: Array<number | null | undefined>): number | null {
+  const defined = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
+  return defined.length ? defined.reduce((sum, value) => sum + value, 0) / defined.length : null;
+}
+
+function formatPace(seconds?: number | null): string {
+  if (!seconds) return "–";
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(Math.round(seconds % 60)).padStart(2, "0")} min/km`;
+}
+
+function formatOptionalMetric(value?: number | null): string {
+  return value != null && Number.isFinite(value) ? value.toLocaleString("de-DE", { maximumFractionDigits: 1 }) : "–";
+}
+
+function formatWeekday(date: string): string {
+  return new Intl.DateTimeFormat("de-DE", { weekday: "short" }).format(new Date(`${date}T12:00:00`));
+}
+
+function translateConfidence(confidence: "high" | "medium" | "low"): string {
+  if (confidence === "high") return "hoch";
+  if (confidence === "medium") return "mittel";
+  return "niedrig";
+}
+
+function findLatestPerformanceSnapshot(
+  snapshots: Record<string, DailyPerformanceSnapshot>,
+  date: string
+): DailyPerformanceSnapshot | undefined {
+  const latestDate = Object.keys(snapshots).filter((candidate) => candidate <= date).sort().at(-1);
+  return latestDate ? snapshots[latestDate] : undefined;
 }
 
 function createTrainingOverview(

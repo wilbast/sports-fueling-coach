@@ -253,3 +253,16 @@ Bewusst verschoben:
 - Drag-and-drop-Personalisierung
 - PNG-/PDF-Export
 - Körper-, Gewichts- und Flüssigkeitsmodule
+
+## Sprint 16: Daily Performance System
+
+Status: umgesetzt
+
+Umgesetzt:
+
+- gemeinsamer typisierter Performance-Snapshot für Gesundheit, Recovery, Bewegung und Energie
+- Today als priorisierte Tagesentscheidung mit transparenter Readiness, Garmin-Signalen und kanonischer Fueling-Bilanz
+- Training mit Ist-vs.-Plan-Wochenprognose, 28-Tage-Konstanz, Pace-, Puls- und Belastungswerten
+- Fueling mit derselben Zielberechnung wie Today, nächster konkreter Mahlzeitenentscheidung und Log-basierter Wochenansicht
+- wiederverwendbare Performance-Hero-, Signal-, Empfehlungs- und Trend-Komponenten
+- keine scheinpräzisen Scores ohne ausreichende Daten und keine Wasser-/Wetter-/Qualitätskennzahlen ohne Datenquelle
